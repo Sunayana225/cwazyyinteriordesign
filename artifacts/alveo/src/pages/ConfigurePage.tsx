@@ -23,20 +23,16 @@ function readDraftFromStorage(): {
   if (typeof window === "undefined") {
     return { config: {}, step: "shape", restored: false };
   }
-
   try {
     const raw = localStorage.getItem(WIZARD_DRAFT_KEY);
     if (!raw) return { config: {}, step: "shape", restored: false };
-
     const parsed = JSON.parse(raw) as {
       config?: Partial<ClosetConfiguration>;
       currentStep?: ConfigStep;
     };
-
     if (!parsed?.config || !parsed.config.dimensions) {
       return { config: {}, step: "shape", restored: false };
     }
-
     return {
       config: parsed.config,
       step: parsed.currentStep ?? "shape",
@@ -45,6 +41,12 @@ function readDraftFromStorage(): {
   } catch {
     return { config: {}, step: "shape", restored: false };
   }
+}
+
+function apiHeaders(userEmail: string): HeadersInit {
+  const base: Record<string, string> = { "Content-Type": "application/json" };
+  if (userEmail) base["x-user-email"] = userEmail;
+  return base;
 }
 
 export default function ConfigurePage() {
@@ -83,12 +85,8 @@ export default function ConfigurePage() {
   const [savedDesigns, setSavedDesigns] = useState<SavedDesign[]>([]);
   const [userEmail, setUserEmail] = useState("");
   const [isReadonly, setIsReadonly] = useState(false);
-
   const [draftRestored, setDraftRestored] = useState(draft.restored);
-
-  const [mobileTab, setMobileTab] = useState<"configure" | "preview">(
-    "configure",
-  );
+  const [mobileTab, setMobileTab] = useState<"configure" | "preview">("configure");
 
   const [clientName, setClientName] = useState("");
   const [projectRef, setProjectRef] = useState(
@@ -141,9 +139,33 @@ export default function ConfigurePage() {
       }
     }
 
+    if (storedEmail) {
+      fetch("/api/designs", {
+        headers: { "x-user-email": storedEmail },
+        cache: "no-store",
+      })
+        .then((res) => (res.ok ? res.json() : null))
+        .then((data) => {
+          if (data && Array.isArray(data.designs)) {
+            setSavedDesigns(data.designs as SavedDesign[]);
+          } else {
+            const fallback = localStorage.getItem("alveo-saved-designs");
+            if (fallback) setSavedDesigns(JSON.parse(fallback) as SavedDesign[]);
+          }
+        })
+        .catch(() => {
+          const fallback = localStorage.getItem("alveo-saved-designs");
+          if (fallback) {
+            try { setSavedDesigns(JSON.parse(fallback) as SavedDesign[]); } catch { /* ignore */ }
+          }
+        })
+        .finally(() => { loadedRef.current = true; });
+      return;
+    }
+
     try {
       const stored = localStorage.getItem("alveo-saved-designs");
-      if (stored) setSavedDesigns(JSON.parse(stored));
+      if (stored) setSavedDesigns(JSON.parse(stored) as SavedDesign[]);
     } catch {
       /* ignore corrupt storage */
     }
@@ -188,11 +210,7 @@ export default function ConfigurePage() {
 
     setConfig({
       userInfo: {
-        userType: storedType as
-          | "homeowner"
-          | "renter"
-          | "designer"
-          | "browsing",
+        userType: storedType as "homeowner" | "renter" | "designer" | "browsing",
         stylePreference: "modern",
         woodFinish: "medium",
         drawerPreference: "mixed",
@@ -200,19 +218,9 @@ export default function ConfigurePage() {
       },
       dimensions: { width: 96, height: 96, depth: 24 },
       wardrobe: {
-        longDresses: 3,
-        shortJackets: 4,
-        suits: 2,
-        shirts: 10,
-        pants: 5,
-        tShirts: 15,
-        sweaters: 6,
-        jeans: 4,
-        underwear: 10,
-        bags: 3,
-        belts: 2,
-        jewelry: true,
-        ties: 0,
+        longDresses: 3, shortJackets: 4, suits: 2, shirts: 10, pants: 5,
+        tShirts: 15, sweaters: 6, jeans: 4, underwear: 10, bags: 3,
+        belts: 2, jewelry: true, ties: 0,
       },
       shoes: { sneakers: 5, heels: 4, boots: 2, flats: 3 },
     });
@@ -237,11 +245,27 @@ export default function ConfigurePage() {
       userType,
       mode: isReadonly ? "readonly" : "editor",
     });
+
+    if (userEmail) {
+      fetch("/api/designs", {
+        method: "POST",
+        headers: apiHeaders(userEmail),
+        body: JSON.stringify({ design }),
+      }).catch(() => { /* ignore cloud sync failures */ });
+    }
   };
 
   const handleRemoveDesign = (id: string) => {
     setSavedDesigns((prev) => prev.filter((d) => d.id !== id));
     trackEvent("design_removed", { id });
+
+    if (userEmail) {
+      fetch("/api/designs", {
+        method: "DELETE",
+        headers: apiHeaders(userEmail),
+        body: JSON.stringify({ id }),
+      }).catch(() => { /* ignore cloud sync failures */ });
+    }
   };
 
   const handleRenameDesign = (id: string, newName: string) => {
@@ -255,19 +279,12 @@ export default function ConfigurePage() {
       <div className="bg-white border-b border-cream-200 sticky top-16 z-40">
         <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
           <div className="flex items-center space-x-4">
-            <Link
-              href="/"
-              className="text-charcoal-400 hover:text-charcoal-600 transition-colors"
-            >
+            <Link href="/" className="text-charcoal-400 hover:text-charcoal-600 transition-colors">
               <ArrowLeft className="w-5 h-5" />
             </Link>
             <div>
-              <span className="font-serif text-xl text-charcoal-600">
-                Alvéo Configurator
-              </span>
-              <span className="ml-3 text-sm text-charcoal-400 capitalize">
-                · {userType} mode
-              </span>
+              <span className="font-serif text-xl text-charcoal-600">Alvéo Configurator</span>
+              <span className="ml-3 text-sm text-charcoal-400 capitalize">· {userType} mode</span>
             </div>
           </div>
 
@@ -328,7 +345,6 @@ export default function ConfigurePage() {
       </div>
 
       <div className="max-w-7xl mx-auto px-6 py-8 pb-24 lg:pb-8">
-
         {userType === "designer" && (
           <div className="bg-amber-50 border border-amber-200 rounded-xl px-5 py-4 mb-6 flex flex-wrap items-center gap-4">
             <span className="text-xs font-semibold text-amber-700 uppercase tracking-widest">
@@ -435,6 +451,7 @@ export default function ConfigurePage() {
               clientName={clientName}
               projectRef={projectRef}
               logoDataUrl={logoDataUrl}
+              userEmail={userEmail}
             />
           </div>
         </div>

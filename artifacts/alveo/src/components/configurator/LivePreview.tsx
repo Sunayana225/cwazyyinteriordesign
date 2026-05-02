@@ -55,6 +55,7 @@ interface LivePreviewProps {
   clientName?: string;
   projectRef?: string;
   logoDataUrl?: string;
+  userEmail?: string;
 }
 
 type DesignComment = {
@@ -92,7 +93,17 @@ export function LivePreview({
   clientName,
   projectRef,
   logoDataUrl,
+  userEmail: userEmailProp,
 }: LivePreviewProps) {
+  const [userEmail] = useState<string>(
+    () => userEmailProp ?? (typeof window !== "undefined" ? localStorage.getItem("alveo-user-email") ?? "" : ""),
+  );
+
+  const makeHeaders = (extra?: Record<string, string>): HeadersInit => {
+    const h: Record<string, string> = { "Content-Type": "application/json", ...extra };
+    if (userEmail) h["x-user-email"] = userEmail;
+    return h;
+  };
   const [activeTab, setActiveTab] = useState<
     "drawing" | "summary" | "tips" | "style" | "cost" | "cutList"
   >("drawing");
@@ -414,6 +425,7 @@ export function LivePreview({
         `/api/design-comments?designId=${encodeURIComponent(designId)}`,
         {
           cache: "no-store",
+          headers: userEmail ? { "x-user-email": userEmail } : undefined,
         },
       );
       if (!res.ok) return;
@@ -475,7 +487,7 @@ export function LivePreview({
     try {
       const res = await fetch("/api/design-comments", {
         method: "POST",
-        headers: { "Content-Type": "application/json" },
+        headers: makeHeaders(),
         body: JSON.stringify({
           designId: activeCommentDesign.id,
           text: commentDraft.trim(),
@@ -511,7 +523,7 @@ export function LivePreview({
     try {
       const res = await fetch("/api/design-comments", {
         method: "PATCH",
-        headers: { "Content-Type": "application/json" },
+        headers: makeHeaders(),
         body: JSON.stringify({ designId: activeCommentDesign.id, ...payload }),
       });
       if (!res.ok) return;

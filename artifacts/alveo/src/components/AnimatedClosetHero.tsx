@@ -19,7 +19,8 @@ export function AnimatedClosetHero() {
   }, [controls]);
 
   // Staggered draw animation for architectural effect
-  const pathVariants = {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const pathVariants: any = {
     hidden: { pathLength: 0, opacity: 0 },
     visible: (i: number) => ({
       pathLength: 1,
@@ -28,7 +29,7 @@ export function AnimatedClosetHero() {
         pathLength: {
           duration: 0.8,
           delay: i * 0.15,
-          ease: [0.43, 0.13, 0.23, 0.96], // architectural easing
+          ease: [0.43, 0.13, 0.23, 0.96],
         },
         opacity: { duration: 0.2, delay: i * 0.15 },
       },

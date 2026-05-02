@@ -25,7 +25,8 @@ const timeline = [
   { year: "Step 4", label: "Get your layout", detail: "A precision elevation, ready to build or share." },
 ];
 
-const fadeUp = {
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+const fadeUp: any = {
   hidden: { opacity: 0, y: 16 },
   visible: (i: number) => ({
     opacity: 1,

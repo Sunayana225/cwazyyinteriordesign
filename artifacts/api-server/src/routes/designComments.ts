@@ -6,9 +6,7 @@ import { Pool } from "pg";
 const router  = Router();
 const pool    = new Pool({ connectionString: process.env["DATABASE_URL"] });
 
-// ── In-memory helpers (kept for permission & mention-read state; these are
-//    not yet persisted to DB, which is fine — they reset on restart and are
-//    advisory-only features). ────────────────────────────────────────────────
+// ── Types ────────────────────────────────────────────────────────────────────
 
 type DesignCommentPermissions = {
   ownerEmail?: string;
@@ -16,15 +14,7 @@ type DesignCommentPermissions = {
   editors: string[];
 };
 
-const permissionStore: Map<string, DesignCommentPermissions> =
-  ((globalThis as Record<string, unknown>).__alveoDesignCommentPermissions as Map<string, DesignCommentPermissions>) ??
-  new Map<string, DesignCommentPermissions>();
-(globalThis as Record<string, unknown>).__alveoDesignCommentPermissions = permissionStore;
-
-const mentionReadStore: Map<string, Set<string>> =
-  ((globalThis as Record<string, unknown>).__alveoDesignCommentMentionRead as Map<string, Set<string>>) ??
-  new Map<string, Set<string>>();
-(globalThis as Record<string, unknown>).__alveoDesignCommentMentionRead = mentionReadStore;
+// ── Rate limiting ─────────────────────────────────────────────────────────────
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -40,6 +30,64 @@ function checkRateLimit(key: string, windowMs: number, max: number): { allowed: 
     return { allowed: false, retryAfterSec: Math.ceil((entry.resetAt - now) / 1000) };
   }
   return { allowed: true, retryAfterSec: 0 };
+}
+
+// ── Audit helper ──────────────────────────────────────────────────────────────
+
+async function writeAudit(opts: {
+  actorEmail?: string;
+  action: string;
+  designId?: string;
+  targetId?: string;
+  before?: unknown;
+  after?: unknown;
+}): Promise<void> {
+  try {
+    await pool.query(
+      `INSERT INTO alveo_design_audit (actor_email, action, design_id, target_id, before_data, after_data)
+       VALUES ($1, $2, $3, $4, $5, $6)`,
+      [
+        opts.actorEmail ?? null,
+        opts.action,
+        opts.designId ?? null,
+        opts.targetId ?? null,
+        opts.before !== undefined ? JSON.stringify(opts.before) : null,
+        opts.after  !== undefined ? JSON.stringify(opts.after)  : null,
+      ],
+    );
+  } catch (auditErr) {
+    console.error("[audit write failed]", auditErr);
+  }
+}
+
+// ── Permission helpers ────────────────────────────────────────────────────────
+
+async function getPermissions(designId: string): Promise<DesignCommentPermissions> {
+  const result = await pool.query<{ owner_email: string | null; default_role: string; editors: string[] }>(
+    `SELECT owner_email, default_role, editors FROM alveo_design_permissions WHERE design_id = $1`,
+    [designId],
+  );
+  if (result.rows.length === 0) {
+    return { ownerEmail: undefined, defaultRole: "editor", editors: [] };
+  }
+  const row = result.rows[0]!;
+  return {
+    ownerEmail:  row.owner_email ?? undefined,
+    defaultRole: (row.default_role as "viewer" | "editor") ?? "editor",
+    editors:     row.editors ?? [],
+  };
+}
+
+async function upsertPermissions(designId: string, perms: DesignCommentPermissions): Promise<void> {
+  await pool.query(
+    `INSERT INTO alveo_design_permissions (design_id, owner_email, default_role, editors)
+     VALUES ($1, $2, $3, $4)
+     ON CONFLICT (design_id) DO UPDATE
+       SET owner_email  = EXCLUDED.owner_email,
+           default_role = EXCLUDED.default_role,
+           editors      = EXCLUDED.editors`,
+    [designId, perms.ownerEmail ?? null, perms.defaultRole, perms.editors],
+  );
 }
 
 function extractMentions(text: string): string[] {
@@ -137,7 +185,6 @@ router.get("/design-comments", async (req: Request, res: Response) => {
   const isAll           = req.query["all"] === "1";
 
   if (isAll) {
-    // Fail-closed: require a configured token; deny access if not set.
     if (!configuredToken || req.headers["x-admin-token"] !== configuredToken) {
       res.status(401).json({ error: "Unauthorized" }); return;
     }
@@ -165,8 +212,7 @@ router.get("/design-comments", async (req: Request, res: Response) => {
     if (mentionsOnly)         { conditions.push(`array_length(mentions, 1) > 0`); }
 
     const where    = conditions.length ? `WHERE ${conditions.join(" AND ")}` : "";
-    const orderBy  = sort === "oldest" ? "ASC"
-                   : sort === "most-mentioned" ? "DESC" /* fallback */ : "DESC";
+    const orderBy  = sort === "oldest" ? "ASC" : "DESC";
     const orderCol = sort === "most-mentioned" ? "array_length(mentions, 1) DESC NULLS LAST, created_at" : "created_at";
 
     try {
@@ -194,16 +240,22 @@ router.get("/design-comments", async (req: Request, res: Response) => {
   const designId = req.query["designId"] as string | undefined;
   if (!designId) { res.status(400).json({ error: "Missing designId" }); return; }
 
-  const permissions  = permissionStore.get(designId) ?? { ownerEmail: undefined, defaultRole: "editor" as const, editors: [] };
-  const role         = getEffectiveRole(permissions, userEmail);
-  const mentionKeys  = mentionKeysForUser(userEmail);
-  const relevantRead = new Set<string>();
-  for (const k of mentionKeys) {
-    const s = mentionReadStore.get(k);
-    if (s) for (const id of s) relevantRead.add(id);
-  }
-
   try {
+    const permissions  = await getPermissions(designId);
+    const role         = getEffectiveRole(permissions, userEmail);
+    const mentionKeys  = mentionKeysForUser(userEmail);
+
+    // Fetch which comment IDs have been read by this user from DB
+    const relevantRead = new Set<string>();
+    if (mentionKeys.length > 0) {
+      const readRows = await pool.query<{ comment_id: string }>(
+        `SELECT comment_id FROM alveo_mention_reads
+         WHERE mention_user = ANY($1) AND read = TRUE`,
+        [mentionKeys],
+      );
+      for (const r of readRows.rows) relevantRead.add(r.comment_id);
+    }
+
     const rows = await pool.query<CommentRow>(
       `SELECT * FROM alveo_design_comments WHERE design_id = $1 ORDER BY created_at ASC`,
       [designId],
@@ -243,22 +295,36 @@ router.post("/design-comments", async (req: Request, res: Response) => {
   const parsed = postSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
 
-  const permissions = permissionStore.get(parsed.data.designId) ?? { ownerEmail: userEmail, defaultRole: "editor" as const, editors: [] };
-  permissionStore.set(parsed.data.designId, permissions);
-  if (getEffectiveRole(permissions, userEmail) !== "editor") {
-    res.status(403).json({ error: "Read-only comments" }); return;
-  }
-
-  const id       = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-  const mentions = extractMentions(parsed.data.text);
-
   try {
+    let permissions = await getPermissions(parsed.data.designId);
+
+    // If no permissions exist yet, initialize with current user as owner
+    if (!permissions.ownerEmail && userEmail) {
+      permissions = { ownerEmail: userEmail, defaultRole: "editor", editors: [] };
+      await upsertPermissions(parsed.data.designId, permissions);
+    }
+
+    if (getEffectiveRole(permissions, userEmail) !== "editor") {
+      res.status(403).json({ error: "Read-only comments" }); return;
+    }
+
+    const id       = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+    const mentions = extractMentions(parsed.data.text);
+
     await pool.query(
       `INSERT INTO alveo_design_comments
          (id, design_id, user_email, author_name, text, parent_id, mentions)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
       [id, parsed.data.designId, userEmail ?? "guest", userEmail ?? "Guest", parsed.data.text.trim(), parsed.data.parentId ?? null, mentions],
     );
+
+    await writeAudit({
+      actorEmail: userEmail,
+      action: "comment.create",
+      designId: parsed.data.designId,
+      targetId: id,
+      after: { text: parsed.data.text.trim(), parentId: parsed.data.parentId ?? null, mentions },
+    });
 
     const rows = await pool.query<CommentRow>(
       `SELECT * FROM alveo_design_comments WHERE design_id = $1 ORDER BY created_at ASC`,
@@ -273,23 +339,53 @@ router.post("/design-comments", async (req: Request, res: Response) => {
 
 // ── PATCH /design-comments ────────────────────────────────────────────────────
 
-router.patch("/design-comments", (req: Request, res: Response) => {
+router.patch("/design-comments", async (req: Request, res: Response) => {
   const configuredToken = process.env["EVENTS_ADMIN_TOKEN"];
   const userEmail       = req.headers["x-user-email"] as string | undefined;
 
   // mention-ack path
   const mentionAckParsed = mentionAckSchema.safeParse(req.body);
   if (mentionAckParsed.success) {
-    // Fail-closed: mention-ack requires a configured admin token too.
     if (!configuredToken || req.headers["x-admin-token"] !== configuredToken) {
       res.status(401).json({ error: "Unauthorized" }); return;
     }
     const { mentionUser, commentId, read } = mentionAckParsed.data;
-    const key     = mentionUser.trim().toLowerCase();
-    const current = mentionReadStore.get(key) ?? new Set<string>();
-    if (read) { current.add(commentId); } else { current.delete(commentId); }
-    mentionReadStore.set(key, current);
-    res.json({ ok: true, readCount: current.size });
+    const key = mentionUser.trim().toLowerCase();
+
+    try {
+      if (read) {
+        await pool.query(
+          `INSERT INTO alveo_mention_reads (mention_user, comment_id, read)
+           VALUES ($1, $2, TRUE)
+           ON CONFLICT (mention_user, comment_id) DO UPDATE SET read = TRUE`,
+          [key, commentId],
+        );
+      } else {
+        await pool.query(
+          `INSERT INTO alveo_mention_reads (mention_user, comment_id, read)
+           VALUES ($1, $2, FALSE)
+           ON CONFLICT (mention_user, comment_id) DO UPDATE SET read = FALSE`,
+          [key, commentId],
+        );
+      }
+
+      await writeAudit({
+        actorEmail: userEmail,
+        action: "mention.ack",
+        targetId: commentId,
+        after: { mentionUser: key, read },
+      });
+
+      const countResult = await pool.query<{ count: string }>(
+        `SELECT COUNT(*) FROM alveo_mention_reads WHERE mention_user = $1 AND read = TRUE`,
+        [key],
+      );
+      const readCount = parseInt(countResult.rows[0]?.count ?? "0", 10);
+      res.json({ ok: true, readCount });
+    } catch (err) {
+      console.error("[design-comments PATCH mention-ack]", err);
+      res.status(500).json({ error: "Database error" });
+    }
     return;
   }
 
@@ -298,22 +394,56 @@ router.patch("/design-comments", (req: Request, res: Response) => {
   if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
   if (!userEmail) { res.status(401).json({ error: "Unauthorized" }); return; }
 
-  const current = permissionStore.get(parsed.data.designId) ?? { ownerEmail: userEmail, defaultRole: "editor" as const, editors: [] };
-  if (!canManagePermissions(current, userEmail)) { res.status(403).json({ error: "Forbidden" }); return; }
+  try {
+    let current = await getPermissions(parsed.data.designId);
+    const before = { ...current };
 
-  if (parsed.data.defaultRole)   { current.defaultRole = parsed.data.defaultRole; }
-  if (parsed.data.addEditor) {
-    const n = parsed.data.addEditor.toLowerCase();
-    if (!current.editors.map((v) => v.toLowerCase()).includes(n)) current.editors.push(parsed.data.addEditor);
-  }
-  if (parsed.data.removeEditor)  { current.editors = current.editors.filter((v) => v.toLowerCase() !== parsed.data.removeEditor!.toLowerCase()); }
-  if (parsed.data.transferOwner) {
-    current.ownerEmail = parsed.data.transferOwner;
-    current.editors    = current.editors.filter((v) => v.toLowerCase() !== parsed.data.transferOwner!.toLowerCase());
-  }
+    // Bootstrap permissions if none exist
+    if (!current.ownerEmail) {
+      current = { ownerEmail: userEmail, defaultRole: "editor", editors: [] };
+    }
 
-  permissionStore.set(parsed.data.designId, current);
-  res.json({ permissions: current });
+    if (!canManagePermissions(current, userEmail)) {
+      res.status(403).json({ error: "Forbidden" }); return;
+    }
+
+    const actions: string[] = [];
+    if (parsed.data.defaultRole) {
+      actions.push(`defaultRole:${current.defaultRole}→${parsed.data.defaultRole}`);
+      current.defaultRole = parsed.data.defaultRole;
+    }
+    if (parsed.data.addEditor) {
+      const n = parsed.data.addEditor.toLowerCase();
+      if (!current.editors.map((v) => v.toLowerCase()).includes(n)) {
+        current.editors.push(parsed.data.addEditor);
+        actions.push(`addEditor:${parsed.data.addEditor}`);
+      }
+    }
+    if (parsed.data.removeEditor) {
+      current.editors = current.editors.filter((v) => v.toLowerCase() !== parsed.data.removeEditor!.toLowerCase());
+      actions.push(`removeEditor:${parsed.data.removeEditor}`);
+    }
+    if (parsed.data.transferOwner) {
+      current.ownerEmail = parsed.data.transferOwner;
+      current.editors    = current.editors.filter((v) => v.toLowerCase() !== parsed.data.transferOwner!.toLowerCase());
+      actions.push(`transferOwner:${parsed.data.transferOwner}`);
+    }
+
+    await upsertPermissions(parsed.data.designId, current);
+
+    await writeAudit({
+      actorEmail: userEmail,
+      action: "permissions.update",
+      designId: parsed.data.designId,
+      before,
+      after: { ...current, changes: actions },
+    });
+
+    res.json({ permissions: current });
+  } catch (err) {
+    console.error("[design-comments PATCH permissions]", err);
+    res.status(500).json({ error: "Database error" });
+  }
 });
 
 export default router;

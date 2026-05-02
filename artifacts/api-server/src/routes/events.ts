@@ -1,8 +1,10 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { Request, Response } from "express";
+import { Pool } from "pg";
 
 const router = Router();
+const pool   = new Pool({ connectionString: process.env["DATABASE_URL"] });
 
 const schema = z.object({
   name: z.string().min(1).max(100),
@@ -10,15 +12,6 @@ const schema = z.object({
     .record(z.string(), z.union([z.string(), z.number(), z.boolean(), z.null()]))
     .optional(),
 });
-
-type EventRecord = {
-  name: string;
-  props?: Record<string, string | number | boolean | null>;
-  at: string;
-};
-
-const store: EventRecord[] = (globalThis as Record<string, unknown>).__alveoEvents as EventRecord[] || [];
-(globalThis as Record<string, unknown>).__alveoEvents = store;
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -36,7 +29,7 @@ function checkRateLimit(key: string, windowMs: number, max: number): { allowed: 
   return { allowed: true, retryAfterSec: 0 };
 }
 
-router.post("/events", (req: Request, res: Response) => {
+router.post("/events", async (req: Request, res: Response) => {
   const ip = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown";
   const limit = checkRateLimit(`events:${ip}`, 60_000, 100);
   if (!limit.allowed) {
@@ -51,21 +44,43 @@ router.post("/events", (req: Request, res: Response) => {
     return;
   }
 
-  store.push({ ...parsed.data, at: new Date().toISOString() });
-  if (store.length > 1000) store.splice(0, store.length - 1000);
-
-  res.json({ ok: true });
+  try {
+    await pool.query(
+      `INSERT INTO alveo_events (event_name, properties, session_id)
+       VALUES ($1, $2, $3)`,
+      [parsed.data.name, JSON.stringify(parsed.data.props ?? {}), null],
+    );
+    res.json({ ok: true });
+  } catch (err) {
+    console.error("[events POST]", err);
+    res.status(500).json({ error: "Database error" });
+  }
 });
 
-router.get("/events", (req: Request, res: Response) => {
+router.get("/events", async (req: Request, res: Response) => {
   const configuredToken = process.env["EVENTS_ADMIN_TOKEN"];
-  // Fail-closed: if no token is configured, deny all access to the admin listing.
-  // This prevents accidental exposure of analytics data in unprotected deployments.
   if (!configuredToken || req.headers["x-admin-token"] !== configuredToken) {
     res.status(401).json({ error: "Unauthorized" });
     return;
   }
-  res.json({ events: store.slice(-200) });
+
+  try {
+    const result = await pool.query<{ id: number; event_name: string; properties: unknown; session_id: string | null; created_at: string }>(
+      `SELECT id, event_name, properties, session_id, created_at
+       FROM alveo_events
+       ORDER BY created_at DESC
+       LIMIT 200`,
+    );
+    const events = result.rows.map((r) => ({
+      name: r.event_name,
+      props: r.properties,
+      at: r.created_at,
+    }));
+    res.json({ events });
+  } catch (err) {
+    console.error("[events GET]", err);
+    res.status(500).json({ error: "Database error" });
+  }
 });
 
 export default router;

@@ -7,6 +7,7 @@ import { useTheme } from 'next-themes';
 const navLinks = [
   { href: '/', label: 'Home' },
   { href: '/configure', label: 'Configure' },
+  { href: '/builder', label: 'Builder' },
   { href: '/gallery', label: 'Gallery' },
   { href: '/about', label: 'About' },
   { href: '/faq', label: 'FAQ' },

@@ -308,6 +308,7 @@ export function LivePreview({
       const renderer = new ClosetIsometricRenderer(wallLayout, {
         style: config.userInfo.stylePreference,
         woodFinish: config.userInfo.woodFinish,
+        hardwareFinish: config.userInfo.hardwareFinish,
       });
       return renderer.renderIsometric();
     } catch {

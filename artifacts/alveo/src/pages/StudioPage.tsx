@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, type ReactElement } from "react";
 import { useLocation, Link } from "wouter";
-import { ArrowLeft, ArrowRight, Check, Plus, GripVertical, Trash2, Bookmark, BookmarkCheck, ExternalLink, AlertCircle } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Plus, GripVertical, Trash2, Bookmark, BookmarkCheck, ExternalLink, AlertCircle, FolderOpen, Clock, X, Loader2 } from "lucide-react";
 import { BUILTIN_CATALOGUE, getCat, type CatalogueEntry } from "@/types/catalogue";
 import { getStoredToken } from "@/lib/AuthContext";
 
@@ -501,6 +501,202 @@ function StepBar({ step }: { step: number }) {
   );
 }
 
+// ─── Load modal ──────────────────────────────────────────────────────────────
+
+interface AnyDesign {
+  id: string;
+  name: string;
+  savedAt?: string;
+  config?: {
+    source?: string;
+    closetKind?: string;
+    wallDimensions?: { width?: number; height?: number; depth?: number };
+    builderModules?: Array<{ id?: string; type: string; label: string; width: number }>;
+  };
+}
+
+function _localLoad(): AnyDesign[] {
+  try {
+    const a = JSON.parse(localStorage.getItem("alveo_saved_designs") || "[]") as AnyDesign[];
+    const b = JSON.parse(localStorage.getItem("alveo_designs") || "[]") as AnyDesign[];
+    const seen = new Set<string>();
+    return [...a, ...b].filter((d) => { if (seen.has(d.id)) return false; seen.add(d.id); return true; });
+  } catch { return []; }
+}
+
+function fmtDate(iso?: string) {
+  if (!iso) return "";
+  try { return new Date(iso).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" }); }
+  catch { return ""; }
+}
+
+const KIND_LABELS: Record<string, string> = {
+  "reach-in": "Reach-In", "walkin-single": "Walk-In · Single", "walkin-l": "Walk-In · L", "walkin-u": "Walk-In · U",
+};
+
+interface LoadModalProps {
+  onLoad: (kind: ClosetKind, wallW: number, wallH: number, wallD: number, modules: StudioModule[]) => void;
+  onClose: () => void;
+}
+
+function LoadModal({ onLoad, onClose }: LoadModalProps) {
+  const [designs, setDesigns] = useState<AnyDesign[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      setLoading(true);
+      const local = _localLoad();
+      const token = getStoredToken();
+      let remote: AnyDesign[] = [];
+      if (token) {
+        try {
+          const res = await fetch(`${BASE}/api/designs`, {
+            headers: { Authorization: `Bearer ${token}` },
+          });
+          if (res.ok) {
+            const data = (await res.json()) as { designs: AnyDesign[] };
+            remote = data.designs ?? [];
+          }
+        } catch { /* ignore */ }
+      }
+      if (cancelled) return;
+      // Merge: remote takes precedence over local (by id)
+      const seen = new Set<string>();
+      const merged: AnyDesign[] = [];
+      for (const d of [...remote, ...local]) {
+        if (!seen.has(d.id)) { seen.add(d.id); merged.push(d); }
+      }
+      // Sort newest first
+      merged.sort((a, b) => (b.savedAt ?? "").localeCompare(a.savedAt ?? ""));
+      setDesigns(merged);
+      setLoading(false);
+    })();
+    return () => { cancelled = true; };
+  }, []);
+
+  const filtered = search.trim()
+    ? designs.filter((d) => d.name.toLowerCase().includes(search.toLowerCase()))
+    : designs;
+
+  const handleLoad = (d: AnyDesign) => {
+    const cfg = d.config ?? {};
+    const kind = (cfg.closetKind as ClosetKind) ?? "reach-in";
+    const dims = cfg.wallDimensions ?? {};
+    const wallW = Math.max(36, Math.min(360, dims.width ?? 120));
+    const wallH = Math.max(72, Math.min(120, dims.height ?? 96));
+    const wallD = Math.max(14, Math.min(30, dims.depth ?? 24));
+    const modules: StudioModule[] = (cfg.builderModules ?? []).map((m) => ({
+      id: sid(),
+      type: m.type,
+      label: m.label,
+      width: m.width,
+    }));
+    onLoad(kind, wallW, wallH, wallD, modules);
+  };
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <div className="relative bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[80vh] flex flex-col overflow-hidden"
+        onClick={(e) => e.stopPropagation()}>
+        {/* Header */}
+        <div className="flex items-center gap-3 px-5 py-4 border-b border-stone-100">
+          <FolderOpen size={18} className="text-taupe-500 flex-shrink-0"/>
+          <div className="flex-1 min-w-0">
+            <p className="font-semibold text-charcoal-600 text-sm">Load a Saved Design</p>
+            <p className="text-xs text-stone-400 mt-0.5">Pick any design to continue editing it</p>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 transition-colors">
+            <X size={14}/>
+          </button>
+        </div>
+
+        {/* Search */}
+        <div className="px-4 pt-3 pb-2">
+          <input
+            autoFocus
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            placeholder="Search designs…"
+            className="w-full text-sm border border-stone-200 rounded-xl px-3 py-2 placeholder-stone-300 focus:outline-none focus:ring-2 focus:ring-taupe-300 bg-stone-50 text-charcoal-700"
+          />
+        </div>
+
+        {/* List */}
+        <div className="flex-1 overflow-y-auto px-4 pb-4 space-y-2">
+          {loading && (
+            <div className="flex items-center justify-center py-10 gap-2 text-stone-400">
+              <Loader2 size={16} className="animate-spin"/> Loading designs…
+            </div>
+          )}
+
+          {!loading && filtered.length === 0 && (
+            <div className="flex flex-col items-center justify-center py-10 text-stone-400 gap-2">
+              <FolderOpen size={28} className="opacity-40"/>
+              <p className="text-sm">
+                {search ? "No designs match that search." : "No saved designs yet."}
+              </p>
+              {!search && (
+                <p className="text-xs text-stone-300 text-center max-w-xs">
+                  Complete step 3 and hit "Save Design" to bookmark a layout for later.
+                </p>
+              )}
+            </div>
+          )}
+
+          {!loading && filtered.map((d) => {
+            const cfg = d.config ?? {};
+            const dims = cfg.wallDimensions;
+            const modCount = cfg.builderModules?.length ?? 0;
+            const isStudio = cfg.source === "studio";
+            const kindLabel = KIND_LABELS[cfg.closetKind ?? ""] ?? "";
+            return (
+              <button key={d.id} onClick={() => handleLoad(d)}
+                className="w-full flex items-start gap-3 p-3.5 rounded-xl border border-stone-200 hover:border-taupe-300 hover:bg-taupe-50 text-left transition-all group">
+                <span className="w-9 h-9 rounded-lg bg-stone-100 group-hover:bg-taupe-100 flex items-center justify-center text-lg flex-shrink-0 transition-colors">
+                  {isStudio ? "🛋️" : "🔨"}
+                </span>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold text-charcoal-600 truncate">{d.name}</p>
+                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                    {kindLabel && (
+                      <span className="text-[10px] font-medium text-taupe-600 bg-taupe-50 border border-taupe-100 rounded-full px-1.5 py-0.5">{kindLabel}</span>
+                    )}
+                    {dims && (
+                      <span className="text-[10px] text-stone-400 font-mono">{dims.width}″ × {dims.height}″ × {dims.depth}″</span>
+                    )}
+                    {modCount > 0 && (
+                      <span className="text-[10px] text-stone-400">{modCount} module{modCount !== 1 ? "s" : ""}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex-shrink-0 flex flex-col items-end gap-1">
+                  {d.savedAt && (
+                    <span className="flex items-center gap-1 text-[10px] text-stone-300">
+                      <Clock size={9}/>{fmtDate(d.savedAt)}
+                    </span>
+                  )}
+                  <span className="text-[10px] font-semibold text-taupe-500 opacity-0 group-hover:opacity-100 transition-opacity">Load →</span>
+                </div>
+              </button>
+            );
+          })}
+        </div>
+
+        {!loading && !getStoredToken() && designs.length > 0 && (
+          <div className="px-4 pb-3 flex items-center gap-1.5 text-[10px] text-amber-600">
+            <AlertCircle size={10}/> Showing local designs only.{" "}
+            <Link href="/login" onClick={onClose} className="underline hover:text-amber-700">Log in</Link>
+            {" "}to load your account designs.
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── Save panel ──────────────────────────────────────────────────────────────
 
 type SaveStatus = "idle" | "saving" | "saved" | "error";
@@ -661,6 +857,7 @@ export default function StudioPage() {
   const [wallH, setWallH] = useState(96);
   const [wallD, setWallD] = useState(24);
   const [modules, setModules] = useState<StudioModule[]>([]);
+  const [showLoad, setShowLoad] = useState(false);
   const catalogue = BUILTIN_CATALOGUE;
 
   const totalUsed = modules.reduce((s, m) => s + m.width, 0);
@@ -669,6 +866,23 @@ export default function StudioPage() {
     localStorage.setItem("alveo_builder_modules", JSON.stringify(modules));
     localStorage.setItem("alveo_studio_dims", JSON.stringify({ wallW, wallH, wallD }));
     navigate("/builder");
+  };
+
+  const handleLoadDesign = (
+    loadedKind: ClosetKind,
+    loadedW: number,
+    loadedH: number,
+    loadedD: number,
+    loadedModules: StudioModule[],
+  ) => {
+    setKind(loadedKind);
+    setWallW(loadedW);
+    setWallH(loadedH);
+    setWallD(loadedD);
+    setModules(loadedModules);
+    setShowLoad(false);
+    // Jump straight to the layout step so the user can see + edit what they loaded
+    setStep(3);
   };
 
   const canAdvance =
@@ -682,7 +896,23 @@ export default function StudioPage() {
 
       {/* Content */}
       <div className="flex-1 flex flex-col items-center justify-start overflow-y-auto py-6 min-h-0">
-        {step === 1 && <TypeStep value={kind} onChange={setKind}/>}
+        {step === 1 && (
+          <>
+            <TypeStep value={kind} onChange={setKind}/>
+            {/* Load saved shortcut — shown below the type cards */}
+            <div className="mt-2 flex items-center gap-3">
+              <div className="h-px w-16 bg-stone-200"/>
+              <span className="text-xs text-stone-400">or</span>
+              <div className="h-px w-16 bg-stone-200"/>
+            </div>
+            <button
+              onClick={() => setShowLoad(true)}
+              className="mt-3 flex items-center gap-2 px-5 py-2.5 rounded-xl text-sm font-medium text-taupe-600 bg-taupe-50 hover:bg-taupe-100 border border-taupe-200 transition-all shadow-sm"
+            >
+              <FolderOpen size={15}/> Load a Saved Design
+            </button>
+          </>
+        )}
 
         {step === 2 && (
           <div className="flex flex-col items-center gap-4 w-full px-4">
@@ -696,9 +926,18 @@ export default function StudioPage() {
 
         {step === 3 && (
           <div className="flex flex-col items-center gap-4 w-full">
-            <div className="text-center px-4">
-              <h2 className="font-serif text-2xl font-bold text-charcoal-600">Design your layout</h2>
-              <p className="text-sm text-stone-400 mt-1">Drag modules onto the wall · pick a preset to start fast</p>
+            <div className="flex items-center justify-center gap-4 px-4 w-full">
+              <div className="text-center">
+                <h2 className="font-serif text-2xl font-bold text-charcoal-600">Design your layout</h2>
+                <p className="text-sm text-stone-400 mt-1">Drag modules onto the wall · pick a preset to start fast</p>
+              </div>
+              <button
+                onClick={() => setShowLoad(true)}
+                className="flex-shrink-0 flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-medium text-stone-500 bg-white hover:bg-stone-50 border border-stone-200 hover:border-taupe-300 transition-all"
+                title="Load a different saved design"
+              >
+                <FolderOpen size={13}/> Load
+              </button>
             </div>
             <LayoutStep modules={modules} setModules={setModules} wallW={wallW} catalogue={catalogue}/>
           </div>
@@ -753,6 +992,11 @@ export default function StudioPage() {
           )}
         </div>
       </div>
+
+      {/* Load modal */}
+      {showLoad && (
+        <LoadModal onLoad={handleLoadDesign} onClose={() => setShowLoad(false)}/>
+      )}
     </div>
   );
 }

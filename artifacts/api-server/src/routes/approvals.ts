@@ -136,7 +136,7 @@ router.get("/approvals/design/:designId", requireAuthJwt, async (req: Request, r
   const { designId } = req.params;
   try {
     const result = await pool.query(
-      `SELECT id, design_id, design_name, client_email, status, client_note, created_at, responded_at
+      `SELECT id, design_id, design_name, client_email, status, client_note, token, created_at, responded_at
        FROM alveo_design_approvals
        WHERE design_id = $1 AND owner_email = $2
        ORDER BY created_at DESC`,
@@ -152,7 +152,7 @@ router.get("/approvals", requireAuthJwt, async (req: Request, res: Response) => 
   const email = (req as Request & { userEmail: string }).userEmail;
   try {
     const result = await pool.query(
-      `SELECT id, design_id, design_name, client_email, status, client_note, created_at, responded_at
+      `SELECT id, design_id, design_name, client_email, status, client_note, token, created_at, responded_at
        FROM alveo_design_approvals
        WHERE owner_email = $1
        ORDER BY created_at DESC

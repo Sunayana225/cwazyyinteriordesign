@@ -5,10 +5,11 @@ import {
   Plus, FolderOpen, Users, LayoutGrid, Clock, CheckCircle2,
   AlertCircle, Pencil, Trash2, X, ChevronRight, BarChart2,
   Sparkles, Send, ArrowRight, Tag, GitCompare, Share2, Bell, Copy, Check,
-  History, RotateCcw,
+  History, RotateCcw, Search, Wand2, ExternalLink,
 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { getStoredToken } from "@/lib/AuthContext";
+import { useToast } from "@/lib/toast";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
@@ -57,6 +58,11 @@ function daysSince(iso: string) {
 // ─── Design comparison modal ──────────────────────────────────────────────────
 
 function CompareModal({ a, b, onClose }: { a: SavedDesign; b: SavedDesign; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
   const fields = (d: SavedDesign) => {
     const cfg = d.config ?? {};
     const dims = (cfg.wallDimensions as { width?: number; height?: number; depth?: number } | undefined);
@@ -128,6 +134,11 @@ function CompareModal({ a, b, onClose }: { a: SavedDesign; b: SavedDesign; onClo
 // ─── Share modal ──────────────────────────────────────────────────────────────
 
 function ShareModal({ design, approvals, onClose }: { design: SavedDesign; approvals: Approval[]; onClose: () => void }) {
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
   const existing = approvals.find((a) => a.design_id === design.id);
   const [copied, setCopied] = useState(false);
 
@@ -199,7 +210,11 @@ function VersionHistoryModal({
   duplicating: number | null;
 }) {
   const versions = (design.config?.versions as DesignVersion[] | undefined) ?? [];
-
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [onClose]);
   return (
     <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
       <motion.div
@@ -358,6 +373,9 @@ export default function DashboardPage() {
   const [saving,          setSaving]          = useState(false);
   const [deleteId,        setDeleteId]        = useState<string|null>(null);
 
+  // Design search
+  const [designSearch, setDesignSearch] = useState("");
+
   // Tags filter
   const [activeTag, setActiveTag] = useState<string>("All");
 
@@ -456,6 +474,7 @@ export default function DashboardPage() {
       });
       await loadAll();
       setHistoryDesign(null);
+      showToast(`Branched as "${newName}"`, "success");
     } finally {
       setDuplicatingIdx(null);
     }
@@ -466,7 +485,8 @@ export default function DashboardPage() {
     setResolvingId(approvalId);
     try {
       const res = await fetch(`${BASE}/api/approvals/${approvalId}/resolve`, { method: "PATCH", headers: authHeaders() });
-      if (res.ok) await loadAll();
+      if (res.ok) { await loadAll(); showToast("Revision marked as resolved", "success"); }
+      else showToast("Could not resolve revision", "error");
     } finally { setResolvingId(null); }
   }
 
@@ -475,6 +495,7 @@ export default function DashboardPage() {
     const snapshot = versions[versionIdx];
     if (!snapshot) return;
     setRestoringIdx(versionIdx);
+    // toast after completion handled below
     try {
       // Build the restored config from the snapshot, keep the full versions array
       const restoredConfig: Record<string, unknown> = {
@@ -493,6 +514,7 @@ export default function DashboardPage() {
       });
       await loadAll();
       setHistoryDesign(null);
+      showToast("Version restored", "success");
     } finally {
       setRestoringIdx(null);
     }
@@ -506,12 +528,16 @@ export default function DashboardPage() {
   }, [designs]);
 
   const filteredDesigns = useMemo(() => {
-    if (activeTag === "All") return designs;
-    return designs.filter((d) => {
+    let result = activeTag === "All" ? designs : designs.filter((d) => {
       const tags = d.config?.tags as string[] | undefined;
       return tags?.includes(activeTag);
     });
-  }, [designs, activeTag]);
+    if (designSearch.trim()) {
+      const q = designSearch.trim().toLowerCase();
+      result = result.filter(d => d.name.toLowerCase().includes(q));
+    }
+    return result;
+  }, [designs, activeTag, designSearch]);
 
   const toggleCompare = (id: string) => {
     setCompareIds((prev) => prev.includes(id) ? prev.filter((x) => x !== id) : prev.length < 2 ? [...prev, id] : [prev[1], id]);
@@ -522,7 +548,26 @@ export default function DashboardPage() {
     : [];
 
   const pendingApprovals = approvals.filter((a) => a.status === "pending");
+  const allCaughtUp = approvals.length > 0 && pendingApprovals.length === 0 && !approvals.some(a => a.status === "rejected");
   const displayName = user?.firstName ? `${user.firstName}${user.lastName?" "+user.lastName:""}` : user?.email?.split("@")[0] ?? "Designer";
+
+  const { showToast } = useToast();
+
+  const loadIntoStudio = (d: SavedDesign) => {
+    const cfg = d.config ?? {};
+    if (cfg.builderModules) localStorage.setItem("alveo_builder_modules", JSON.stringify(cfg.builderModules));
+    const dims = cfg.wallDimensions as { width?: number; height?: number; depth?: number } | undefined;
+    localStorage.setItem("alveo_studio_dims", JSON.stringify({
+      wallW: dims?.width ?? 96, wallH: dims?.height ?? 84, wallD: dims?.depth ?? 24,
+      finish: (cfg.finish as string) ?? "medium",
+    }));
+    navigate("/studio");
+  };
+
+  const copyPortalLink = (token: string) => {
+    const url = `${window.location.origin}${BASE}/portal/${token}`;
+    navigator.clipboard.writeText(url).then(() => showToast("Portal link copied!", "success"));
+  };
 
   return (
     <div className="min-h-screen bg-cream-50 pt-16">
@@ -614,7 +659,7 @@ export default function DashboardPage() {
 
             {/* Recent Designs */}
             <div>
-              <div className="flex items-center justify-between mb-4">
+              <div className="flex items-center justify-between mb-3">
                 <h2 className="font-serif text-2xl text-charcoal-600">Recent Designs</h2>
                 <div className="flex items-center gap-2">
                   {compareIds.length === 2 && (
@@ -627,6 +672,22 @@ export default function DashboardPage() {
                     New design <ArrowRight size={14}/>
                   </Link>
                 </div>
+              </div>
+
+              {/* Search */}
+              <div className="relative mb-3">
+                <Search size={13} className="absolute left-3 top-1/2 -translate-y-1/2 text-stone-400 pointer-events-none"/>
+                <input
+                  value={designSearch} onChange={e => setDesignSearch(e.target.value)}
+                  placeholder="Search designs…"
+                  className="w-full pl-8 pr-8 py-2 text-sm bg-white border border-cream-200 rounded-xl text-charcoal-600 placeholder-stone-300 focus:outline-none focus:ring-1 focus:ring-taupe-300 focus:border-taupe-300"
+                />
+                {designSearch && (
+                  <button onClick={() => setDesignSearch("")}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 p-0.5 rounded text-stone-300 hover:text-stone-500">
+                    <X size={12}/>
+                  </button>
+                )}
               </div>
 
               {/* Tag filter */}
@@ -645,14 +706,18 @@ export default function DashboardPage() {
               {filteredDesigns.length === 0 && !loading ? (
                 <div className="bg-white rounded-2xl border border-dashed border-cream-300 p-10 text-center">
                   <LayoutGrid className="mx-auto mb-3 text-charcoal-300" size={36}/>
-                  <p className="text-charcoal-400 text-sm">{activeTag==="All" ? "No saved designs yet." : `No designs tagged "${activeTag}".`}</p>
-                  <Link href="/configure" className="inline-block mt-4 px-5 py-2 bg-charcoal-600 text-white text-sm rounded-lg hover:bg-charcoal-500 transition-colors">Start designing</Link>
+                  <p className="text-charcoal-400 text-sm">
+                    {designSearch ? `No designs match "${designSearch}".` : activeTag==="All" ? "No saved designs yet." : `No designs tagged "${activeTag}".`}
+                  </p>
+                  {!designSearch && <Link href="/configure" className="inline-block mt-4 px-5 py-2 bg-charcoal-600 text-white text-sm rounded-lg hover:bg-charcoal-500 transition-colors">Start designing</Link>}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   {(showAllDesigns ? filteredDesigns : filteredDesigns.slice(0, 6)).map((d) => {
                     const tags = d.config?.tags as string[] | undefined;
                     const versionCount = (d.config?.versions as unknown[] | undefined)?.length ?? 0;
+                    const mods = (d.config?.builderModules as unknown[] | undefined) ?? [];
+                    const dims = d.config?.wallDimensions as { width?: number; height?: number } | undefined;
                     const isSelected = compareIds.includes(d.id);
                     return (
                       <div key={d.id} className={`bg-white rounded-xl border p-4 flex items-start gap-3 transition-all
@@ -673,6 +738,13 @@ export default function DashboardPage() {
                             )}
                           </div>
                           <p className="text-xs text-charcoal-400 mt-0.5">{new Date(d.savedAt).toLocaleDateString()}</p>
+                          {(mods.length > 0 || dims?.width) && (
+                            <p className="text-[10px] text-stone-400 mt-0.5 font-mono">
+                              {mods.length > 0 && `${mods.length} module${mods.length !== 1 ? "s" : ""}`}
+                              {mods.length > 0 && dims?.width && " · "}
+                              {dims?.width && `${dims.width}×${dims.height}″`}
+                            </p>
+                          )}
                           {tags && tags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1.5">
                               {tags.map((t) => (
@@ -681,19 +753,25 @@ export default function DashboardPage() {
                             </div>
                           )}
                         </div>
-                        <div className="flex items-center gap-1 shrink-0">
-                          <button onClick={() => setHistoryDesign(d)} title="Version history"
-                            className="p-1.5 rounded-lg bg-cream-50 border border-cream-200 text-charcoal-400 hover:text-taupe-600 hover:bg-taupe-50 hover:border-taupe-200 transition-colors">
-                            <History size={13}/>
+                        <div className="flex flex-col gap-1 shrink-0">
+                          <div className="flex items-center gap-1">
+                            <button onClick={() => setHistoryDesign(d)} title="Version history"
+                              className="p-1.5 rounded-lg bg-cream-50 border border-cream-200 text-charcoal-400 hover:text-taupe-600 hover:bg-taupe-50 hover:border-taupe-200 transition-colors">
+                              <History size={13}/>
+                            </button>
+                            <button onClick={() => setShareDesign(d)} title="Share design"
+                              className="p-1.5 rounded-lg bg-cream-50 border border-cream-200 text-charcoal-400 hover:text-taupe-600 hover:bg-taupe-50 hover:border-taupe-200 transition-colors">
+                              <Share2 size={13}/>
+                            </button>
+                            <Link href="/configure"
+                              className="p-1.5 rounded-lg bg-cream-50 border border-cream-200 text-charcoal-400 hover:text-charcoal-600 hover:bg-cream-100 transition-colors">
+                              <ChevronRight size={15}/>
+                            </Link>
+                          </div>
+                          <button onClick={() => loadIntoStudio(d)} title="Load into Studio"
+                            className="flex items-center justify-center gap-1 text-[10px] font-medium py-1 px-2 rounded-lg border border-taupe-200 bg-taupe-50 text-taupe-600 hover:bg-taupe-100 transition-colors w-full">
+                            <Wand2 size={9}/> Studio
                           </button>
-                          <button onClick={() => setShareDesign(d)} title="Share design"
-                            className="p-1.5 rounded-lg bg-cream-50 border border-cream-200 text-charcoal-400 hover:text-taupe-600 hover:bg-taupe-50 hover:border-taupe-200 transition-colors">
-                            <Share2 size={13}/>
-                          </button>
-                          <Link href="/configure"
-                            className="p-1.5 rounded-lg bg-cream-50 border border-cream-200 text-charcoal-400 hover:text-charcoal-600 hover:bg-cream-100 transition-colors">
-                            <ChevronRight size={15}/>
-                          </Link>
                         </div>
                       </div>
                     );
@@ -724,6 +802,12 @@ export default function DashboardPage() {
                   <p className="text-sm text-charcoal-400">No approval requests yet.</p>
                   <p className="text-xs text-charcoal-400 mt-1">Send a design for client approval from the configure page.</p>
                 </div>
+              ) : allCaughtUp ? (
+                <div className="bg-emerald-50 rounded-2xl border border-emerald-100 p-5 text-center">
+                  <CheckCircle2 className="mx-auto mb-2 text-emerald-400" size={24}/>
+                  <p className="text-sm font-semibold text-emerald-700">All caught up!</p>
+                  <p className="text-xs text-emerald-600 mt-1">All {approvals.length} approval{approvals.length!==1?"s":""} resolved.</p>
+                </div>
               ) : (
                 <div className="space-y-2.5">
                   {(showAllApprovals ? approvals : approvals.slice(0, 5)).map((a) => {
@@ -736,8 +820,15 @@ export default function DashboardPage() {
                           <span className="font-medium text-charcoal-600 text-sm truncate flex-1">{a.design_name ?? a.design_id}</span>
                           <span className={`text-[10px] uppercase tracking-widest border rounded-full px-2 py-0.5 ${STATUS_COLORS[a.status]??""}`}>{a.status}</span>
                         </div>
-                        {a.client_email && <p className="text-xs text-charcoal-400 mt-1">{a.client_email}</p>}
-                        {a.client_note && <p className="text-xs text-charcoal-500 mt-1 italic">"{a.client_note}"</p>}
+                        <div className="flex items-center gap-2 mt-0.5">
+                          {a.client_email && <p className="text-xs text-charcoal-400 flex-1 truncate">{a.client_email}</p>}
+                          {a.token && (
+                            <button onClick={() => copyPortalLink(a.token!)} title="Copy portal link"
+                              className="p-1 rounded text-stone-400 hover:text-taupe-600 hover:bg-taupe-50 transition-colors flex-shrink-0">
+                              <ExternalLink size={11}/>
+                            </button>
+                          )}
+                        </div>
                         <div className="flex items-center justify-between mt-1.5 gap-2">
                           <p className="text-xs text-charcoal-400">{new Date(a.created_at).toLocaleDateString()}</p>
                           {isPending && days > 0 && (

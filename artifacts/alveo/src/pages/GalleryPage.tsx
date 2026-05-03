@@ -440,11 +440,14 @@ export default function GalleryPage() {
 
         {/* Style filter */}
         <div className="sticky top-16 z-10 bg-cream-50/95 backdrop-blur-sm pb-3 pt-2 -mx-6 px-6 border-b border-cream-200">
-          <div className="flex flex-wrap gap-2 mb-2">
+          <div className="flex flex-wrap gap-2 mb-2 items-center">
             {tags.map((t) => (
               <button key={t} onClick={() => setActiveTag(t)}
                 className={`${filterPillBase} ${activeTag===t ? filterPillActive : filterPillInactive}`}>{t}</button>
             ))}
+            <span className="ml-auto text-[10px] font-medium text-stone-400 tabular-nums">
+              {sorted.length !== items.length ? `${sorted.length} of ${items.length}` : `${items.length}`} designs
+            </span>
           </div>
           <div className="flex flex-wrap gap-2 items-center">
             {sizes.map((s) => (

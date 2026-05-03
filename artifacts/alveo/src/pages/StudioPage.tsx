@@ -1,5 +1,6 @@
 import { useState, useRef, useEffect, useCallback, type ReactElement } from "react";
 import { useLocation, Link } from "wouter";
+import { useToast } from "@/lib/toast";
 import {
   ArrowLeft, ArrowRight, Check, Plus, GripVertical, Trash2, Bookmark, BookmarkCheck,
   ExternalLink, AlertCircle, FolderOpen, Clock, X, Loader2, Pencil, Copy,
@@ -908,6 +909,7 @@ interface SavePanelProps {
 }
 
 function SavePanel({ modules, wallW, wallH, wallD, kind, finish, triggerRef }: SavePanelProps) {
+  const { showToast } = useToast();
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -946,13 +948,13 @@ function SavePanel({ modules, wallW, wallH, wallD, kind, finish, triggerRef }: S
           body: JSON.stringify({ design }),
         });
         if (!res.ok) throw new Error(`HTTP ${res.status}`);
-        setStatus("saved");
+        setStatus("saved"); showToast(`"${trimmed}" saved!`, "success");
       } catch {
         setErrMsg("Could not reach the server — saved locally instead.");
-        _localSave(design); setStatus("saved");
+        _localSave(design); setStatus("saved"); showToast("Saved locally", "info");
       }
     } else {
-      _localSave(design); setStatus("saved");
+      _localSave(design); setStatus("saved"); showToast("Saved locally", "info");
     }
   };
 
@@ -1197,6 +1199,10 @@ export default function StudioPage() {
                 )}
               </div>
               <SavePanel modules={modules} wallW={wallW} wallH={wallH} wallD={wallD} kind={kind} finish={finish} triggerRef={saveTriggerRef}/>
+              <span className="hidden sm:flex items-center gap-1 text-[10px] text-stone-300 select-none">
+                <kbd className="px-1 py-0.5 rounded border border-stone-200 bg-stone-50 text-stone-400 text-[9px] font-mono leading-tight">⌘S</kbd>
+                save
+              </span>
             </>
           ) : (
             <span className="text-xs text-stone-400 font-mono">
@@ -1207,9 +1213,19 @@ export default function StudioPage() {
 
         <div className="flex items-center gap-2">
           {step===3 && modules.length>0 && (
-            <span className={`text-xs font-medium whitespace-nowrap ${totalUsed>wallW?"text-red-500":"text-stone-400"}`}>
-              {totalUsed}″ / {wallW}″
-            </span>
+            <div className="flex flex-col items-end gap-0.5">
+              <span className={`text-[10px] font-mono tabular-nums ${totalUsed>wallW?"text-red-500":"text-stone-400"}`}>
+                {totalUsed}″ / {wallW}″
+              </span>
+              <div className="w-20 h-1.5 bg-stone-100 rounded-full overflow-hidden">
+                <div className="h-full rounded-full transition-all duration-200"
+                  style={{
+                    width: `${Math.min(100, (totalUsed / wallW) * 100)}%`,
+                    background: totalUsed > wallW ? "#ef4444" : totalUsed / wallW > 0.9 ? "#f59e0b" : "#8b7355",
+                  }}
+                />
+              </div>
+            </div>
           )}
           {step < 3 ? (
             <button onClick={() => setStep(s => s+1)} disabled={!canAdvance}

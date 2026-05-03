@@ -1,6 +1,6 @@
 import { useState, useRef, useEffect, useCallback, type ReactElement } from "react";
 import { useLocation, Link } from "wouter";
-import { ArrowLeft, ArrowRight, Check, Plus, GripVertical, Trash2, Bookmark, BookmarkCheck, ExternalLink, AlertCircle, FolderOpen, Clock, X, Loader2 } from "lucide-react";
+import { ArrowLeft, ArrowRight, Check, Plus, GripVertical, Trash2, Bookmark, BookmarkCheck, ExternalLink, AlertCircle, FolderOpen, Clock, X, Loader2, Pencil } from "lucide-react";
 import { BUILTIN_CATALOGUE, getCat, type CatalogueEntry } from "@/types/catalogue";
 import { getStoredToken } from "@/lib/AuthContext";
 
@@ -515,6 +515,15 @@ interface AnyDesign {
   };
 }
 
+function _localRename(id: string, name: string) {
+  for (const key of ["alveo_saved_designs", "alveo_designs"]) {
+    try {
+      const arr = JSON.parse(localStorage.getItem(key) || "[]") as AnyDesign[];
+      localStorage.setItem(key, JSON.stringify(arr.map((d) => d.id === id ? { ...d, name } : d)));
+    } catch { /* ignore */ }
+  }
+}
+
 function _localDelete(id: string) {
   for (const key of ["alveo_saved_designs", "alveo_designs"]) {
     try {
@@ -553,6 +562,8 @@ function LoadModal({ onLoad, onClose }: LoadModalProps) {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [renamingId, setRenamingId] = useState<string | null>(null);
+  const [renameValue, setRenameValue] = useState("");
 
   useEffect(() => {
     let cancelled = false;
@@ -605,6 +616,33 @@ function LoadModal({ onLoad, onClose }: LoadModalProps) {
       width: m.width,
     }));
     onLoad(kind, wallW, wallH, wallD, modules);
+  };
+
+  const startRename = (d: AnyDesign) => {
+    setDeletingId(null);
+    setRenamingId(d.id);
+    setRenameValue(d.name);
+  };
+
+  const executeRename = async (id: string) => {
+    const newName = renameValue.trim();
+    if (!newName) { setRenamingId(null); return; }
+    setDesigns((prev) => prev.map((d) => d.id === id ? { ...d, name: newName } : d));
+    setRenamingId(null);
+    _localRename(id, newName);
+    const token = getStoredToken();
+    if (token) {
+      try {
+        const design = designs.find((d) => d.id === id);
+        if (design) {
+          await fetch(`${BASE}/api/designs`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+            body: JSON.stringify({ design: { ...design, name: newName } }),
+          });
+        }
+      } catch { /* ignore */ }
+    }
   };
 
   const executeDelete = async (id: string) => {
@@ -679,20 +717,38 @@ function LoadModal({ onLoad, onClose }: LoadModalProps) {
             const isStudio = cfg.source === "studio";
             const kindLabel = KIND_LABELS[cfg.closetKind ?? ""] ?? "";
             const isPendingDelete = deletingId === d.id;
+            const isRenaming = renamingId === d.id;
             return (
               <div key={d.id}
                 className={`w-full flex items-stretch gap-0 rounded-xl border transition-all group overflow-hidden
-                  ${isPendingDelete ? "border-red-300 bg-red-50" : "border-stone-200 hover:border-taupe-300 hover:bg-taupe-50"}`}>
+                  ${isPendingDelete ? "border-red-300 bg-red-50"
+                  : isRenaming    ? "border-taupe-400 bg-taupe-50"
+                  : "border-stone-200 hover:border-taupe-300 hover:bg-taupe-50"}`}>
 
-                {/* Load area — click to load */}
-                <button onClick={() => handleLoad(d)}
-                  className="flex items-start gap-3 flex-1 min-w-0 p-3.5 text-left">
+                {/* Load / rename area */}
+                <button
+                  onClick={() => { if (!isRenaming) handleLoad(d); }}
+                  className={`flex items-start gap-3 flex-1 min-w-0 p-3.5 text-left ${isRenaming ? "cursor-default" : ""}`}>
                   <span className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0 transition-colors
-                    ${isPendingDelete ? "bg-red-100" : "bg-stone-100 group-hover:bg-taupe-100"}`}>
+                    ${isPendingDelete ? "bg-red-100" : isRenaming ? "bg-taupe-100" : "bg-stone-100 group-hover:bg-taupe-100"}`}>
                     {isStudio ? "🛋️" : "🔨"}
                   </span>
                   <div className="flex-1 min-w-0">
-                    <p className="text-sm font-semibold text-charcoal-600 truncate">{d.name}</p>
+                    {isRenaming ? (
+                      <input
+                        autoFocus
+                        value={renameValue}
+                        onChange={(e) => setRenameValue(e.target.value)}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") { e.preventDefault(); executeRename(d.id); }
+                          if (e.key === "Escape") setRenamingId(null);
+                        }}
+                        onClick={(e) => e.stopPropagation()}
+                        className="w-full text-sm font-semibold text-charcoal-700 border border-taupe-300 rounded-lg px-2 py-0.5 focus:outline-none focus:ring-2 focus:ring-taupe-300 bg-white"
+                      />
+                    ) : (
+                      <p className="text-sm font-semibold text-charcoal-600 truncate">{d.name}</p>
+                    )}
                     <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
                       {kindLabel && (
                         <span className="text-[10px] font-medium text-taupe-600 bg-taupe-50 border border-taupe-100 rounded-full px-1.5 py-0.5">{kindLabel}</span>
@@ -710,33 +766,50 @@ function LoadModal({ onLoad, onClose }: LoadModalProps) {
                       </span>
                     )}
                   </div>
-                  <span className="text-[10px] font-semibold text-taupe-500 self-center flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
-                    Load →
-                  </span>
+                  {!isRenaming && !isPendingDelete && (
+                    <span className="text-[10px] font-semibold text-taupe-500 self-center flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
+                      Load →
+                    </span>
+                  )}
                 </button>
 
-                {/* Delete column */}
-                <div className="flex-shrink-0 flex flex-col items-center justify-center border-l border-stone-100 px-2 gap-1.5 min-w-[52px]">
+                {/* Actions column */}
+                <div className="flex-shrink-0 flex flex-col items-center justify-center border-l border-stone-100 px-2 gap-1.5 min-w-[56px]">
                   {isPendingDelete ? (
                     <>
-                      <button
-                        onClick={() => executeDelete(d.id)}
+                      <button onClick={() => executeDelete(d.id)}
                         className="w-full text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg px-2 py-1 transition-colors">
                         Delete
                       </button>
-                      <button
-                        onClick={() => setDeletingId(null)}
+                      <button onClick={() => setDeletingId(null)}
+                        className="w-full text-[10px] text-stone-400 hover:text-stone-600 rounded-lg px-2 py-1 hover:bg-stone-100 transition-colors">
+                        Cancel
+                      </button>
+                    </>
+                  ) : isRenaming ? (
+                    <>
+                      <button onClick={() => executeRename(d.id)}
+                        className="w-full text-[10px] font-bold text-white bg-taupe-500 hover:bg-taupe-600 rounded-lg px-2 py-1 transition-colors">
+                        Save
+                      </button>
+                      <button onClick={() => setRenamingId(null)}
                         className="w-full text-[10px] text-stone-400 hover:text-stone-600 rounded-lg px-2 py-1 hover:bg-stone-100 transition-colors">
                         Cancel
                       </button>
                     </>
                   ) : (
-                    <button
-                      onClick={(e) => { e.stopPropagation(); setDeletingId(d.id); }}
-                      title="Delete this design"
-                      className="p-1.5 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all">
-                      <Trash2 size={13}/>
-                    </button>
+                    <>
+                      <button onClick={(e) => { e.stopPropagation(); startRename(d); }}
+                        title="Rename this design"
+                        className="p-1.5 rounded-lg text-stone-300 hover:text-taupe-600 hover:bg-taupe-50 opacity-0 group-hover:opacity-100 transition-all">
+                        <Pencil size={12}/>
+                      </button>
+                      <button onClick={(e) => { e.stopPropagation(); setDeletingId(d.id); setRenamingId(null); }}
+                        title="Delete this design"
+                        className="p-1.5 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all">
+                        <Trash2 size={12}/>
+                      </button>
+                    </>
                   )}
                 </div>
               </div>

@@ -17,6 +17,16 @@ const sendSchema = z.object({
   pdfBase64:    z.string().max(10_000_000),
 });
 
+function escHtml(s: string | null | undefined): string {
+  if (!s) return "";
+  return s
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#39;");
+}
+
 function smtpConfigured(): boolean {
   return !!(process.env["SMTP_HOST"] && process.env["SMTP_USER"] && process.env["SMTP_PASS"]);
 }
@@ -47,6 +57,12 @@ function buildEmailHtml(opts: {
   const usd   = (n: number) => "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
+  const safeDesignName   = escHtml(opts.designName);
+  const safeClientName   = escHtml(opts.clientName);
+  const safeDesignerName = escHtml(opts.designerName ?? opts.designerEmail);
+  const safeQuoteNumber  = escHtml(opts.quoteNumber);
+  const safeMessage      = escHtml(opts.message);
+
   return `<!DOCTYPE html>
 <html lang="en">
 <head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"></head>
@@ -62,20 +78,20 @@ function buildEmailHtml(opts: {
         </tr>
         <tr>
           <td style="padding:32px 36px;">
-            ${opts.clientName ? `<p style="margin:0 0 20px;font-size:15px;color:#2d2823;">Dear <strong>${opts.clientName}</strong>,</p>` : "<p style='margin:0 0 20px;font-size:15px;'>Hello,</p>"}
+            ${safeClientName ? `<p style="margin:0 0 20px;font-size:15px;color:#2d2823;">Dear <strong>${safeClientName}</strong>,</p>` : "<p style='margin:0 0 20px;font-size:15px;'>Hello,</p>"}
             <p style="margin:0 0 20px;font-size:14px;color:#5a5045;line-height:1.6;">
-              ${opts.message ? opts.message : `Please find attached your design quotation for <strong>${opts.designName}</strong>. The PDF contains a full cost breakdown including materials, labour, and all accessories.`}
+              ${safeMessage ? safeMessage : `Please find attached your design quotation for <strong>${safeDesignName}</strong>. The PDF contains a full cost breakdown including materials, labour, and all accessories.`}
             </p>
             <table width="100%" cellpadding="0" cellspacing="0" style="background:#f7f4ef;border-radius:8px;border:1px solid #e8e0d5;margin:0 0 24px;">
               <tr>
                 <td style="padding:20px 24px;">
                   <p style="margin:0 0 4px;font-size:11px;color:#9a8a78;letter-spacing:0.1em;text-transform:uppercase;">Design</p>
-                  <p style="margin:0 0 16px;font-size:16px;font-weight:600;color:#2d2823;">${opts.designName}</p>
+                  <p style="margin:0 0 16px;font-size:16px;font-weight:600;color:#2d2823;">${safeDesignName}</p>
                   <table width="100%" cellpadding="0" cellspacing="0">
                     <tr>
                       <td style="padding-right:20px;">
                         <p style="margin:0 0 2px;font-size:11px;color:#9a8a78;text-transform:uppercase;letter-spacing:0.08em;">Quote #</p>
-                        <p style="margin:0;font-size:13px;font-weight:600;color:#2d2823;font-family:monospace;">${opts.quoteNumber}</p>
+                        <p style="margin:0;font-size:13px;font-weight:600;color:#2d2823;font-family:monospace;">${safeQuoteNumber}</p>
                       </td>
                       <td style="padding-right:20px;">
                         <p style="margin:0 0 2px;font-size:11px;color:#9a8a78;text-transform:uppercase;letter-spacing:0.08em;">Date</p>
@@ -96,7 +112,7 @@ function buildEmailHtml(opts: {
         </tr>
         <tr>
           <td style="padding:20px 36px;border-top:1px solid #e8e0d5;background:#faf8f5;">
-            <p style="margin:0;font-size:12px;color:#9a8a78;">Sent by ${opts.designerName ?? opts.designerEmail} via <strong>Alvéo Design Platform</strong></p>
+            <p style="margin:0;font-size:12px;color:#9a8a78;">Sent by ${safeDesignerName} via <strong>Alvéo Design Platform</strong></p>
             <p style="margin:4px 0 0;font-size:11px;color:#b4a494;">Estimates exclude applicable taxes and permit fees. Actual pricing confirmed on signed order.</p>
           </td>
         </tr>

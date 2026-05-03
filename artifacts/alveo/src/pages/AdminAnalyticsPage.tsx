@@ -8,6 +8,8 @@ import {
   filterEventsByRange,
 } from "@/lib/analyticsInsights";
 
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
 const FUNNEL_STEPS = [
   "landing_viewed",
   "configure_opened",
@@ -68,7 +70,7 @@ export default function AdminAnalyticsPage() {
     setLoading(true);
     setError(null);
     try {
-      const res = await fetch("/api/events", {
+      const res = await fetch(`${BASE}/api/events`, {
         method: "GET",
         headers: token ? { "x-admin-token": token } : undefined,
         cache: "no-store",
@@ -95,7 +97,7 @@ export default function AdminAnalyticsPage() {
       if (mention) params.set("mention", mention);
       if (mentionFromDate) params.set("from", mentionFromDate);
       if (mentionToDate) params.set("to", mentionToDate);
-      const res = await fetch(`/api/design-comments?${params.toString()}`, {
+      const res = await fetch(`${BASE}/api/design-comments?${params.toString()}`, {
         method: "GET",
         headers: token ? { "x-admin-token": token } : undefined,
         cache: "no-store",
@@ -116,7 +118,7 @@ export default function AdminAnalyticsPage() {
       current.map((comment) => comment.id === commentId ? { ...comment, mentionRead: read } : comment),
     );
     try {
-      const res = await fetch("/api/design-comments", {
+      const res = await fetch(`${BASE}/api/design-comments`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json", ...(token ? { "x-admin-token": token } : {}) },
         body: JSON.stringify({ action: "mention-ack", mentionUser, commentId, read }),

@@ -49,6 +49,8 @@ import { CompareModal } from "@/components/CompareModal";
 import { LayoutOptimizerModal } from "@/components/LayoutOptimizerModal";
 import { trackEvent } from "@/lib/analytics";
 
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
 interface LivePreviewProps {
   config: Partial<ClosetConfiguration>;
   savedDesigns: SavedDesign[];
@@ -305,7 +307,7 @@ export function LivePreview({
       clearInterval(phaseTimer);
       clearTimeout(renderTimer);
     };
-  }, [wallLayout, config.userInfo]);
+  }, [wallLayout, config.userInfo, config.lighting, config.doorType, config.roomContext]);
 
   const hasDrawersInView =
     wallLayout?.zones.some((z) => z.type === "drawers") ?? false;
@@ -413,7 +415,7 @@ export function LivePreview({
       designs.map(async (design) => {
         try {
           const res = await fetch(
-            `/api/design-comments?designId=${encodeURIComponent(design.id)}`,
+            `${BASE}/api/design-comments?designId=${encodeURIComponent(design.id)}`,
             { cache: "no-store" },
           );
           if (!res.ok) return [design.id, []] as const;
@@ -432,7 +434,7 @@ export function LivePreview({
     setIsCommentsLoading(true);
     try {
       const res = await fetch(
-        `/api/design-comments?designId=${encodeURIComponent(designId)}`,
+        `${BASE}/api/design-comments?designId=${encodeURIComponent(designId)}`,
         {
           cache: "no-store",
           headers: userEmail ? { "x-user-email": userEmail } : undefined,
@@ -495,7 +497,7 @@ export function LivePreview({
 
     setIsCommentPosting(true);
     try {
-      const res = await fetch("/api/design-comments", {
+      const res = await fetch(`${BASE}/api/design-comments`, {
         method: "POST",
         headers: makeHeaders(),
         body: JSON.stringify({
@@ -531,7 +533,7 @@ export function LivePreview({
   ) => {
     if (!activeCommentDesign) return;
     try {
-      const res = await fetch("/api/design-comments", {
+      const res = await fetch(`${BASE}/api/design-comments`, {
         method: "PATCH",
         headers: makeHeaders(),
         body: JSON.stringify({ designId: activeCommentDesign.id, ...payload }),

@@ -28,11 +28,11 @@ const STYLE_MULTIPLIER: Record<string, number> = {
 };
 
 const HARDWARE_FINISH_PREMIUM: Record<string, number> = {
-  "matte black":    120,
-  "brushed gold":   180,
-  "polished nickel":200,
-  "chrome":          80,
-  "satin brass":    160,
+  "chrome":       80,
+  "brass":       160,
+  "matte-black": 120,
+  "nickel":      200,
+  "gold":        180,
 };
 
 const ROD_COST_PER_FT     = 9.5;   // per linear foot

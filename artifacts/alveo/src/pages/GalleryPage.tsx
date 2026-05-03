@@ -52,6 +52,8 @@ interface CommentHistoryResponse {
 
 type CommentSort = "newest" | "oldest" | "most-mentioned";
 
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
 const SIZE_MAP: Record<Exclude<SizeTag, "Any Size">, ItemSize> = {
   "Compact (≤ 60 sq ft)": "compact",
   "Standard (60–120 sq ft)": "standard",
@@ -168,8 +170,14 @@ export default function GalleryPage() {
   }, []);
 
   useEffect(() => {
-    const controller = new AbortController();
     const token = localStorage.getItem("alveo-events-admin-token") ?? "";
+    if (!token) {
+      setCommentHistory([]);
+      setHistoryHasNextPage(false);
+      setHistoryTotal(0);
+      return;
+    }
+    const controller = new AbortController();
     const params = new URLSearchParams({
       all: "1",
       page: String(historyPage),
@@ -182,8 +190,8 @@ export default function GalleryPage() {
     if (historyToDate) params.set("to", historyToDate);
     params.set("sort", historySort);
 
-    fetch(`/api/design-comments?${params.toString()}`, {
-      headers: token ? { "x-admin-token": token } : undefined,
+    fetch(`${BASE}/api/design-comments?${params.toString()}`, {
+      headers: { "x-admin-token": token },
       cache: "no-store",
       signal: controller.signal,
     })
@@ -313,10 +321,13 @@ export default function GalleryPage() {
                           Start from this style
                           <ArrowRight size={12} />
                         </Link>
-                        <button className="text-cream-300 hover:text-white text-xs flex items-center gap-1 transition-colors">
+                        <Link
+                          href="/configure"
+                          className="text-cream-300 hover:text-white text-xs flex items-center gap-1 transition-colors"
+                        >
                           <Maximize2 size={12} />
                           Full preview
-                        </button>
+                        </Link>
                       </motion.div>
                     )}
                   </AnimatePresence>

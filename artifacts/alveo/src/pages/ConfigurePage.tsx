@@ -14,6 +14,7 @@ import { useKeyboardShortcuts } from "@/lib/useKeyboardShortcuts";
 import { trackEvent } from "@/lib/analytics";
 
 const WIZARD_DRAFT_KEY = "alveo-wizard-draft";
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
 function readDraftFromStorage(): {
   config: Partial<ClosetConfiguration>;
@@ -140,7 +141,7 @@ export default function ConfigurePage() {
     }
 
     if (storedEmail) {
-      fetch("/api/designs", {
+      fetch(`${BASE}/api/designs`, {
         headers: { "x-user-email": storedEmail },
         cache: "no-store",
       })
@@ -247,7 +248,7 @@ export default function ConfigurePage() {
     });
 
     if (userEmail) {
-      fetch("/api/designs", {
+      fetch(`${BASE}/api/designs`, {
         method: "POST",
         headers: apiHeaders(userEmail),
         body: JSON.stringify({ design }),
@@ -260,7 +261,7 @@ export default function ConfigurePage() {
     trackEvent("design_removed", { id });
 
     if (userEmail) {
-      fetch("/api/designs", {
+      fetch(`${BASE}/api/designs`, {
         method: "DELETE",
         headers: apiHeaders(userEmail),
         body: JSON.stringify({ id }),

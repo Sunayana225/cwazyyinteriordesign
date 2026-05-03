@@ -28,7 +28,8 @@ export async function trackEvent(name: string, props?: EventPayload["props"]) {
       localStorage.setItem(key, JSON.stringify([...current.slice(-49), payload]));
     }
 
-    await fetch("/api/events", {
+    const base = (typeof import.meta !== "undefined" ? import.meta.env?.BASE_URL : "") ?? "";
+    await fetch(`${base.replace(/\/$/, "")}/api/events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(payload),

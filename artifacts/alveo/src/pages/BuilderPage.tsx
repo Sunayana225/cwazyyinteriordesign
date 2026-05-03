@@ -268,12 +268,30 @@ function buildLayout(
     zones,
     aisleWarnings: [],
     layoutWarnings: [],
-    totalStorage: {
-      hangingRods: 0,
-      shelfSpace: 0,
-      drawerCount: 0,
-      shoeCapacity: 0,
-    },
+    totalStorage: (() => {
+      let hangingRods = 0;
+      let drawerCount = 0;
+      let shoeCapacity = 0;
+      let shelfSpace = 0;
+      for (const zone of zones) {
+        if (zone.type === "long-hang") {
+          hangingRods += Math.round((zone.width / 12) * 10) / 10;
+        } else if (zone.type === "double-hang") {
+          hangingRods += Math.round((zone.width / 12) * 2 * 10) / 10;
+        }
+        if (zone.type === "drawers") {
+          drawerCount += zone.drawers?.length ?? 0;
+        }
+        if (zone.type === "shoe-shelves") {
+          shoeCapacity += (zone.shelves?.length ?? 0) * Math.max(2, Math.floor(zone.width / 9));
+        }
+        if (zone.type === "open-shelves" || zone.type === "top-shelves") {
+          const boards = zone.shelves?.length ?? 0;
+          shelfSpace += Math.round((boards * (zone.width / 12) * (wallD / 12)) * 10) / 10;
+        }
+      }
+      return { hangingRods, shelfSpace, drawerCount, shoeCapacity };
+    })(),
     utilizationScore: 100,
     recommendations: [],
   };

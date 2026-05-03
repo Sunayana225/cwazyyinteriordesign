@@ -182,6 +182,23 @@ export default function ClientsPage() {
 
         {userEmail && (
           <>
+            {/* Stats bar */}
+            {!loading && clients.length > 0 && (
+              <div className="grid grid-cols-4 gap-3 mb-6">
+                {([
+                  { label: "Total", value: clients.length,                                         color: "text-charcoal-600" },
+                  { label: "Active",    value: clients.filter(c => c.status === "active").length,    color: "text-emerald-600" },
+                  { label: "Completed", value: clients.filter(c => c.status === "completed").length, color: "text-taupe-500"   },
+                  { label: "On-Hold",   value: clients.filter(c => c.status === "on-hold").length,   color: "text-amber-600"  },
+                ] as const).map(({ label, value, color }) => (
+                  <div key={label} className="bg-white rounded-xl border border-cream-200 px-4 py-3 text-center">
+                    <p className={`text-2xl font-serif font-bold ${color}`}>{value}</p>
+                    <p className="text-xs text-stone-400 mt-0.5">{label}</p>
+                  </div>
+                ))}
+              </div>
+            )}
+
             {/* Filters */}
             <div className="flex flex-wrap items-center gap-3 mb-6">
               <input

@@ -176,28 +176,50 @@ export function PresentationMode({ layout, config, clientName, projectRef, onClo
               </div>
             )}
 
-            {slide.kind === "cost" && cost && (
-              <div className="w-full max-w-xl mx-auto">
-                <p className="text-white/40 text-xs uppercase tracking-widest text-center mb-8">Investment Summary</p>
-                <div className="space-y-3">
-                  {[
-                    { label: "Hanging rods & rails", value: cost.rods },
-                    { label: "Shelf panels & boards", value: cost.shelves },
-                    { label: "Drawer units", value: cost.drawers },
-                    { label: "Professional installation", value: cost.baseInstall },
-                  ].map(({ label, value }) => (
-                    <div key={label} className="flex items-center justify-between py-3 border-b border-white/10">
-                      <span className="text-white/60 text-sm">{label}</span>
-                      <span className="text-white/80 font-medium tabular-nums">${value.toLocaleString()}</span>
+            {slide.kind === "cost" && cost && (() => {
+              const accessoriesTotal = Math.round(
+                (config.accessories ?? []).reduce((s, a) => s + a.qty * a.unitPrice, 0)
+              );
+              const wallCount = layout.walls.length;
+              const lightingTotal = Math.round(
+                ((config.lighting?.underShelfLED ? 85 * wallCount : 0) +
+                 (config.lighting?.overheadRail  ? 320 : 0) +
+                 (config.lighting?.puckLights    ? 210 : 0) +
+                 (config.lighting?.islandPendant ? 320 : 0))
+              );
+              const extrasTotal = accessoriesTotal + lightingTotal;
+              const grandTotal  = cost.proTotal + extrasTotal;
+              const lineItems: { label: string; value: number }[] = [
+                { label: "Hanging rods & rails",     value: cost.rods        },
+                { label: "Shelf panels & boards",    value: cost.shelves     },
+                { label: "Drawer units",             value: cost.drawers     },
+                { label: "Professional installation",value: cost.baseInstall },
+                ...(lightingTotal > 0   ? [{ label: "Lighting fixtures",    value: lightingTotal   }] : []),
+                ...(accessoriesTotal > 0 ? [{ label: "Accessories",         value: accessoriesTotal }] : []),
+              ];
+              return (
+                <div className="w-full max-w-xl mx-auto">
+                  <p className="text-white/40 text-xs uppercase tracking-widest text-center mb-8">Investment Summary</p>
+                  <div className="space-y-3">
+                    {lineItems.map(({ label, value }) => (
+                      <div key={label} className="flex items-center justify-between py-3 border-b border-white/10">
+                        <span className="text-white/60 text-sm">{label}</span>
+                        <span className="text-white/80 font-medium tabular-nums">${value.toLocaleString()}</span>
+                      </div>
+                    ))}
+                    <div className="flex items-center justify-between pt-4">
+                      <span className="text-white/90 font-semibold">Estimated total</span>
+                      <span className="text-2xl font-serif font-bold text-white">${grandTotal.toLocaleString()}</span>
                     </div>
-                  ))}
-                  <div className="flex items-center justify-between pt-4">
-                    <span className="text-white/90 font-semibold">Estimated total</span>
-                    <span className="text-2xl font-serif font-bold text-white">${cost.proTotal.toLocaleString()}</span>
                   </div>
+                  {extrasTotal > 0 && (
+                    <p className="text-center text-white/25 text-xs mt-4">
+                      Includes ${extrasTotal.toLocaleString()} in lighting &amp; accessories
+                    </p>
+                  )}
                 </div>
-              </div>
-            )}
+              );
+            })()}
 
             {slide.kind === "materials" && (
               <div className="w-full max-w-xl mx-auto">

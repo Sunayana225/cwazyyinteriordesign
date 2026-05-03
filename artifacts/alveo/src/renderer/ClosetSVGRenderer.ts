@@ -324,10 +324,28 @@ export class ClosetSVGRenderer {
         fill="rgba(0,0,0,0.05)" stroke="none"/>`;
     }
 
+    // Per-zone background tints — subtle hue shifts to distinguish zone types
+    const ZONE_BG: Partial<Record<string, string>> = {
+      'long-hang':    '#fdf8f0',  // warm amber-cream
+      'double-hang':  '#f5f8fd',  // cool blue-white
+      'drawers':      '#fdfaf3',  // warm honey
+      'shoe-shelves': '#f8f5fd',  // pale lavender
+      'top-shelves':  '#f4fdf8',  // pale mint
+      'open-shelves': '#f2fdf6',  // pale sage
+    };
+
     for (const zone of zones) {
       const zx = this.cx(zone.x);
       const zw = zone.width * this.scale;
       if (zw < 1) continue;
+
+      // Draw zone tint fill before zone content
+      const zoneBg = ZONE_BG[zone.type];
+      if (zoneBg) {
+        const zTop = this.cy(Math.min(zone.y + zone.height, this.drawH));
+        const zBot = this.cy(Math.max(zone.y, 0));
+        out += `\n  <rect x="${zx}" y="${zTop}" width="${zw}" height="${Math.max(0, zBot - zTop)}" fill="${zoneBg}" opacity="0.85"/>`;
+      }
 
       switch (zone.type) {
         case 'long-hang':

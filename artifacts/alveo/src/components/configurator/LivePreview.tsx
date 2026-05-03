@@ -1230,6 +1230,41 @@ export function LivePreview({
                     ))}
                   </div>
 
+                  {/* Zone breakdown */}
+                  {layout.zones.length > 0 && (
+                    <div className="bg-cream-50 rounded-xl border border-cream-200 p-4 space-y-2">
+                      <p className="text-xs font-semibold text-charcoal-500 uppercase tracking-widest mb-3">
+                        Zone Layout
+                      </p>
+                      {layout.zones.map((z, i) => {
+                        const ZONE_META: Record<string, { icon: string; label: string; bg: string; dot: string }> = {
+                          'long-hang':    { icon: "👗", label: "Long Hang",    bg: "#fce7f3", dot: "#ec4899" },
+                          'double-hang':  { icon: "👔", label: "Double Hang",  bg: "#dbeafe", dot: "#3b82f6" },
+                          'drawers':      { icon: "🗄️", label: "Drawers",      bg: "#fef3c7", dot: "#f59e0b" },
+                          'shoe-shelves': { icon: "👠", label: "Shoe Shelves", bg: "#ede9fe", dot: "#8b5cf6" },
+                          'top-shelves':  { icon: "📦", label: "Top Shelves",  bg: "#fee2e2", dot: "#ef4444" },
+                          'open-shelves': { icon: "📂", label: "Open Shelves", bg: "#d1fae5", dot: "#10b981" },
+                        };
+                        const meta = ZONE_META[z.type] ?? { icon: "⬜", label: z.type, bg: "#f5f0eb", dot: "#aaa" };
+                        return (
+                          <div key={i} className="flex items-center gap-2.5">
+                            <span
+                              className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-[11px]"
+                              style={{ background: meta.bg }}
+                            >
+                              {meta.icon}
+                            </span>
+                            <span className="flex-1 text-xs text-charcoal-600 font-medium">{meta.label}</span>
+                            <span className="text-xs text-stone-400 tabular-nums">{Math.round(z.width)}"</span>
+                            {z.contentLabel && (
+                              <span className="text-[10px] text-stone-400 max-w-[120px] truncate text-right">{z.contentLabel.split(' · ')[0]}</span>
+                            )}
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+
                   {/* Per-wall breakdown */}
                   {layout.walls.length > 1 && (
                     <div className="bg-cream-50 rounded-xl border border-cream-200 p-4 space-y-2">

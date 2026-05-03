@@ -1,7 +1,7 @@
 import { Router } from "express";
 import { z } from "zod";
 import type { Request, Response } from "express";
-import { authMiddleware } from "../middlewares/authMiddleware.js";
+import { requireAuthJwt } from "../middlewares/auth.js";
 import type { AuthenticatedRequest } from "../middlewares/auth.js";
 
 const router = Router();
@@ -22,52 +22,29 @@ function smtpConfigured(): boolean {
 }
 
 async function sendWithNodemailer(opts: {
-  to: string;
-  subject: string;
-  html: string;
-  pdfBase64: string;
-  designName: string;
-  quoteNumber: string;
+  to: string; subject: string; html: string;
+  pdfBase64: string; designName: string; quoteNumber: string;
 }): Promise<void> {
   const nodemailer = (await import("nodemailer")).default;
   const transporter = nodemailer.createTransport({
     host:   process.env["SMTP_HOST"],
     port:   parseInt(process.env["SMTP_PORT"] ?? "587"),
     secure: process.env["SMTP_SECURE"] === "true",
-    auth: {
-      user: process.env["SMTP_USER"],
-      pass: process.env["SMTP_PASS"],
-    },
+    auth:   { user: process.env["SMTP_USER"], pass: process.env["SMTP_PASS"] },
   });
-
-  const from = process.env["SMTP_FROM"] ?? process.env["SMTP_USER"];
+  const from      = process.env["SMTP_FROM"] ?? process.env["SMTP_USER"];
   const pdfBuffer = Buffer.from(opts.pdfBase64, "base64");
-
   await transporter.sendMail({
-    from,
-    to: opts.to,
-    subject: opts.subject,
-    html: opts.html,
-    attachments: [
-      {
-        filename: `alveo-quote-${opts.quoteNumber}.pdf`,
-        content:  pdfBuffer,
-        contentType: "application/pdf",
-      },
-    ],
+    from, to: opts.to, subject: opts.subject, html: opts.html,
+    attachments: [{ filename: `alveo-quote-${opts.quoteNumber}.pdf`, content: pdfBuffer, contentType: "application/pdf" }],
   });
 }
 
 function buildEmailHtml(opts: {
-  designName: string;
-  clientName?: string | null;
-  designerName?: string | null;
-  designerEmail: string;
-  quoteNumber: string;
-  grandTotal: number;
-  message?: string | null;
+  designName: string; clientName?: string | null; designerName?: string | null;
+  designerEmail: string; quoteNumber: string; grandTotal: number; message?: string | null;
 }): string {
-  const usd = (n: number) => "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
+  const usd   = (n: number) => "$" + n.toLocaleString("en-US", { maximumFractionDigits: 0 });
   const today = new Date().toLocaleDateString("en-US", { year: "numeric", month: "long", day: "numeric" });
 
   return `<!DOCTYPE html>
@@ -77,21 +54,18 @@ function buildEmailHtml(opts: {
   <table width="100%" cellpadding="0" cellspacing="0" style="background:#f7f4ef;padding:40px 0;">
     <tr><td align="center">
       <table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;border:1px solid #e8e0d5;">
-        <!-- Header -->
         <tr>
           <td style="background:#2d2823;padding:28px 36px;">
             <p style="margin:0;font-size:24px;font-weight:700;color:#f5ede1;letter-spacing:0.05em;font-family:Georgia,serif;">ALVÉO</p>
             <p style="margin:4px 0 0;font-size:11px;color:#b4a494;letter-spacing:0.12em;text-transform:uppercase;">Design Quotation</p>
           </td>
         </tr>
-        <!-- Body -->
         <tr>
           <td style="padding:32px 36px;">
             ${opts.clientName ? `<p style="margin:0 0 20px;font-size:15px;color:#2d2823;">Dear <strong>${opts.clientName}</strong>,</p>` : "<p style='margin:0 0 20px;font-size:15px;'>Hello,</p>"}
             <p style="margin:0 0 20px;font-size:14px;color:#5a5045;line-height:1.6;">
               ${opts.message ? opts.message : `Please find attached your design quotation for <strong>${opts.designName}</strong>. The PDF contains a full cost breakdown including materials, labour, and all accessories.`}
             </p>
-            <!-- Quote summary box -->
             <table width="100%" cellpadding="0" cellspacing="0" style="background:#f7f4ef;border-radius:8px;border:1px solid #e8e0d5;margin:0 0 24px;">
               <tr>
                 <td style="padding:20px 24px;">
@@ -116,15 +90,10 @@ function buildEmailHtml(opts: {
                 </td>
               </tr>
             </table>
-            <p style="margin:0 0 8px;font-size:13px;color:#5a5045;line-height:1.6;">
-              The attached PDF contains the full line-item breakdown. This quote is valid for <strong>30 days</strong>.
-            </p>
-            <p style="margin:0;font-size:13px;color:#5a5045;line-height:1.6;">
-              Please don't hesitate to reach out with any questions.
-            </p>
+            <p style="margin:0 0 8px;font-size:13px;color:#5a5045;line-height:1.6;">The attached PDF contains the full line-item breakdown. This quote is valid for <strong>30 days</strong>.</p>
+            <p style="margin:0;font-size:13px;color:#5a5045;line-height:1.6;">Please don't hesitate to reach out with any questions.</p>
           </td>
         </tr>
-        <!-- Footer -->
         <tr>
           <td style="padding:20px 36px;border-top:1px solid #e8e0d5;background:#faf8f5;">
             <p style="margin:0;font-size:12px;color:#9a8a78;">Sent by ${opts.designerName ?? opts.designerEmail} via <strong>Alvéo Design Platform</strong></p>
@@ -138,18 +107,16 @@ function buildEmailHtml(opts: {
 </html>`;
 }
 
-router.post("/quotes/send", authMiddleware, async (req: Request, res: Response) => {
+// ─── POST /quotes/send ────────────────────────────────────────────────────────
+// requireAuthJwt enforces a valid JWT Bearer token and populates req.userEmail
+router.post("/quotes/send", requireAuthJwt, async (req: Request, res: Response) => {
   const parsed = sendSchema.safeParse(req.body);
   if (!parsed.success) {
     res.status(400).json({ error: "Invalid input", details: parsed.error.issues });
     return;
   }
 
-  const {
-    to, designName, clientName, designerName,
-    quoteNumber, grandTotal, message, pdfBase64,
-  } = parsed.data;
-
+  const { to, designName, clientName, designerName, quoteNumber, grandTotal, message, pdfBase64 } = parsed.data;
   const designerEmail = (req as AuthenticatedRequest).userEmail;
 
   if (!smtpConfigured()) {
@@ -158,20 +125,12 @@ router.post("/quotes/send", authMiddleware, async (req: Request, res: Response) 
   }
 
   try {
-    const html = buildEmailHtml({
-      designName, clientName, designerName, designerEmail,
-      quoteNumber, grandTotal, message,
-    });
-
+    const html = buildEmailHtml({ designName, clientName, designerName, designerEmail, quoteNumber, grandTotal, message });
     await sendWithNodemailer({
       to,
       subject: `Your Alvéo Design Quote — ${designName} (${quoteNumber})`,
-      html,
-      pdfBase64,
-      designName,
-      quoteNumber,
+      html, pdfBase64, designName, quoteNumber,
     });
-
     res.json({ sent: true });
   } catch (err) {
     console.error("[quotes/send] error:", err);

@@ -20,9 +20,7 @@ async function ensureTable() {
       updated_at  TIMESTAMPTZ NOT NULL DEFAULT NOW()
     )
   `);
-  await pool.query(`
-    ALTER TABLE alveo_designs ADD COLUMN IF NOT EXISTS project_id TEXT;
-  `);
+  await pool.query(`ALTER TABLE alveo_designs ADD COLUMN IF NOT EXISTS project_id TEXT;`);
 }
 ensureTable().catch(() => {});
 
@@ -33,8 +31,14 @@ const projectSchema = z.object({
   notes:      z.string().max(2000).optional().nullable(),
 });
 
+const linkDesignSchema = z.object({
+  designId: z.string().min(1).max(200),
+});
+
+type AuthedReq = Request & { userEmail: string };
+
 router.get("/projects", requireAuthJwt, async (req: Request, res: Response) => {
-  const email = (req as Request & { userEmail: string }).userEmail;
+  const email = (req as AuthedReq).userEmail;
   try {
     const result = await pool.query<{
       id: string; name: string; client_name: string | null; status: string;
@@ -55,7 +59,7 @@ router.get("/projects", requireAuthJwt, async (req: Request, res: Response) => {
 });
 
 router.post("/projects", requireAuthJwt, async (req: Request, res: Response) => {
-  const email = (req as Request & { userEmail: string }).userEmail;
+  const email  = (req as AuthedReq).userEmail;
   const parsed = projectSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
   const { name, clientName, status, notes } = parsed.data;
@@ -72,7 +76,7 @@ router.post("/projects", requireAuthJwt, async (req: Request, res: Response) => 
 });
 
 router.put("/projects/:id", requireAuthJwt, async (req: Request, res: Response) => {
-  const email = (req as Request & { userEmail: string }).userEmail;
+  const email  = (req as AuthedReq).userEmail;
   const { id } = req.params;
   const parsed = projectSchema.partial().safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid input" }); return; }
@@ -80,10 +84,10 @@ router.put("/projects/:id", requireAuthJwt, async (req: Request, res: Response) 
     const fields: string[] = [];
     const values: unknown[] = [];
     let i = 1;
-    if (parsed.data.name !== undefined) { fields.push(`name = $${i++}`); values.push(parsed.data.name); }
+    if (parsed.data.name       !== undefined) { fields.push(`name = $${i++}`);        values.push(parsed.data.name); }
     if (parsed.data.clientName !== undefined) { fields.push(`client_name = $${i++}`); values.push(parsed.data.clientName); }
-    if (parsed.data.status !== undefined) { fields.push(`status = $${i++}`); values.push(parsed.data.status); }
-    if (parsed.data.notes !== undefined) { fields.push(`notes = $${i++}`); values.push(parsed.data.notes); }
+    if (parsed.data.status     !== undefined) { fields.push(`status = $${i++}`);      values.push(parsed.data.status); }
+    if (parsed.data.notes      !== undefined) { fields.push(`notes = $${i++}`);       values.push(parsed.data.notes); }
     if (fields.length === 0) { res.status(400).json({ error: "Nothing to update" }); return; }
     fields.push(`updated_at = NOW()`);
     values.push(email, id);
@@ -99,7 +103,7 @@ router.put("/projects/:id", requireAuthJwt, async (req: Request, res: Response) 
 });
 
 router.delete("/projects/:id", requireAuthJwt, async (req: Request, res: Response) => {
-  const email = (req as Request & { userEmail: string }).userEmail;
+  const email  = (req as AuthedReq).userEmail;
   const { id } = req.params;
   try {
     await pool.query("UPDATE alveo_designs SET project_id = NULL WHERE project_id = $1 AND user_email = $2", [id, email]);
@@ -111,15 +115,34 @@ router.delete("/projects/:id", requireAuthJwt, async (req: Request, res: Respons
 });
 
 router.post("/projects/:id/designs", requireAuthJwt, async (req: Request, res: Response) => {
-  const email = (req as Request & { userEmail: string }).userEmail;
-  const { id: projectId } = req.params;
-  const { designId } = req.body as { designId?: string };
-  if (!designId) { res.status(400).json({ error: "designId required" }); return; }
+  const email     = (req as AuthedReq).userEmail;
+  const projectId = req.params.id;
+
+  const parsed = linkDesignSchema.safeParse(req.body);
+  if (!parsed.success) { res.status(400).json({ error: "designId required and must be a non-empty string" }); return; }
+  const { designId } = parsed.data;
+
   try {
-    await pool.query(
-      "UPDATE alveo_designs SET project_id = $1 WHERE id = $2 AND user_email = $3",
+    // Verify the project belongs to the authenticated user before linking
+    const projectCheck = await pool.query(
+      "SELECT id FROM alveo_projects WHERE id = $1 AND owner_email = $2",
+      [projectId, email],
+    );
+    if (projectCheck.rows.length === 0) {
+      res.status(404).json({ error: "Project not found" });
+      return;
+    }
+
+    // Only link designs that also belong to the user
+    const result = await pool.query(
+      "UPDATE alveo_designs SET project_id = $1 WHERE id = $2 AND user_email = $3 RETURNING id",
       [projectId, designId, email],
     );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "Design not found" });
+      return;
+    }
+
     res.json({ ok: true });
   } catch {
     res.status(500).json({ error: "Failed to link design" });

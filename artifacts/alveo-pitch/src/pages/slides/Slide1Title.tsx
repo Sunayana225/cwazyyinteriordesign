@@ -98,7 +98,7 @@ export default function Slide1Title() {
             margin: "0 0 4vh 0",
             letterSpacing: "-0.03em",
             textTransform: "uppercase",
-            fontFamily: "'Space Grotesk', sans-serif",
+            fontFamily: "'Playfair Display', serif",
           }}
         >
           ALV&Eacute;O

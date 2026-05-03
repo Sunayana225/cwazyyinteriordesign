@@ -97,6 +97,7 @@ export default function Slide2Problem() {
             margin: "0 0 2.5vh 0",
             letterSpacing: "-0.02em",
             textTransform: "uppercase",
+            fontFamily: "'Playfair Display', serif",
           }}
         >
           The Problem

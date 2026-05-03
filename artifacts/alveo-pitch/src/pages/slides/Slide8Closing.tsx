@@ -101,6 +101,7 @@ export default function Slide8Closing() {
             letterSpacing: "-0.03em",
             textTransform: "uppercase",
             color: "#F4F4F0",
+            fontFamily: "'Playfair Display', serif",
           }}
         >
           ALV&Eacute;O

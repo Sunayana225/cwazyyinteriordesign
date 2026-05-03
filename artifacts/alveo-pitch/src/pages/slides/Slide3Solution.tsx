@@ -100,6 +100,7 @@ export default function Slide3Solution() {
             letterSpacing: "-0.02em",
             textTransform: "uppercase",
             color: "#F4F4F0",
+            fontFamily: "'Playfair Display', serif",
           }}
         >
           The Solution

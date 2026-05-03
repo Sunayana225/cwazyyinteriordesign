@@ -27,7 +27,7 @@ export default function Slide4Features() {
         <div>
           <div
             style={{
-              fontSize: "1vw",
+              fontSize: "1.5vw",
               textTransform: "uppercase",
               letterSpacing: "0.1em",
               fontWeight: 700,
@@ -69,7 +69,7 @@ export default function Slide4Features() {
       <div
         style={{
           borderBottom: "0.2vw solid #111111",
-          padding: "5vw 5vw 4vw 5vw",
+          padding: "4vw 5vw 3vw 5vw",
           display: "flex",
           flexDirection: "column",
           position: "relative",
@@ -80,7 +80,7 @@ export default function Slide4Features() {
             position: "absolute",
             top: "4vw",
             right: "4vw",
-            fontSize: "1vw",
+            fontSize: "1.5vw",
             fontFamily: "'DM Mono', monospace",
             color: "#666666",
             letterSpacing: "0.05em",
@@ -94,34 +94,41 @@ export default function Slide4Features() {
             fontSize: "4.5vw",
             fontWeight: 700,
             lineHeight: 1,
-            margin: "0 0 2.5vh 0",
+            margin: "0 0 2vh 0",
             letterSpacing: "-0.02em",
             textTransform: "uppercase",
+            fontFamily: "'Playfair Display', serif",
           }}
         >
           Key Features
         </h2>
 
-        <div style={{ width: "8vw", height: "0.4vw", backgroundColor: "#B5956A", marginBottom: "5vh" }} />
+        <div style={{ width: "8vw", height: "0.4vw", backgroundColor: "#B5956A", marginBottom: "4vh" }} />
 
-        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr", gap: "2vw" }}>
-          <div style={{ backgroundColor: "#111111", color: "#F4F4F0", padding: "2.5vw 2vw" }}>
-            <div style={{ fontSize: "1vw", fontFamily: "'DM Mono', monospace", color: "#B5956A", marginBottom: "2vh", letterSpacing: "0.05em" }}>001</div>
-            <div style={{ fontSize: "1.5vw", fontWeight: 700, marginBottom: "1.5vh", textTransform: "uppercase", letterSpacing: "-0.01em", lineHeight: 1.1 }}>Configurator</div>
-            <div style={{ width: "3vw", height: "0.2vw", backgroundColor: "#B5956A", marginBottom: "1.5vh" }} />
-            <div style={{ fontSize: "1.4vw", color: "#CCCCCC", lineHeight: 1.4 }}>Guided room and wardrobe input</div>
+        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr 1fr 1fr", gap: "1.5vw" }}>
+          <div style={{ backgroundColor: "#111111", color: "#F4F4F0", padding: "2vw 1.8vw" }}>
+            <div style={{ fontSize: "1.5vw", fontFamily: "'DM Mono', monospace", color: "#B5956A", marginBottom: "1.5vh", letterSpacing: "0.05em" }}>001</div>
+            <div style={{ fontSize: "1.4vw", fontWeight: 700, marginBottom: "1vh", textTransform: "uppercase", letterSpacing: "-0.01em", lineHeight: 1.1 }}>Configurator</div>
+            <div style={{ width: "2.5vw", height: "0.2vw", backgroundColor: "#B5956A", marginBottom: "1.2vh" }} />
+            <div style={{ fontSize: "1.3vw", color: "#CCCCCC", lineHeight: 1.4 }}>Guided room and wardrobe input</div>
           </div>
-          <div style={{ border: "0.2vw solid #111111", padding: "2.5vw 2vw" }}>
-            <div style={{ fontSize: "1vw", fontFamily: "'DM Mono', monospace", color: "#B5956A", marginBottom: "2vh", letterSpacing: "0.05em" }}>002</div>
-            <div style={{ fontSize: "1.5vw", fontWeight: 700, marginBottom: "1.5vh", textTransform: "uppercase", letterSpacing: "-0.01em", lineHeight: 1.1 }}>Layout Engine</div>
-            <div style={{ width: "3vw", height: "0.2vw", backgroundColor: "#111111", marginBottom: "1.5vh" }} />
-            <div style={{ fontSize: "1.4vw", color: "#333333", lineHeight: 1.4 }}>Proprietary zone allocation algorithm</div>
+          <div style={{ border: "0.2vw solid #111111", padding: "2vw 1.8vw" }}>
+            <div style={{ fontSize: "1.5vw", fontFamily: "'DM Mono', monospace", color: "#B5956A", marginBottom: "1.5vh", letterSpacing: "0.05em" }}>002</div>
+            <div style={{ fontSize: "1.4vw", fontWeight: 700, marginBottom: "1vh", textTransform: "uppercase", letterSpacing: "-0.01em", lineHeight: 1.1 }}>Gallery</div>
+            <div style={{ width: "2.5vw", height: "0.2vw", backgroundColor: "#111111", marginBottom: "1.2vh" }} />
+            <div style={{ fontSize: "1.3vw", color: "#333333", lineHeight: 1.4 }}>Browse and save inspiration layouts</div>
           </div>
-          <div style={{ border: "0.2vw solid #111111", padding: "2.5vw 2vw" }}>
-            <div style={{ fontSize: "1vw", fontFamily: "'DM Mono', monospace", color: "#B5956A", marginBottom: "2vh", letterSpacing: "0.05em" }}>003</div>
-            <div style={{ fontSize: "1.5vw", fontWeight: 700, marginBottom: "1.5vh", textTransform: "uppercase", letterSpacing: "-0.01em", lineHeight: 1.1 }}>PDF / SVG Export</div>
-            <div style={{ width: "3vw", height: "0.2vw", backgroundColor: "#111111", marginBottom: "1.5vh" }} />
-            <div style={{ fontSize: "1.4vw", color: "#333333", lineHeight: 1.4 }}>Professional-grade output ready to build or share</div>
+          <div style={{ border: "0.2vw solid #111111", padding: "2vw 1.8vw" }}>
+            <div style={{ fontSize: "1.5vw", fontFamily: "'DM Mono', monospace", color: "#B5956A", marginBottom: "1.5vh", letterSpacing: "0.05em" }}>003</div>
+            <div style={{ fontSize: "1.4vw", fontWeight: 700, marginBottom: "1vh", textTransform: "uppercase", letterSpacing: "-0.01em", lineHeight: 1.1 }}>Layout Engine</div>
+            <div style={{ width: "2.5vw", height: "0.2vw", backgroundColor: "#111111", marginBottom: "1.2vh" }} />
+            <div style={{ fontSize: "1.3vw", color: "#333333", lineHeight: 1.4 }}>Proprietary zone allocation algorithm</div>
+          </div>
+          <div style={{ border: "0.2vw solid #111111", padding: "2vw 1.8vw" }}>
+            <div style={{ fontSize: "1.5vw", fontFamily: "'DM Mono', monospace", color: "#B5956A", marginBottom: "1.5vh", letterSpacing: "0.05em" }}>004</div>
+            <div style={{ fontSize: "1.4vw", fontWeight: 700, marginBottom: "1vh", textTransform: "uppercase", letterSpacing: "-0.01em", lineHeight: 1.1 }}>PDF Export</div>
+            <div style={{ width: "2.5vw", height: "0.2vw", backgroundColor: "#111111", marginBottom: "1.2vh" }} />
+            <div style={{ fontSize: "1.3vw", color: "#333333", lineHeight: 1.4 }}>Professional-grade output ready to build</div>
           </div>
         </div>
       </div>
@@ -134,7 +141,7 @@ export default function Slide4Features() {
           alignItems: "center",
           padding: "2vw 4vw",
           fontFamily: "'DM Mono', monospace",
-          fontSize: "1vw",
+          fontSize: "1.5vw",
           textTransform: "uppercase",
           backgroundColor: "#111111",
           color: "#F4F4F0",

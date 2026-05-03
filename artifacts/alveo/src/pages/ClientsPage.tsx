@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { Link } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, X, ExternalLink, Pencil, Trash2, User, Phone, Mail, MapPin, Briefcase, StickyNote, DollarSign } from "lucide-react";
+import { makeAuthHeaders } from "@/lib/auth";
 
 interface Client {
   id: string;
@@ -27,9 +28,6 @@ const STATUS_COLORS: Record<ClientStatus, string> = {
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
-function makeHeaders(email: string): HeadersInit {
-  return { "Content-Type": "application/json", "x-user-email": email };
-}
 
 const BLANK: Omit<Client, "id" | "created_at" | "updated_at"> = {
   name: "", email: "", phone: "", address: "", project_type: "",
@@ -57,7 +55,8 @@ export default function ClientsPage() {
   async function fetchClients(email: string) {
     setLoading(true);
     try {
-      const res = await fetch(`${BASE}/api/clients`, { headers: makeHeaders(email) });
+      const headers = await makeAuthHeaders(email);
+      const res = await fetch(`${BASE}/api/clients`, { headers });
       if (res.ok) {
         const data = await res.json() as { clients: Client[] };
         setClients(data.clients ?? []);
@@ -84,9 +83,10 @@ export default function ClientsPage() {
     if (!form.name.trim() || !userEmail) return;
     setSaving(true);
     try {
+      const headers = await makeAuthHeaders(userEmail);
       const res = await fetch(`${BASE}/api/clients`, {
         method: "POST",
-        headers: makeHeaders(userEmail),
+        headers,
         body: JSON.stringify({
           client: {
             ...(editingClient ? { id: editingClient.id } : {}),
@@ -108,9 +108,10 @@ export default function ClientsPage() {
 
   async function deleteClient(id: string) {
     if (!userEmail) return;
+    const headers = await makeAuthHeaders(userEmail);
     const res = await fetch(`${BASE}/api/clients`, {
       method: "DELETE",
-      headers: makeHeaders(userEmail),
+      headers,
       body: JSON.stringify({ id }),
     });
     if (res.ok) {

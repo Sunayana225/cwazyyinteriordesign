@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Request, Response } from "express";
 import { Pool } from "pg";
+import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 
 const router = Router();
 
@@ -35,10 +36,8 @@ const deleteDesignBodySchema = z.object({
   id: z.string().min(1),
 });
 
-// GET /designs — list all designs for the authenticated user
-router.get("/designs", async (req: Request, res: Response) => {
-  const user = req.headers["x-user-email"] as string | undefined;
-  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.get("/designs", requireAuth, async (req: Request, res: Response) => {
+  const user = (req as AuthenticatedRequest).userEmail;
 
   const ip    = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown";
   const limit = checkRateLimit(`designs:get:${user}:${ip}`, 60_000, 120);
@@ -70,10 +69,8 @@ router.get("/designs", async (req: Request, res: Response) => {
   }
 });
 
-// POST /designs — upsert a design for the authenticated user
-router.post("/designs", async (req: Request, res: Response) => {
-  const user = req.headers["x-user-email"] as string | undefined;
-  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.post("/designs", requireAuth, async (req: Request, res: Response) => {
+  const user = (req as AuthenticatedRequest).userEmail;
 
   const ip    = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown";
   const limit = checkRateLimit(`designs:post:${user}:${ip}`, 60_000, 40);
@@ -103,7 +100,6 @@ router.post("/designs", async (req: Request, res: Response) => {
       [id, user, designName, JSON.stringify(rest)],
     );
 
-    // Return updated list
     const result = await pool.query<{ id: string; name: string; config: unknown; saved_at: string }>(
       `SELECT id, name, config, saved_at FROM alveo_designs
        WHERE user_email = $1
@@ -125,10 +121,8 @@ router.post("/designs", async (req: Request, res: Response) => {
   }
 });
 
-// DELETE /designs — delete a design for the authenticated user
-router.delete("/designs", async (req: Request, res: Response) => {
-  const user = req.headers["x-user-email"] as string | undefined;
-  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.delete("/designs", requireAuth, async (req: Request, res: Response) => {
+  const user = (req as AuthenticatedRequest).userEmail;
 
   const ip    = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown";
   const limit = checkRateLimit(`designs:delete:${user}:${ip}`, 60_000, 50);

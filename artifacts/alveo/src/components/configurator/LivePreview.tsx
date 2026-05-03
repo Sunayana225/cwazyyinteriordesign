@@ -107,7 +107,8 @@ export function LivePreview({
 
   const makeHeaders = (extra?: Record<string, string>): HeadersInit => {
     const h: Record<string, string> = { "Content-Type": "application/json", ...extra };
-    if (userEmail) h["x-user-email"] = userEmail;
+    const storedToken = localStorage.getItem("alveo_auth_token");
+    if (storedToken) h["Authorization"] = `Bearer ${storedToken}`;
     return h;
   };
   const [activeTab, setActiveTab] = useState<
@@ -437,7 +438,7 @@ export function LivePreview({
         `${BASE}/api/design-comments?designId=${encodeURIComponent(designId)}`,
         {
           cache: "no-store",
-          headers: userEmail ? { "x-user-email": userEmail } : undefined,
+          headers: makeHeaders(),
         },
       );
       if (!res.ok) return;

@@ -10,20 +10,16 @@
  * polyfill process.env for browser code.
  */
 import { SavedDesign } from "@/types/closet";
-
-function makeHeaders(userEmail?: string) {
-  const h: Record<string, string> = { "Content-Type": "application/json" };
-  if (userEmail) h["x-user-email"] = userEmail;
-  return h;
-}
+import { makeAuthHeaders } from "./auth";
 
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
 
 export async function listDesigns(userEmail: string): Promise<SavedDesign[]> {
   if (!userEmail) return [];
   try {
+    const headers = await makeAuthHeaders(userEmail);
     const res = await fetch(`${BASE}/api/designs`, {
-      headers: makeHeaders(userEmail),
+      headers,
       credentials: "include",
     });
     if (!res.ok) throw new Error(`HTTP ${res.status}`);
@@ -40,9 +36,10 @@ export async function addDesign(
 ): Promise<SavedDesign[]> {
   if (!userEmail) return [design];
   try {
+    const headers = await makeAuthHeaders(userEmail);
     const res = await fetch(`${BASE}/api/designs`, {
       method: "POST",
-      headers: makeHeaders(userEmail),
+      headers,
       credentials: "include",
       body: JSON.stringify({ design }),
     });
@@ -60,9 +57,10 @@ export async function removeDesign(
 ): Promise<SavedDesign[]> {
   if (!userEmail) return [];
   try {
+    const headers = await makeAuthHeaders(userEmail);
     const res = await fetch(`${BASE}/api/designs`, {
       method: "DELETE",
-      headers: makeHeaders(userEmail),
+      headers,
       credentials: "include",
       body: JSON.stringify({ id }),
     });

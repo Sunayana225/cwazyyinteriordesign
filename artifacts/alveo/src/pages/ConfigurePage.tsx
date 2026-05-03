@@ -12,6 +12,7 @@ import { getSharedConfigFromURL } from "@/lib/shareLink";
 import { useUndoRedo } from "@/lib/useUndoRedo";
 import { useKeyboardShortcuts } from "@/lib/useKeyboardShortcuts";
 import { trackEvent } from "@/lib/analytics";
+import { makeAuthHeaders, getAuthToken } from "@/lib/auth";
 
 const WIZARD_DRAFT_KEY = "alveo-wizard-draft";
 const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
@@ -42,12 +43,6 @@ function readDraftFromStorage(): {
   } catch {
     return { config: {}, step: "shape", restored: false };
   }
-}
-
-function apiHeaders(userEmail: string): HeadersInit {
-  const base: Record<string, string> = { "Content-Type": "application/json" };
-  if (userEmail) base["x-user-email"] = userEmail;
-  return base;
 }
 
 export default function ConfigurePage() {
@@ -141,10 +136,13 @@ export default function ConfigurePage() {
     }
 
     if (storedEmail) {
-      fetch(`${BASE}/api/designs`, {
-        headers: { "x-user-email": storedEmail },
-        cache: "no-store",
-      })
+      getAuthToken(storedEmail)
+        .then((token) =>
+          fetch(`${BASE}/api/designs`, {
+            headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+            cache: "no-store",
+          })
+        )
         .then((res) => (res.ok ? res.json() : null))
         .then((data) => {
           if (data && Array.isArray(data.designs)) {
@@ -248,11 +246,13 @@ export default function ConfigurePage() {
     });
 
     if (userEmail) {
-      fetch(`${BASE}/api/designs`, {
-        method: "POST",
-        headers: apiHeaders(userEmail),
-        body: JSON.stringify({ design }),
-      }).catch(() => { /* ignore cloud sync failures */ });
+      makeAuthHeaders(userEmail).then((headers) =>
+        fetch(`${BASE}/api/designs`, {
+          method: "POST",
+          headers,
+          body: JSON.stringify({ design }),
+        })
+      ).catch(() => { /* ignore cloud sync failures */ });
     }
   };
 
@@ -261,11 +261,13 @@ export default function ConfigurePage() {
     trackEvent("design_removed", { id });
 
     if (userEmail) {
-      fetch(`${BASE}/api/designs`, {
-        method: "DELETE",
-        headers: apiHeaders(userEmail),
-        body: JSON.stringify({ id }),
-      }).catch(() => { /* ignore cloud sync failures */ });
+      makeAuthHeaders(userEmail).then((headers) =>
+        fetch(`${BASE}/api/designs`, {
+          method: "DELETE",
+          headers,
+          body: JSON.stringify({ id }),
+        })
+      ).catch(() => { /* ignore cloud sync failures */ });
     }
   };
 

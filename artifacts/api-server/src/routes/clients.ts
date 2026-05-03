@@ -2,6 +2,7 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Request, Response } from "express";
 import { Pool } from "pg";
+import { requireAuth, type AuthenticatedRequest } from "../middlewares/auth";
 
 const router = Router();
 const pool = new Pool({ connectionString: process.env["DATABASE_URL"] });
@@ -40,9 +41,8 @@ const clientBodySchema = z.object({
   }),
 });
 
-router.get("/clients", async (req: Request, res: Response) => {
-  const user = req.headers["x-user-email"] as string | undefined;
-  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.get("/clients", requireAuth, async (req: Request, res: Response) => {
+  const user = (req as AuthenticatedRequest).userEmail;
   try {
     await ensureTable();
     const result = await pool.query(
@@ -55,9 +55,8 @@ router.get("/clients", async (req: Request, res: Response) => {
   }
 });
 
-router.post("/clients", async (req: Request, res: Response) => {
-  const user = req.headers["x-user-email"] as string | undefined;
-  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.post("/clients", requireAuth, async (req: Request, res: Response) => {
+  const user = (req as AuthenticatedRequest).userEmail;
   const parsed = clientBodySchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: parsed.error.flatten() }); return; }
   const { client } = parsed.data;
@@ -70,8 +69,7 @@ router.post("/clients", async (req: Request, res: Response) => {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,NOW())
        ON CONFLICT (owner_email, id) DO UPDATE SET
          name=$3, email=$4, phone=$5, address=$6, project_type=$7,
-         status=$8, notes=$9, budget=$10, updated_at=NOW()
-       WHERE alveo_clients.owner_email = $2`,
+         status=$8, notes=$9, budget=$10, updated_at=NOW()`,
       [id, user, client.name, client.email ?? null, client.phone ?? null,
        client.address ?? null, client.projectType ?? null,
        client.status, client.notes ?? null, client.budget ?? null],
@@ -86,9 +84,8 @@ router.post("/clients", async (req: Request, res: Response) => {
   }
 });
 
-router.delete("/clients", async (req: Request, res: Response) => {
-  const user = req.headers["x-user-email"] as string | undefined;
-  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+router.delete("/clients", requireAuth, async (req: Request, res: Response) => {
+  const user = (req as AuthenticatedRequest).userEmail;
   const { id } = req.body as { id?: string };
   if (!id) { res.status(400).json({ error: "id required" }); return; }
   try {

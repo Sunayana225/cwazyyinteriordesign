@@ -2,19 +2,25 @@ import { Router } from "express";
 import { z } from "zod";
 import type { Request, Response } from "express";
 import { Pool } from "pg";
+import { verifyToken } from "../middlewares/auth";
 
 const router  = Router();
 const pool    = new Pool({ connectionString: process.env["DATABASE_URL"] });
 
-// ── Types ────────────────────────────────────────────────────────────────────
+function getUserEmailFromRequest(req: Request): string | undefined {
+  const authHeader = req.headers["authorization"];
+  if (authHeader?.startsWith("Bearer ")) {
+    const token = authHeader.slice(7);
+    return verifyToken(token) ?? undefined;
+  }
+  return undefined;
+}
 
 type DesignCommentPermissions = {
   ownerEmail?: string;
   defaultRole: "viewer" | "editor";
   editors: string[];
 };
-
-// ── Rate limiting ─────────────────────────────────────────────────────────────
 
 const rateLimitMap = new Map<string, { count: number; resetAt: number }>();
 
@@ -31,8 +37,6 @@ function checkRateLimit(key: string, windowMs: number, max: number): { allowed: 
   }
   return { allowed: true, retryAfterSec: 0 };
 }
-
-// ── Audit helper ──────────────────────────────────────────────────────────────
 
 async function writeAudit(opts: {
   actorEmail?: string;
@@ -59,8 +63,6 @@ async function writeAudit(opts: {
     console.error("[audit write failed]", auditErr);
   }
 }
-
-// ── Permission helpers ────────────────────────────────────────────────────────
 
 async function getPermissions(designId: string): Promise<DesignCommentPermissions> {
   const result = await pool.query<{ owner_email: string | null; default_role: string; editors: string[] }>(
@@ -127,8 +129,6 @@ function parseBoundaryTimestamp(value: string | null | undefined, endOfDay: bool
   return Number.isNaN(millis) ? null : millis;
 }
 
-// ── Schemas ───────────────────────────────────────────────────────────────────
-
 const postSchema = z.object({
   designId: z.string().min(1).max(200),
   text:     z.string().min(1).max(500),
@@ -149,8 +149,6 @@ const mentionAckSchema = z.object({
   commentId:   z.string().min(1).max(200),
   read:        z.boolean(),
 });
-
-// ── DB row type ───────────────────────────────────────────────────────────────
 
 interface CommentRow {
   id:          string;
@@ -177,11 +175,9 @@ function rowToComment(r: CommentRow) {
   };
 }
 
-// ── GET /design-comments ──────────────────────────────────────────────────────
-
 router.get("/design-comments", async (req: Request, res: Response) => {
   const configuredToken = process.env["EVENTS_ADMIN_TOKEN"];
-  const userEmail       = req.headers["x-user-email"] as string | undefined;
+  const userEmail       = getUserEmailFromRequest(req);
   const isAll           = req.query["all"] === "1";
 
   if (isAll) {
@@ -245,7 +241,6 @@ router.get("/design-comments", async (req: Request, res: Response) => {
     const role         = getEffectiveRole(permissions, userEmail);
     const mentionKeys  = mentionKeysForUser(userEmail);
 
-    // Fetch which comment IDs have been read by this user from DB
     const relevantRead = new Set<string>();
     if (mentionKeys.length > 0) {
       const readRows = await pool.query<{ comment_id: string }>(
@@ -280,12 +275,12 @@ router.get("/design-comments", async (req: Request, res: Response) => {
   }
 });
 
-// ── POST /design-comments ─────────────────────────────────────────────────────
-
 router.post("/design-comments", async (req: Request, res: Response) => {
   const ip        = (req.headers["x-forwarded-for"] as string) || req.socket.remoteAddress || "unknown";
-  const userEmail = req.headers["x-user-email"] as string | undefined;
-  const limit     = checkRateLimit(`design-comments:${ip}`, 60_000, 80);
+  const userEmail = getUserEmailFromRequest(req);
+  if (!userEmail) { res.status(401).json({ error: "Unauthorized" }); return; }
+
+  const limit = checkRateLimit(`design-comments:${ip}`, 60_000, 80);
   if (!limit.allowed) {
     res.setHeader("Retry-After", String(limit.retryAfterSec));
     res.status(429).json({ error: "Too many requests" });
@@ -298,8 +293,7 @@ router.post("/design-comments", async (req: Request, res: Response) => {
   try {
     let permissions = await getPermissions(parsed.data.designId);
 
-    // If no permissions exist yet, initialize with current user as owner
-    if (!permissions.ownerEmail && userEmail) {
+    if (!permissions.ownerEmail) {
       permissions = { ownerEmail: userEmail, defaultRole: "editor", editors: [] };
       await upsertPermissions(parsed.data.designId, permissions);
     }
@@ -315,7 +309,7 @@ router.post("/design-comments", async (req: Request, res: Response) => {
       `INSERT INTO alveo_design_comments
          (id, design_id, user_email, author_name, text, parent_id, mentions)
        VALUES ($1, $2, $3, $4, $5, $6, $7)`,
-      [id, parsed.data.designId, userEmail ?? "guest", userEmail ?? "Guest", parsed.data.text.trim(), parsed.data.parentId ?? null, mentions],
+      [id, parsed.data.designId, userEmail, userEmail, parsed.data.text.trim(), parsed.data.parentId ?? null, mentions],
     );
 
     await writeAudit({
@@ -337,13 +331,10 @@ router.post("/design-comments", async (req: Request, res: Response) => {
   }
 });
 
-// ── PATCH /design-comments ────────────────────────────────────────────────────
-
 router.patch("/design-comments", async (req: Request, res: Response) => {
   const configuredToken = process.env["EVENTS_ADMIN_TOKEN"];
-  const userEmail       = req.headers["x-user-email"] as string | undefined;
+  const userEmail       = getUserEmailFromRequest(req);
 
-  // mention-ack path
   const mentionAckParsed = mentionAckSchema.safeParse(req.body);
   if (mentionAckParsed.success) {
     if (!configuredToken || req.headers["x-admin-token"] !== configuredToken) {
@@ -389,7 +380,6 @@ router.patch("/design-comments", async (req: Request, res: Response) => {
     return;
   }
 
-  // permission management path
   const parsed = patchPermissionSchema.safeParse(req.body);
   if (!parsed.success) { res.status(400).json({ error: "Invalid request body" }); return; }
   if (!userEmail) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -398,7 +388,6 @@ router.patch("/design-comments", async (req: Request, res: Response) => {
     let current = await getPermissions(parsed.data.designId);
     const before = { ...current };
 
-    // Bootstrap permissions if none exist
     if (!current.ownerEmail) {
       current = { ownerEmail: userEmail, defaultRole: "editor", editors: [] };
     }

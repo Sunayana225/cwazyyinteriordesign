@@ -108,6 +108,29 @@ router.post("/approvals/portal/:token/respond", async (req: Request, res: Respon
   }
 });
 
+router.patch("/approvals/:id/resolve", requireAuthJwt, async (req: Request, res: Response) => {
+  const email = (req as Request & { userEmail: string }).userEmail;
+  const id = String(req.params["id"]);
+  try {
+    const result = await pool.query(
+      `UPDATE alveo_design_approvals
+       SET status = 'resolved', responded_at = NOW()
+       WHERE id = $1 AND owner_email = $2 AND status = 'rejected'
+       RETURNING id`,
+      [id, email],
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "Approval not found or not in revision state" });
+      return;
+    }
+    const ip = String(req.ip ?? req.socket.remoteAddress ?? "unknown");
+    writeAuditLog({ actorEmail: email, action: "approval.resolve", resourceType: "approval", resourceId: id, ip, meta: {} });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to resolve revision" });
+  }
+});
+
 router.get("/approvals/design/:designId", requireAuthJwt, async (req: Request, res: Response) => {
   const email = (req as Request & { userEmail: string }).userEmail;
   const { designId } = req.params;

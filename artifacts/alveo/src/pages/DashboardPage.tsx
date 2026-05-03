@@ -189,12 +189,14 @@ const FINISH_SWATCHES: Record<string, { bg: string; label: string }> = {
 };
 
 function VersionHistoryModal({
-  design, onClose, onRestore, restoring,
+  design, onClose, onRestore, restoring, onDuplicate, duplicating,
 }: {
   design: SavedDesign;
   onClose: () => void;
   onRestore: (versionIdx: number) => void;
   restoring: number | null;
+  onDuplicate: (versionIdx: number) => void;
+  duplicating: number | null;
 }) {
   const versions = (design.config?.versions as DesignVersion[] | undefined) ?? [];
 
@@ -301,17 +303,30 @@ function VersionHistoryModal({
                             ))}
                           </div>
                         </div>
-                        <button
-                          onClick={() => onRestore(idx)}
-                          disabled={isRestoring}
-                          className="shrink-0 flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg border transition-all
-                            bg-white border-stone-200 text-stone-500 hover:border-taupe-400 hover:text-taupe-600 hover:bg-taupe-50 disabled:opacity-50">
-                          {isRestoring ? (
-                            <span className="flex items-center gap-1"><motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }} className="inline-block"><RotateCcw size={10}/></motion.span> Restoring…</span>
-                          ) : (
-                            <><RotateCcw size={10}/> Restore</>
-                          )}
-                        </button>
+                        <div className="shrink-0 flex flex-col gap-1">
+                          <button
+                            onClick={() => onRestore(idx)}
+                            disabled={isRestoring || duplicating === idx}
+                            className="flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg border transition-all
+                              bg-white border-stone-200 text-stone-500 hover:border-taupe-400 hover:text-taupe-600 hover:bg-taupe-50 disabled:opacity-50">
+                            {isRestoring ? (
+                              <span className="flex items-center gap-1"><motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }} className="inline-block"><RotateCcw size={10}/></motion.span> Restoring…</span>
+                            ) : (
+                              <><RotateCcw size={10}/> Restore</>
+                            )}
+                          </button>
+                          <button
+                            onClick={() => onDuplicate(idx)}
+                            disabled={duplicating === idx || isRestoring}
+                            className="flex items-center gap-1.5 text-[10px] font-medium px-2.5 py-1.5 rounded-lg border transition-all
+                              bg-white border-stone-200 text-stone-400 hover:border-blue-300 hover:text-blue-600 hover:bg-blue-50 disabled:opacity-50">
+                            {duplicating === idx ? (
+                              <span className="flex items-center gap-1"><motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }} className="inline-block"><RotateCcw size={10}/></motion.span> Saving…</span>
+                            ) : (
+                              <><Copy size={10}/> Branch</>
+                            )}
+                          </button>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -356,6 +371,11 @@ export default function DashboardPage() {
   // Version history modal
   const [historyDesign,  setHistoryDesign]  = useState<SavedDesign|null>(null);
   const [restoringIdx,   setRestoringIdx]   = useState<number|null>(null);
+  const [duplicatingIdx, setDuplicatingIdx] = useState<number|null>(null);
+
+  // "Show all" toggles
+  const [showAllDesigns,   setShowAllDesigns]   = useState(false);
+  const [showAllApprovals, setShowAllApprovals] = useState(false);
 
   // Reminder feedback
   const [sentReminder, setSentReminder] = useState<string|null>(null);
@@ -411,6 +431,44 @@ export default function DashboardPage() {
     setSentReminder(approvalId);
     setTimeout(() => setSentReminder(null), 3000);
   };
+
+  async function duplicateVersion(design: SavedDesign, versionIdx: number) {
+    const versions = (design.config?.versions as DesignVersion[] | undefined) ?? [];
+    const snapshot = versions[versionIdx];
+    if (!snapshot) return;
+    setDuplicatingIdx(versionIdx);
+    try {
+      const newId = `studio_${Date.now().toString(36)}`;
+      const newName = `${design.name} — v${versions.length - versionIdx}`;
+      const newConfig: Record<string, unknown> = {
+        source:         snapshot.source ?? "studio",
+        closetKind:     snapshot.closetKind,
+        finish:         snapshot.finish,
+        wallDimensions: snapshot.wallDimensions,
+        builderModules: snapshot.builderModules,
+        tags:           snapshot.tags,
+        versions:       [],
+      };
+      await fetch(`${BASE}/api/designs`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ design: { id: newId, name: newName, ...newConfig } }),
+      });
+      await loadAll();
+      setHistoryDesign(null);
+    } finally {
+      setDuplicatingIdx(null);
+    }
+  }
+
+  const [resolvingId, setResolvingId] = useState<string|null>(null);
+  async function resolveRevision(approvalId: string) {
+    setResolvingId(approvalId);
+    try {
+      const res = await fetch(`${BASE}/api/approvals/${approvalId}/resolve`, { method: "PATCH", headers: authHeaders() });
+      if (res.ok) await loadAll();
+    } finally { setResolvingId(null); }
+  }
 
   async function restoreVersion(design: SavedDesign, versionIdx: number) {
     const versions = (design.config?.versions as DesignVersion[] | undefined) ?? [];
@@ -592,8 +650,9 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                  {filteredDesigns.slice(0, 6).map((d) => {
+                  {(showAllDesigns ? filteredDesigns : filteredDesigns.slice(0, 6)).map((d) => {
                     const tags = d.config?.tags as string[] | undefined;
+                    const versionCount = (d.config?.versions as unknown[] | undefined)?.length ?? 0;
                     const isSelected = compareIds.includes(d.id);
                     return (
                       <div key={d.id} className={`bg-white rounded-xl border p-4 flex items-start gap-3 transition-all
@@ -605,7 +664,14 @@ export default function DashboardPage() {
                           {isSelected && <Check size={12} className="text-white m-auto"/>}
                         </button>
                         <div className="flex-1 min-w-0">
-                          <p className="font-medium text-charcoal-600 truncate">{d.name}</p>
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <p className="font-medium text-charcoal-600 truncate">{d.name}</p>
+                            {versionCount > 0 && (
+                              <span className="text-[9px] font-bold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-stone-100 border border-stone-200 text-stone-400 flex-shrink-0">
+                                {versionCount + 1} ver
+                              </span>
+                            )}
+                          </div>
                           <p className="text-xs text-charcoal-400 mt-0.5">{new Date(d.savedAt).toLocaleDateString()}</p>
                           {tags && tags.length > 0 && (
                             <div className="flex flex-wrap gap-1 mt-1.5">
@@ -634,6 +700,12 @@ export default function DashboardPage() {
                   })}
                 </div>
               )}
+              {filteredDesigns.length > 6 && (
+                <button onClick={() => setShowAllDesigns(v => !v)}
+                  className="w-full mt-2 py-2 text-xs font-medium text-taupe-600 hover:text-taupe-700 bg-taupe-50 hover:bg-taupe-100 border border-taupe-200 rounded-xl transition-colors">
+                  {showAllDesigns ? `Show less` : `Show all ${filteredDesigns.length} designs`}
+                </button>
+              )}
               {compareIds.length > 0 && compareIds.length < 2 && (
                 <p className="text-xs text-stone-400 mt-2">Select one more design to compare</p>
               )}
@@ -654,7 +726,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="space-y-2.5">
-                  {approvals.slice(0, 8).map((a) => {
+                  {(showAllApprovals ? approvals : approvals.slice(0, 5)).map((a) => {
                     const days = daysSince(a.created_at);
                     const isPending = a.status === "pending";
                     const reminderSent = sentReminder === a.id;
@@ -681,12 +753,37 @@ export default function DashboardPage() {
                             {reminderSent ? <><Check size={11}/> Reminder noted</> : <><Bell size={11}/> Send reminder</>}
                           </button>
                         )}
+                        {a.status === "rejected" && (
+                          <div className="mt-2 space-y-1.5">
+                            {a.client_note && (
+                              <div className="bg-amber-50 border border-amber-100 rounded-lg px-2.5 py-1.5">
+                                <p className="text-[10px] font-semibold text-amber-700 uppercase tracking-wider mb-0.5">Client note</p>
+                                <p className="text-xs text-amber-800 italic">"{a.client_note}"</p>
+                              </div>
+                            )}
+                            <button onClick={() => resolveRevision(a.id)}
+                              disabled={resolvingId === a.id}
+                              className="w-full flex items-center justify-center gap-1.5 text-xs font-medium py-1.5 rounded-lg border transition-all
+                                bg-emerald-50 border-emerald-200 text-emerald-700 hover:bg-emerald-100 hover:border-emerald-300 disabled:opacity-50">
+                              {resolvingId === a.id
+                                ? <><motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }} className="inline-block"><RotateCcw size={11}/></motion.span> Resolving…</>
+                                : <><Check size={11}/> Mark resolved</>}
+                            </button>
+                          </div>
+                        )}
                       </div>
                     );
                   })}
                 </div>
               )}
             </div>
+
+            {approvals.length > 5 && (
+              <button onClick={() => setShowAllApprovals(v => !v)}
+                className="w-full py-2 text-xs font-medium text-taupe-600 hover:text-taupe-700 bg-taupe-50 hover:bg-taupe-100 border border-taupe-200 rounded-xl transition-colors">
+                {showAllApprovals ? "Show less" : `Show all ${approvals.length} approvals`}
+              </button>
+            )}
 
             {/* Quick links */}
             <div className="bg-white rounded-2xl border border-cream-200 p-5">
@@ -795,9 +892,11 @@ export default function DashboardPage() {
         {historyDesign && (
           <VersionHistoryModal
             design={historyDesign}
-            onClose={() => { setHistoryDesign(null); setRestoringIdx(null); }}
+            onClose={() => { setHistoryDesign(null); setRestoringIdx(null); setDuplicatingIdx(null); }}
             onRestore={(idx) => restoreVersion(historyDesign, idx)}
             restoring={restoringIdx}
+            onDuplicate={(idx) => duplicateVersion(historyDesign, idx)}
+            duplicating={duplicatingIdx}
           />
         )}
       </AnimatePresence>

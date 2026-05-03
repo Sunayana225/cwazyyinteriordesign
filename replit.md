@@ -35,20 +35,33 @@ A closet design configurator app for interior designers with:
 - PDF export and design sharing features
 - Dark/light mode support
 
-#### Feature Set (v2 — all 13 tasks complete)
+#### Feature Set (v2 — all 13 original tasks complete)
 - **T001/T012 Gallery**: finish filter chips (Light Oak/Warm Walnut/Dark Espresso/Painted White), heart-button mood board, `MoodboardDrawer` slide-in panel (localStorage `alveo_moodboard`)
-- **T002 Studio Undo/Redo**: `undoStack`/`redoStack` state with Ctrl+Z/Y keyboard shortcuts; Undo/Redo buttons in bottom nav
+- **T002 Studio Undo/Redo**: `undoStack`/`redoStack` state with Ctrl+Z/Y keyboard shortcuts; Undo/Redo buttons in bottom nav with count badges
 - **T002 Finish picker**: 4 swatch picker (Light Oak, Warm Walnut, Dark Espresso, Painted White) in Step 3 sidebar; finish stored in `alveo_studio_dims` and saved design config
 - **T002 Module resize**: drag right-edge handle on each module column to resize its width inline
 - **T003 3D preview panel**: live isometric SVG panel (`StudioMiniPreview`) showing modules as 3D boxes with chosen finish colours; summary card with module count breakdown
 - **T004 Quick-share**: Share modal in Dashboard copies `/portal/:token` link to clipboard with animated feedback
-- **T005 Design versioning**: `tags[]` + `finish` + `versions[]` saved in design config JSONB; tags input in SavePanel
+- **T005 Design versioning**: `tags[]` + `finish` + `versions[]` (max 20) saved in design config JSONB; VersionHistoryModal with restore + "Branch" (duplicate-as-new-design) per snapshot
 - **T006 Comparison**: checkbox select 2 designs from Dashboard → `CompareModal` side-by-side diff (dimensions, finish, module count, tags)
 - **T007 Folder/tag org**: tags saved per design; tag filter chips on Dashboard Recent Designs section
-- **T008 Room shape step**: Step 1 renamed "Room Footprint" with enhanced visual floor-plan cards
+- **T008 Room shape step**: Step 1 "Room Footprint" with visual floor-plan cards (straight wall, walk-in L, walk-in U)
 - **T009 Module comments**: Comments tab in Client Portal with module chip selector (`[ModuleName] text` prefix); fetches/posts to `/api/design-comments`
-- **T010 Revision flow**: "Request Changes" button in portal review tab with note; enhanced status UI for revision vs approval
+- **T010 Revision flow**: "Request Changes" button in portal posts `status=rejected` with note; Dashboard shows client note in amber box + "Mark resolved" button (`PATCH /api/approvals/:id/resolve` sets status to `resolved`)
 - **T011 Approval reminders**: days-since badge on pending approvals; "Send reminder" button in Dashboard
+- **T013 AR Preview (mobile)**: `ar.tsx` in mobile app with CameraView + ClosetOverlay (tap-to-place closet wireframe), finish swatch picker, pulsing reticle; web fallback with simulated room renderer
+
+#### Feature Set (v3 — new 10-feature batch)
+- **Toast system**: `src/lib/toast.tsx` with `ToastProvider` + `useToast`; animated spring toasts (success/error/info); app wrapped at root
+- **Gallery sort**: `ArrowUpDown` sort dropdown in filter bar with 5 orders (Default / Name A→Z / Name Z→A / Size ↑ / Size ↓); clears with filter reset
+- **Module label inline-edit**: double-click any module label in Studio Step 3 to rename it; Enter/Escape/blur commit; `commitLabel()` updates modules array
+- **Finish colour dot on module cards**: small `w-2.5 h-2.5` rounded swatch in each module card showing the current finish colour
+- **Ctrl+S to save**: `saveTriggerRef` + `useEffect` keyboard listener in StudioPage; opens SavePanel when on Step 3
+- **Version count badge**: each design card in Dashboard shows `N ver` pill when it has saved versions
+- **Show all designs toggle**: "Show all N designs" / "Show less" expand button below the designs grid when >6 designs
+- **Show all approvals toggle**: "Show all N approvals" / "Show less" expand button below the approvals sidebar list when >5
+- **Duplicate version as branch**: "Branch" button in VersionHistoryModal saves any snapshot as a brand-new independent design
+- **Undo/redo count badges**: step 3 bottom bar shows `{undoStack.length} / {redoStack.length}` counts next to the Undo/Redo buttons
 
 #### localStorage keys
 - `alveo_builder_modules` — modules from Studio
@@ -65,7 +78,8 @@ Backend with routes for:
 - `/api/projects` — CRUD for designer projects (groups designs)
 - `/api/approvals/send` — create client approval request with design snapshot
 - `/api/approvals/portal/:token` — public portal read (no auth)
-- `/api/approvals/portal/:token/respond` — client approve/reject
+- `/api/approvals/portal/:token/respond` — client approve/reject (status: `approved` | `rejected`)
+- `/api/approvals/:id/resolve` — designer marks a revision (`rejected`) as resolved → sets status `resolved`
 - `/api/approvals` — list all approvals for authenticated designer
 - `/api/events` — analytics event tracking
 - `/api/designComments` — collaborative comments on designs

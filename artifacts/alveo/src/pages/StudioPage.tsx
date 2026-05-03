@@ -370,6 +370,16 @@ function LayoutStep({ modules, setModules, wallW, wallH, wallD, catalogue, finis
 }) {
   const [dragOverIdx, setDragOverIdx] = useState<number|null>(null);
 
+  // Inline label editing
+  const [editingLabelId, setEditingLabelId] = useState<string|null>(null);
+  const [editingLabelVal, setEditingLabelVal] = useState("");
+
+  const commitLabel = (moduleId: string) => {
+    const trimmed = editingLabelVal.trim();
+    if (trimmed) setModules(modules.map(m => m.id === moduleId ? { ...m, label: trimmed } : m));
+    setEditingLabelId(null);
+  };
+
   // Module resize state
   const resizeDrag = useRef<{ moduleId:string; startX:number; startWidth:number } | null>(null);
   const [resizePreview, setResizePreview] = useState<{ moduleId:string; width:number }|null>(null);
@@ -526,9 +536,36 @@ function LayoutStep({ modules, setModules, wallW, wallH, wallD, catalogue, finis
                       <div className="flex-1 flex flex-col items-center justify-center gap-0.5 px-1 text-center overflow-hidden">
                         <span className="text-lg leading-none" style={{ color:cat.border }}>{cat.icon}</span>
                         {colW >= 42 && <>
-                          <span className="text-[10px] font-semibold text-stone-700 mt-1 line-clamp-2">{mod.label}</span>
+                          {editingLabelId === mod.id ? (
+                            <input
+                              autoFocus
+                              value={editingLabelVal}
+                              onChange={e => setEditingLabelVal(e.target.value)}
+                              onBlur={() => commitLabel(mod.id)}
+                              onKeyDown={e => { if(e.key==="Enter"){e.preventDefault();commitLabel(mod.id);} if(e.key==="Escape")setEditingLabelId(null); }}
+                              onClick={e => e.stopPropagation()}
+                              className="w-full text-[10px] font-semibold text-stone-700 bg-white/80 border border-taupe-300 rounded px-1 py-0.5 text-center focus:outline-none focus:ring-1 focus:ring-taupe-400"
+                              style={{ maxWidth: colW - 8 }}
+                            />
+                          ) : (
+                            <span
+                              className="text-[10px] font-semibold text-stone-700 mt-1 line-clamp-2 cursor-text select-none"
+                              title="Double-click to rename"
+                              onDoubleClick={e => { e.stopPropagation(); setEditingLabelId(mod.id); setEditingLabelVal(mod.label); }}
+                            >{mod.label}</span>
+                          )}
                           <span className="text-[9px] font-mono text-stone-400">{mod.width}″</span>
                         </>}
+                        {/* Finish colour dot */}
+                        {colW >= 30 && (() => {
+                          const FDOT: Record<string,string> = { light:"#f0ebe3", medium:"#d4c2a8", dark:"#8d7060", white:"#f8f8f6" };
+                          const FDOT_BORDER: Record<string,string> = { light:"#c4b096", medium:"#a08070", dark:"#5d4030", white:"#d0d0ce" };
+                          return (
+                            <span className="w-2.5 h-2.5 rounded-full border flex-shrink-0 mt-0.5"
+                              style={{ background: FDOT[finish] ?? FDOT.medium, borderColor: FDOT_BORDER[finish] ?? FDOT_BORDER.medium }}
+                              title={`Finish: ${finish}`}/>
+                          );
+                        })()}
                       </div>
                     )}
                     <button onClick={() => setModules(modules.filter((_,j) => j !== i))}
@@ -867,10 +904,16 @@ type SaveStatus = "idle" | "saving" | "saved" | "error";
 interface SavePanelProps {
   modules: StudioModule[]; wallW: number; wallH: number; wallD: number;
   kind: ClosetKind; finish: string;
+  triggerRef?: React.MutableRefObject<(() => void) | null>;
 }
 
-function SavePanel({ modules, wallW, wallH, wallD, kind, finish }: SavePanelProps) {
+function SavePanel({ modules, wallW, wallH, wallD, kind, finish, triggerRef }: SavePanelProps) {
   const [open, setOpen] = useState(false);
+
+  useEffect(() => {
+    if (triggerRef) { triggerRef.current = () => setOpen(true); }
+    return () => { if (triggerRef) triggerRef.current = null; };
+  }, [triggerRef]);
   const [name, setName] = useState("");
   const [tags, setTags] = useState("");
   const [status, setStatus] = useState<SaveStatus>("idle");
@@ -1041,6 +1084,19 @@ export default function StudioPage() {
 
   const totalUsed = modules.reduce((s,m) => s+m.width, 0);
 
+  // Ctrl+S → open save panel
+  const saveTriggerRef = useRef<(() => void) | null>(null);
+  useEffect(() => {
+    const handler = (e: KeyboardEvent) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === "s" && step === 3) {
+        e.preventDefault();
+        saveTriggerRef.current?.();
+      }
+    };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [step]);
+
   const launch = () => {
     localStorage.setItem("alveo_builder_modules", JSON.stringify(modules));
     localStorage.setItem("alveo_studio_dims", JSON.stringify({ wallW, wallH, wallD, finish }));
@@ -1140,7 +1196,7 @@ export default function StudioPage() {
                   <span className="text-[9px] text-stone-300 font-mono ml-0.5">{undoStack.length} / {redoStack.length}</span>
                 )}
               </div>
-              <SavePanel modules={modules} wallW={wallW} wallH={wallH} wallD={wallD} kind={kind} finish={finish}/>
+              <SavePanel modules={modules} wallW={wallW} wallH={wallH} wallD={wallD} kind={kind} finish={finish} triggerRef={saveTriggerRef}/>
             </>
           ) : (
             <span className="text-xs text-stone-400 font-mono">

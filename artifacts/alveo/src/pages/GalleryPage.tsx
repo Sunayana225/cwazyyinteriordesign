@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef } from "react";
 import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
-import { ArrowRight, Maximize2, X, Heart, BookMarked, ChevronRight, Trash2 } from "lucide-react";
+import { ArrowRight, Maximize2, X, Heart, BookMarked, ChevronRight, Trash2, ArrowUpDown } from "lucide-react";
 
 type StyleTag  = "All" | "Minimal" | "Glam" | "Small Space" | "Luxury" | "Modern" | "Rustic";
 type SizeTag   = "Any Size" | "Compact (≤ 60 sq ft)" | "Standard (60–120 sq ft)" | "Large (120+ sq ft)";
@@ -286,9 +286,13 @@ export default function GalleryPage() {
   const HISTORY_PAGE_SIZE = 20;
   const [, navigate] = useLocation();
 
+  type SortOrder = "default" | "name-asc" | "name-desc" | "sqft-asc" | "sqft-desc";
+
   const [activeTag,    setActiveTag]    = useState<StyleTag>("All");
   const [activeSize,   setActiveSize]   = useState<SizeTag>("Any Size");
   const [activeFinish, setActiveFinish] = useState<FinishTag>("Any Finish");
+  const [sortOrder,    setSortOrder]    = useState<SortOrder>("default");
+  const [showSort,     setShowSort]     = useState(false);
   const [hoveredId,    setHoveredId]    = useState<number|null>(null);
   const [previewItem,  setPreviewItem]  = useState<GalleryItem|null>(null);
 
@@ -344,7 +348,7 @@ export default function GalleryPage() {
     return () => controller.abort();
   }, [isAdmin, historyDesignFilter, historyAuthorFilter, mentionsOnly, historyFromDate, historyToDate, historySort, historyPage]);
 
-  // Filtered items
+  // Filtered + sorted items
   const finishMatch = FINISH_MAP[activeFinish];
   const filtered = items.filter((it) => {
     if (activeTag  !== "All"      && it.style  !== activeTag) return false;
@@ -352,6 +356,15 @@ export default function GalleryPage() {
     if (finishMatch !== null      && it.finish !== finishMatch) return false;
     return true;
   });
+  const sorted = (() => {
+    const arr = [...filtered];
+    if (sortOrder === "name-asc")  return arr.sort((a,b) => a.title.localeCompare(b.title));
+    if (sortOrder === "name-desc") return arr.sort((a,b) => b.title.localeCompare(a.title));
+    if (sortOrder === "sqft-asc")  return arr.sort((a,b) => a.sqft.localeCompare(b.sqft));
+    if (sortOrder === "sqft-desc") return arr.sort((a,b) => b.sqft.localeCompare(a.sqft));
+    return arr;
+  })();
+  const SORT_LABELS: Record<string, string> = { "default":"Default", "name-asc":"Name A→Z", "name-desc":"Name Z→A", "sqft-asc":"Size ↑", "sqft-desc":"Size ↓" };
 
   const startFromStyle = (item: GalleryItem) => {
     if (item.style === "All") return;
@@ -433,7 +446,7 @@ export default function GalleryPage() {
                 className={`${filterPillBase} ${activeTag===t ? filterPillActive : filterPillInactive}`}>{t}</button>
             ))}
           </div>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2 items-center">
             {sizes.map((s) => (
               <button key={s} onClick={() => setActiveSize(s)}
                 className={`${filterPillBase} ${activeSize===s ? "bg-taupe-500 text-white border-taupe-500" : filterPillInactive} text-[11px]`}>{s}</button>
@@ -443,21 +456,41 @@ export default function GalleryPage() {
               <button key={f} onClick={() => setActiveFinish(f)}
                 className={`${filterPillBase} ${activeFinish===f ? "bg-amber-600 text-white border-amber-600" : filterPillInactive} text-[11px]`}>{f}</button>
             ))}
+            <div className="w-px h-5 bg-cream-300 self-center mx-1"/>
+            {/* Sort dropdown */}
+            <div className="relative">
+              <button onClick={() => setShowSort(v => !v)}
+                className={`${filterPillBase} flex items-center gap-1.5 text-[11px] ${sortOrder !== "default" ? "bg-charcoal-600 text-white border-charcoal-600" : filterPillInactive}`}>
+                <ArrowUpDown size={11}/> {SORT_LABELS[sortOrder]}
+              </button>
+              {showSort && (
+                <div className="absolute top-full left-0 mt-1 z-20 bg-white rounded-xl border border-stone-200 shadow-lg py-1 min-w-[140px]"
+                  onMouseLeave={() => setShowSort(false)}>
+                  {(["default","name-asc","name-desc","sqft-asc","sqft-desc"] as const).map((o) => (
+                    <button key={o} onClick={() => { setSortOrder(o); setShowSort(false); }}
+                      className={`w-full text-left px-3 py-2 text-[11px] transition-colors
+                        ${sortOrder===o ? "bg-charcoal-50 text-charcoal-700 font-semibold" : "text-stone-600 hover:bg-stone-50"}`}>
+                      {SORT_LABELS[o]}
+                    </button>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
 
       {/* Grid */}
       <div className="max-w-7xl mx-auto px-6 pb-20">
-        {filtered.length === 0 && (
+        {sorted.length === 0 && (
           <div className="flex flex-col items-center justify-center py-20 text-charcoal-400 gap-3">
             <p className="text-lg font-serif">No designs match your filters</p>
-            <button onClick={() => { setActiveTag("All"); setActiveSize("Any Size"); setActiveFinish("Any Finish"); }}
+            <button onClick={() => { setActiveTag("All"); setActiveSize("Any Size"); setActiveFinish("Any Finish"); setSortOrder("default"); }}
               className="text-sm text-taupe-600 hover:underline">Clear all filters</button>
           </div>
         )}
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-5">
-          {filtered.map((item) => {
+          {sorted.map((item) => {
             const hearted = moodboard.includes(item.id);
             return (
               <motion.div key={item.id} layout initial={{opacity:0,y:16}} animate={{opacity:1,y:0}} transition={{duration:0.25}}

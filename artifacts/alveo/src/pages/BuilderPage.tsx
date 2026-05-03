@@ -2,10 +2,12 @@ import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { Link } from "wouter";
 import {
   ArrowLeft, Trash2, GripVertical, Box, RotateCcw, Plus, Minus,
-  ChevronRight, Layers, Ruler, Info,
+  ChevronRight, Layers, Ruler, Info, Save, CheckCircle2, FolderPlus, X,
 } from "lucide-react";
 import { ClosetSVGRenderer } from "@/renderer/ClosetSVGRenderer";
 import { ClosetIsometricRenderer } from "@/renderer/ClosetIsometricRenderer";
+import { useAuth } from "@/lib/AuthContext";
+import { getStoredToken } from "@/lib/AuthContext";
 import {
   ClosetLayout, ClosetZone, ClosetWall, ShelfConfig, DrawerConfig,
 } from "@/types/closet";
@@ -638,9 +640,271 @@ function SelectedModulePanel({ module, onUpdate, onDelete, onClose }: {
   );
 }
 
+// ─── SaveToProjectModal ───────────────────────────────────────────────────────
+
+const BASE = import.meta.env.BASE_URL?.replace(/\/$/, "") ?? "";
+
+interface Project { id: string; name: string; client_name: string | null }
+
+type SaveStage = "form" | "saving" | "done" | "error";
+
+function SaveToProjectModal({
+  modules, wallW, wallH, wallD, woodFinish, onClose,
+}: {
+  modules: BuilderModule[]; wallW: number; wallH: number; wallD: number;
+  woodFinish: string; onClose: () => void;
+}) {
+  const [stage, setStage] = useState<SaveStage>("form");
+  const [projects, setProjects] = useState<Project[]>([]);
+  const [loadingProjects, setLoadingProjects] = useState(true);
+
+  const [designName, setDesignName] = useState(
+    `Layout ${new Date().toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" })}`
+  );
+  const [projectMode, setProjectMode] = useState<"existing" | "new">("existing");
+  const [selectedProjectId, setSelectedProjectId] = useState<string>("");
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newClientName, setNewClientName] = useState("");
+  const [errorMsg, setErrorMsg] = useState("");
+  const [savedDesignId, setSavedDesignId] = useState("");
+
+  useEffect(() => {
+    const token = getStoredToken();
+    if (!token) { setLoadingProjects(false); return; }
+    fetch(`${BASE}/api/projects`, { headers: { Authorization: `Bearer ${token}` } })
+      .then((r) => r.ok ? r.json() : { projects: [] })
+      .then((d: { projects?: Project[] }) => {
+        const list = d.projects ?? [];
+        setProjects(list);
+        if (list.length > 0) setSelectedProjectId(list[0].id);
+        else setProjectMode("new");
+      })
+      .catch(() => setProjectMode("new"))
+      .finally(() => setLoadingProjects(false));
+  }, []);
+
+  const handleSave = async () => {
+    if (!designName.trim()) { setErrorMsg("Design name is required."); return; }
+    if (projectMode === "new" && !newProjectName.trim()) { setErrorMsg("Project name is required."); return; }
+    if (projectMode === "existing" && !selectedProjectId) { setErrorMsg("Select a project."); return; }
+    setErrorMsg("");
+    setStage("saving");
+
+    const token = getStoredToken();
+    if (!token) { setErrorMsg("You must be logged in to save."); setStage("error"); return; }
+    const authH = { "Content-Type": "application/json", Authorization: `Bearer ${token}` };
+
+    try {
+      // 1. Save the design
+      const designId = `builder_${Date.now().toString(36)}`;
+      const designRes = await fetch(`${BASE}/api/designs`, {
+        method: "POST",
+        headers: authH,
+        body: JSON.stringify({
+          design: {
+            id: designId,
+            name: designName.trim(),
+            builderModules: modules,
+            wallDimensions: { width: wallW, height: wallH, depth: wallD },
+            woodFinish,
+            source: "builder",
+          },
+        }),
+      });
+      if (!designRes.ok) throw new Error("Failed to save design");
+      setSavedDesignId(designId);
+
+      // 2. Resolve or create the project
+      let projectId = selectedProjectId;
+      if (projectMode === "new") {
+        const projRes = await fetch(`${BASE}/api/projects`, {
+          method: "POST",
+          headers: authH,
+          body: JSON.stringify({ name: newProjectName.trim(), clientName: newClientName.trim() || null, status: "active" }),
+        });
+        if (!projRes.ok) throw new Error("Failed to create project");
+        const { project } = await projRes.json() as { project: { id: string } };
+        projectId = project.id;
+      }
+
+      // 3. Link design → project
+      await fetch(`${BASE}/api/projects/${projectId}/designs`, {
+        method: "POST",
+        headers: authH,
+        body: JSON.stringify({ designId }),
+      });
+
+      setStage("done");
+    } catch (e) {
+      setErrorMsg(e instanceof Error ? e.message : "An unexpected error occurred.");
+      setStage("error");
+    }
+  };
+
+  return (
+    <div className="fixed inset-0 bg-black/40 backdrop-blur-sm z-50 flex items-center justify-center p-4" onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}>
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden">
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-charcoal-50 flex items-center justify-center">
+              <Save size={15} className="text-charcoal-600" />
+            </div>
+            <div>
+              <p className="text-sm font-semibold text-charcoal-700">Save to Project</p>
+              <p className="text-[10px] text-stone-400">Save this layout to your designer dashboard</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        {/* Body */}
+        <div className="p-5">
+          {stage === "done" ? (
+            <div className="text-center py-4">
+              <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center mx-auto mb-3">
+                <CheckCircle2 size={28} className="text-emerald-500" />
+              </div>
+              <p className="text-base font-semibold text-charcoal-700 mb-1">Layout saved!</p>
+              <p className="text-xs text-stone-500 mb-5">
+                <span className="font-medium text-charcoal-600">{designName}</span> has been saved to your project.
+              </p>
+              <div className="flex gap-2 justify-center">
+                <Link href="/dashboard"
+                  className="px-4 py-2 rounded-xl text-xs font-semibold bg-charcoal-600 text-white hover:bg-charcoal-500 transition-colors">
+                  Go to Dashboard
+                </Link>
+                <button onClick={onClose}
+                  className="px-4 py-2 rounded-xl text-xs font-medium text-stone-600 bg-stone-100 hover:bg-stone-200 transition-colors">
+                  Keep editing
+                </button>
+              </div>
+            </div>
+          ) : (
+            <div className="space-y-4">
+              {/* Design name */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1.5">
+                  Design Name
+                </label>
+                <input
+                  type="text" value={designName} onChange={(e) => setDesignName(e.target.value)}
+                  className="w-full text-sm border border-stone-200 rounded-xl px-3 py-2.5 text-charcoal-700 focus:outline-none focus:ring-2 focus:ring-taupe-300"
+                  placeholder="e.g. Master Bedroom Closet"
+                />
+              </div>
+
+              {/* Project selector */}
+              <div>
+                <label className="text-[10px] font-bold uppercase tracking-wider text-stone-400 block mb-1.5">
+                  Project
+                </label>
+                {loadingProjects ? (
+                  <div className="text-xs text-stone-400 py-2">Loading projects…</div>
+                ) : (
+                  <div className="space-y-2">
+                    {projects.length > 0 && (
+                      <div className="flex gap-2 mb-2">
+                        <button
+                          onClick={() => setProjectMode("existing")}
+                          className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all ${projectMode === "existing" ? "bg-charcoal-600 text-white border-charcoal-600" : "bg-white text-stone-500 border-stone-200 hover:border-stone-300"}`}>
+                          Existing Project
+                        </button>
+                        <button
+                          onClick={() => setProjectMode("new")}
+                          className={`flex-1 py-2 rounded-xl text-xs font-medium border transition-all ${projectMode === "new" ? "bg-charcoal-600 text-white border-charcoal-600" : "bg-white text-stone-500 border-stone-200 hover:border-stone-300"}`}>
+                          New Project
+                        </button>
+                      </div>
+                    )}
+
+                    {projectMode === "existing" && projects.length > 0 && (
+                      <select
+                        value={selectedProjectId}
+                        onChange={(e) => setSelectedProjectId(e.target.value)}
+                        className="w-full text-sm border border-stone-200 rounded-xl px-3 py-2.5 bg-white text-charcoal-700 focus:outline-none focus:ring-2 focus:ring-taupe-300"
+                      >
+                        {projects.map((p) => (
+                          <option key={p.id} value={p.id}>
+                            {p.name}{p.client_name ? ` — ${p.client_name}` : ""}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+
+                    {projectMode === "new" && (
+                      <div className="space-y-2.5 p-3 bg-stone-50 rounded-xl border border-stone-200">
+                        <div className="flex items-center gap-1.5 mb-2">
+                          <FolderPlus size={13} className="text-stone-500" />
+                          <span className="text-xs font-medium text-stone-600">Create new project</span>
+                        </div>
+                        <input
+                          type="text" value={newProjectName} onChange={(e) => setNewProjectName(e.target.value)}
+                          placeholder="Project name *"
+                          className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 text-charcoal-700 focus:outline-none focus:ring-1 focus:ring-taupe-400 bg-white"
+                        />
+                        <input
+                          type="text" value={newClientName} onChange={(e) => setNewClientName(e.target.value)}
+                          placeholder="Client name (optional)"
+                          className="w-full text-sm border border-stone-200 rounded-lg px-3 py-2 text-charcoal-700 focus:outline-none focus:ring-1 focus:ring-taupe-400 bg-white"
+                        />
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Layout summary */}
+              <div className="p-3 bg-stone-50 rounded-xl border border-stone-100">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-stone-400 mb-2">Layout Summary</p>
+                <div className="flex flex-wrap gap-x-4 gap-y-1 text-[11px] text-stone-600">
+                  <span><span className="text-stone-400">Modules:</span> {modules.length}</span>
+                  <span><span className="text-stone-400">Wall:</span> {wallW}″ × {wallH}″ × {wallD}″ deep</span>
+                  <span><span className="text-stone-400">Total width:</span> {modules.reduce((s, m) => s + m.width, 0)}″</span>
+                </div>
+              </div>
+
+              {errorMsg && (
+                <p className="text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-2">
+                  {errorMsg}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+
+        {/* Footer */}
+        {stage !== "done" && (
+          <div className="px-5 py-3.5 border-t border-stone-100 flex items-center justify-between gap-3">
+            <button onClick={onClose} className="text-xs text-stone-500 hover:text-stone-700 transition-colors">
+              Cancel
+            </button>
+            <button
+              onClick={handleSave}
+              disabled={stage === "saving"}
+              className="flex items-center gap-2 px-5 py-2 rounded-xl text-sm font-semibold bg-charcoal-600 text-white hover:bg-charcoal-500 disabled:opacity-60 disabled:cursor-not-allowed transition-all"
+            >
+              {stage === "saving" ? (
+                <><span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Saving…</>
+              ) : (
+                <><Save size={13} /> Save Design</>
+              )}
+            </button>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
 // ─── BuilderPage ──────────────────────────────────────────────────────────────
 
 export default function BuilderPage() {
+  const { user } = useAuth();
+  const [showSave, setShowSave] = useState(false);
+
   const [modules, setModules] = useState<BuilderModule[]>(() => {
     try {
       const raw = localStorage.getItem("alveo_builder_modules");
@@ -790,6 +1054,25 @@ export default function BuilderPage() {
               Clear
             </button>
           )}
+          {user && modules.length > 0 && (
+            <button
+              onClick={() => setShowSave(true)}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-taupe-500 hover:bg-taupe-600 transition-colors"
+            >
+              <Save size={12} />
+              Save to Project
+            </button>
+          )}
+          {!user && modules.length > 0 && (
+            <Link
+              href="/login"
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium text-taupe-600 bg-taupe-50 hover:bg-taupe-100 border border-taupe-200 transition-colors"
+              title="Log in to save this layout"
+            >
+              <Save size={12} />
+              Log in to save
+            </Link>
+          )}
           <Link href="/configurator"
             className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-semibold text-white bg-charcoal-600 hover:bg-charcoal-500 transition-colors">
             Configurator <ChevronRight size={12} />
@@ -840,6 +1123,14 @@ export default function BuilderPage() {
           svgContent={svgContent}
         />
       </div>
+
+      {/* Save to Project modal */}
+      {showSave && (
+        <SaveToProjectModal
+          modules={modules} wallW={wallW} wallH={wallH} wallD={wallD}
+          woodFinish={woodFinish} onClose={() => setShowSave(false)}
+        />
+      )}
     </div>
   );
 }

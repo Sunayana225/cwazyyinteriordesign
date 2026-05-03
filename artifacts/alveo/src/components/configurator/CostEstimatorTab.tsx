@@ -1,12 +1,14 @@
 
 import React, { useMemo } from "react";
 import { motion } from "framer-motion";
-import { ClosetLayout, UserPreferences } from "@/types/closet";
+import { ClosetLayout, UserPreferences, AccessoryItem, LightingOptions } from "@/types/closet";
 import { estimateCostRange } from "@/lib/costEstimator";
 
 interface CostEstimatorTabProps {
   layout: ClosetLayout;
   userInfo: UserPreferences;
+  accessories?: AccessoryItem[];
+  lighting?: LightingOptions;
 }
 
 // ── Cost constants (USD, approximate retail + install) ─────────────────────
@@ -41,6 +43,14 @@ const DRAWER_COST_LARGE   = 265;   // > 9" height
 const LABOUR_RATE         = 0.42;  // 42 % of materials
 const DELIVERY_FLAT       = 185;   // flat delivery / crating
 
+// ── Lighting fixture unit costs (USD, supply + basic install) ───────────────
+const LIGHTING_COSTS: Record<keyof LightingOptions, { label: string; icon: string; unit: number; basis: string }> = {
+  underShelfLED:  { label: "Under-shelf LED strip",       icon: "💡", unit: 85,  basis: "per wall" },
+  overheadRail:   { label: "Overhead track rail + heads", icon: "☀️", unit: 320, basis: "flat"     },
+  puckLights:     { label: "Recessed puck lights (set)",  icon: "🔦", unit: 210, basis: "flat"     },
+  islandPendant:  { label: "Island pendant fitting",      icon: "🕯️", unit: 320, basis: "flat"     },
+};
+
 type LineItem = {
   category: string;
   description: string;
@@ -53,6 +63,8 @@ type LineItem = {
 function computeLineItems(
   layout: ClosetLayout,
   userInfo: UserPreferences,
+  accessories?: AccessoryItem[],
+  lighting?: LightingOptions,
 ): LineItem[] {
   const items: LineItem[] = [];
   const finish     = userInfo.woodFinish   ?? "medium";
@@ -162,7 +174,45 @@ function computeLineItems(
     icon:        "🔩",
   });
 
-  // ── 6. Delivery & crating ────────────────────────────────────────────
+  // ── 6. Lighting fixtures ─────────────────────────────────────────────
+  if (lighting) {
+    const wallCount = layout.walls.length;
+    (Object.keys(LIGHTING_COSTS) as (keyof LightingOptions)[]).forEach((key) => {
+      if (!lighting[key]) return;
+      const fixture = LIGHTING_COSTS[key];
+      const qty = key === "underShelfLED" ? wallCount : 1;
+      const total = fixture.unit * qty;
+      items.push({
+        category:    "Lighting",
+        description: fixture.label + (qty > 1 ? ` (${qty} walls)` : ""),
+        qty,
+        unitCost:    fixture.unit,
+        total,
+        icon:        fixture.icon,
+      });
+    });
+  }
+
+  // ── 7. Accessories catalogue ──────────────────────────────────────────
+  if (accessories?.length) {
+    for (const acc of accessories) {
+      if (acc.qty <= 0) continue;
+      items.push({
+        category:    "Accessories",
+        description: acc.name,
+        qty:         acc.qty,
+        unitCost:    acc.unitPrice,
+        total:       Math.round(acc.qty * acc.unitPrice),
+        icon:        acc.category === "mirror"   ? "🪞"
+                   : acc.category === "lighting" ? "💡"
+                   : acc.category === "hanging"  ? "🪝"
+                   : acc.category === "drawer-insert" ? "🗄️"
+                   : "📦",
+      });
+    }
+  }
+
+  // ── 8. Delivery & crating ────────────────────────────────────────────
   items.push({
     category:    "Logistics",
     description: "Delivery, crating & site protection",
@@ -175,12 +225,12 @@ function computeLineItems(
   return items;
 }
 
-const CATEGORY_ORDER = ["Materials", "Hardware", "Logistics", "Labour"];
+const CATEGORY_ORDER = ["Materials", "Hardware", "Lighting", "Accessories", "Logistics", "Labour"];
 
-export function CostEstimatorTab({ layout, userInfo }: CostEstimatorTabProps) {
+export function CostEstimatorTab({ layout, userInfo, accessories, lighting }: CostEstimatorTabProps) {
   const lineItems = useMemo(
-    () => computeLineItems(layout, userInfo),
-    [layout, userInfo],
+    () => computeLineItems(layout, userInfo, accessories, lighting),
+    [layout, userInfo, accessories, lighting],
   );
 
   const materialsSubtotal = useMemo(
@@ -275,8 +325,8 @@ export function CostEstimatorTab({ layout, userInfo }: CostEstimatorTabProps) {
         </div>
 
         <p className="text-[11px] text-charcoal-300 mt-3 leading-snug">
-          Estimates are indicative only and exclude taxes, permit fees, and
-          optional accessories. Actual quotes may vary by region and supplier.
+          Estimates are indicative only and exclude taxes and permit fees.
+          Actual quotes may vary by region and supplier.
         </p>
       </div>
 

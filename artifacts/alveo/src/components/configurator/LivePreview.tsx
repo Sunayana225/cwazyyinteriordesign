@@ -1321,7 +1321,7 @@ export function LivePreview({
           )}
 
           {activeTab === "cost" && layout && config.userInfo && (
-            <CostEstimatorTab layout={layout} userInfo={config.userInfo} />
+            <CostEstimatorTab layout={layout} userInfo={config.userInfo} accessories={config.accessories} lighting={config.lighting} />
           )}
 
           {activeTab === "cost" && (!layout || !config.userInfo) && (
@@ -1332,7 +1332,7 @@ export function LivePreview({
             </div>
           )}
 
-          {activeTab === "cutList" && layout && <CutListTab layout={layout} />}
+          {activeTab === "cutList" && layout && <CutListTab layout={layout} accessories={config.accessories} lighting={config.lighting} />}
 
           {activeTab === "cutList" && !layout && (
             <div className="bg-cream-50 rounded-xl border border-cream-200 p-8 text-center">

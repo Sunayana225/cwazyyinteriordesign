@@ -1,10 +1,12 @@
 
 import React, { useMemo, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { ClosetLayout, ClosetWall, ClosetZone } from "@/types/closet";
+import { ClosetLayout, ClosetWall, ClosetZone, AccessoryItem, LightingOptions } from "@/types/closet";
 
 interface CutListTabProps {
   layout: ClosetLayout;
+  accessories?: AccessoryItem[];
+  lighting?: LightingOptions;
 }
 
 // ── Cut-list data types ────────────────────────────────────────────────────
@@ -334,7 +336,7 @@ const CATEGORY_ORDER: CutCategory[] = [
 ];
 
 // ── Component ──────────────────────────────────────────────────────────────
-export function CutListTab({ layout }: CutListTabProps) {
+export function CutListTab({ layout, accessories, lighting }: CutListTabProps) {
   const cutList = useMemo(() => deriveCutList(layout), [layout]);
   const [activeCategory, setActiveCategory] = useState<CutCategory | "All">("All");
   const [copyDone, setCopyDone] = useState(false);
@@ -574,6 +576,80 @@ export function CutListTab({ layout }: CutListTabProps) {
           All dimensions in inches. Verify before cutting.
         </span>
       </div>
+
+      {/* ── Accessories & Lighting procurement list ── */}
+      {((accessories?.filter((a) => a.qty > 0).length ?? 0) > 0 ||
+        Object.values(lighting ?? {}).some(Boolean)) && (
+        <div className="rounded-xl border border-cream-200 overflow-hidden">
+          <div className="px-4 py-2.5 bg-amber-50 border-b border-amber-100">
+            <p className="text-xs font-semibold text-amber-700 uppercase tracking-widest">
+              Accessories &amp; Lighting — Procurement List
+            </p>
+          </div>
+          <div className="divide-y divide-cream-100">
+            {/* Lighting fixtures */}
+            {lighting?.underShelfLED && (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className="text-lg">💡</span>
+                <div className="flex-1 text-sm">
+                  <p className="font-medium text-charcoal-600">Under-shelf LED strip tape</p>
+                  <p className="text-xs text-charcoal-400">Per wall run · warm white 2700 K · dimmable driver required</p>
+                </div>
+                <p className="text-xs text-charcoal-400 whitespace-nowrap">{layout.walls.length} run{layout.walls.length !== 1 ? "s" : ""}</p>
+              </div>
+            )}
+            {lighting?.overheadRail && (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className="text-lg">☀️</span>
+                <div className="flex-1 text-sm">
+                  <p className="font-medium text-charcoal-600">Overhead track rail + adjustable heads</p>
+                  <p className="text-xs text-charcoal-400">Ceiling-mounted · GU10 halogen or LED spots</p>
+                </div>
+                <p className="text-xs text-charcoal-400 whitespace-nowrap">1 set</p>
+              </div>
+            )}
+            {lighting?.puckLights && (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className="text-lg">🔦</span>
+                <div className="flex-1 text-sm">
+                  <p className="font-medium text-charcoal-600">Recessed puck lights</p>
+                  <p className="text-xs text-charcoal-400">Under-shelf recessed · 12 V DC · low-voltage transformer</p>
+                </div>
+                <p className="text-xs text-charcoal-400 whitespace-nowrap">1 set</p>
+              </div>
+            )}
+            {lighting?.islandPendant && (
+              <div className="flex items-center gap-3 px-4 py-3">
+                <span className="text-lg">🕯️</span>
+                <div className="flex-1 text-sm">
+                  <p className="font-medium text-charcoal-600">Island pendant fitting</p>
+                  <p className="text-xs text-charcoal-400">Decorative pendant above island · E27 socket</p>
+                </div>
+                <p className="text-xs text-charcoal-400 whitespace-nowrap">1 unit</p>
+              </div>
+            )}
+            {/* Accessories */}
+            {accessories?.filter((a) => a.qty > 0).map((acc) => (
+              <div key={acc.id} className="flex items-center gap-3 px-4 py-3">
+                <span className="text-lg">
+                  {acc.category === "mirror"        ? "🪞"
+                  : acc.category === "lighting"     ? "💡"
+                  : acc.category === "hanging"      ? "🪝"
+                  : acc.category === "drawer-insert" ? "🗄️"
+                  : "📦"}
+                </span>
+                <div className="flex-1 text-sm">
+                  <p className="font-medium text-charcoal-600">{acc.name}</p>
+                  <p className="text-xs text-charcoal-400 capitalize">{acc.category.replace("-", " ")}</p>
+                </div>
+                <p className="text-xs font-semibold text-charcoal-600 whitespace-nowrap">
+                  × {acc.qty}
+                </p>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
     </div>
   );
 }

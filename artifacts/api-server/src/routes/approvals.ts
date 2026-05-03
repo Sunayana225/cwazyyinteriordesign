@@ -108,12 +108,59 @@ router.post("/approvals/portal/:token/respond", async (req: Request, res: Respon
   }
 });
 
+router.patch("/approvals/:id/remind", requireAuthJwt, async (req: Request, res: Response) => {
+  const email = (req as Request & { userEmail: string }).userEmail;
+  const id = String(req.params["id"]);
+  try {
+    await pool.query(`ALTER TABLE alveo_design_approvals ADD COLUMN IF NOT EXISTS reminded_at TIMESTAMPTZ`);
+    const result = await pool.query(
+      `UPDATE alveo_design_approvals
+       SET reminded_at = NOW()
+       WHERE id = $1 AND owner_email = $2 AND status = 'pending'
+       RETURNING id`,
+      [id, email],
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "Approval not found or not pending" });
+      return;
+    }
+    const ip = String(req.ip ?? req.socket.remoteAddress ?? "unknown");
+    writeAuditLog({ actorEmail: email, action: "approval.remind", resourceType: "approval", resourceId: id, ip, meta: {} });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to record reminder" });
+  }
+});
+
+router.patch("/approvals/:id/resolve", requireAuthJwt, async (req: Request, res: Response) => {
+  const email = (req as Request & { userEmail: string }).userEmail;
+  const id = String(req.params["id"]);
+  try {
+    const result = await pool.query(
+      `UPDATE alveo_design_approvals
+       SET status = 'resolved', responded_at = NOW()
+       WHERE id = $1 AND owner_email = $2 AND status = 'rejected'
+       RETURNING id`,
+      [id, email],
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "Approval not found or not in revision state" });
+      return;
+    }
+    const ip = String(req.ip ?? req.socket.remoteAddress ?? "unknown");
+    writeAuditLog({ actorEmail: email, action: "approval.resolve", resourceType: "approval", resourceId: id, ip, meta: {} });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to resolve revision" });
+  }
+});
+
 router.get("/approvals/design/:designId", requireAuthJwt, async (req: Request, res: Response) => {
   const email = (req as Request & { userEmail: string }).userEmail;
   const { designId } = req.params;
   try {
     const result = await pool.query(
-      `SELECT id, design_id, design_name, client_email, status, client_note, created_at, responded_at
+      `SELECT id, design_id, design_name, client_email, status, client_note, token, created_at, responded_at
        FROM alveo_design_approvals
        WHERE design_id = $1 AND owner_email = $2
        ORDER BY created_at DESC`,
@@ -129,7 +176,7 @@ router.get("/approvals", requireAuthJwt, async (req: Request, res: Response) => 
   const email = (req as Request & { userEmail: string }).userEmail;
   try {
     const result = await pool.query(
-      `SELECT id, design_id, design_name, client_email, status, client_note, created_at, responded_at
+      `SELECT id, design_id, design_name, client_email, status, client_note, token, created_at, responded_at
        FROM alveo_design_approvals
        WHERE owner_email = $1
        ORDER BY created_at DESC

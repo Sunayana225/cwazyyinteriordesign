@@ -225,7 +225,7 @@ export default function ClientPortalPage() {
                     {approval.status==="approved" ? "Design Approved" : "Revision Requested"}
                   </h2>
                   <p className="text-charcoal-400 text-sm">
-                    {submitted ? "Your response has been recorded." : `Responded on ${new Date(approval.responded_at!).toLocaleDateString()}`}
+                    {submitted || !approval.responded_at ? "Your response has been recorded." : `Responded on ${new Date(approval.responded_at).toLocaleDateString()}`}
                   </p>
                   {approval.client_note && (
                     <p className="text-charcoal-500 text-sm mt-3 italic bg-white/60 rounded-lg px-4 py-2">"{approval.client_note}"</p>

@@ -447,6 +447,9 @@ export default function DashboardPage() {
 
   const sendReminder = async (approvalId: string) => {
     setSentReminder(approvalId);
+    try {
+      await fetch(`${BASE}/api/approvals/${approvalId}/remind`, { method: "PATCH", headers: authHeaders() });
+    } catch { /* best-effort */ }
     setTimeout(() => setSentReminder(null), 3000);
   };
 

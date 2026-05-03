@@ -370,12 +370,15 @@ export default function GalleryPage() {
     if (item.style === "All") return;
     const preset = STYLE_PRESETS[item.style as Exclude<StyleTag,"All">];
     const draft = {
-      step: 2,
-      stylePreference: preset.stylePreference,
-      woodFinish: preset.woodFinish,
-      dimensions: preset.dimensions,
-      wardrobe: preset.wardrobe,
-      shoes: preset.shoes,
+      config: {
+        dimensions: preset.dimensions,
+        userInfo: {
+          stylePreference: preset.stylePreference,
+          woodFinish: preset.woodFinish,
+        },
+        wardrobe: preset.wardrobe,
+        shoes: preset.shoes,
+      },
       currentStep: "wardrobe",
     };
     localStorage.setItem(WIZARD_DRAFT_KEY, JSON.stringify(draft));

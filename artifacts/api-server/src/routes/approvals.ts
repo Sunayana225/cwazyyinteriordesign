@@ -108,6 +108,30 @@ router.post("/approvals/portal/:token/respond", async (req: Request, res: Respon
   }
 });
 
+router.patch("/approvals/:id/remind", requireAuthJwt, async (req: Request, res: Response) => {
+  const email = (req as Request & { userEmail: string }).userEmail;
+  const id = String(req.params["id"]);
+  try {
+    await pool.query(`ALTER TABLE alveo_design_approvals ADD COLUMN IF NOT EXISTS reminded_at TIMESTAMPTZ`);
+    const result = await pool.query(
+      `UPDATE alveo_design_approvals
+       SET reminded_at = NOW()
+       WHERE id = $1 AND owner_email = $2 AND status = 'pending'
+       RETURNING id`,
+      [id, email],
+    );
+    if (result.rows.length === 0) {
+      res.status(404).json({ error: "Approval not found or not pending" });
+      return;
+    }
+    const ip = String(req.ip ?? req.socket.remoteAddress ?? "unknown");
+    writeAuditLog({ actorEmail: email, action: "approval.remind", resourceType: "approval", resourceId: id, ip, meta: {} });
+    res.json({ ok: true });
+  } catch {
+    res.status(500).json({ error: "Failed to record reminder" });
+  }
+});
+
 router.patch("/approvals/:id/resolve", requireAuthJwt, async (req: Request, res: Response) => {
   const email = (req as Request & { userEmail: string }).userEmail;
   const id = String(req.params["id"]);

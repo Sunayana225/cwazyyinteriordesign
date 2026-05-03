@@ -20,6 +20,86 @@ type ZoneType = string;
 
 interface BuilderModule { id: string; type: string; label: string; width: number }
 
+// ─── Preset layouts ───────────────────────────────────────────────────────────
+
+interface PresetLayout {
+  name: string;
+  desc: string;
+  icon: string;
+  modules: Array<{ type: string; label: string; width: number }>;
+}
+
+const PRESET_LAYOUTS: PresetLayout[] = [
+  {
+    name: "His & Hers",
+    desc: "Symmetric long hang with shared centre storage",
+    icon: "👫",
+    modules: [
+      { type: "long-hang",    label: "Her Side",    width: 30 },
+      { type: "drawers",      label: "Drawers",     width: 18 },
+      { type: "shoe-shelves", label: "Shoe Shelves",width: 18 },
+      { type: "long-hang",    label: "His Side",    width: 30 },
+    ],
+  },
+  {
+    name: "Master Suite",
+    desc: "Full-featured walk-in with every storage type",
+    icon: "🏠",
+    modules: [
+      { type: "double-hang",  label: "Double Hang", width: 24 },
+      { type: "long-hang",    label: "Long Hang",   width: 30 },
+      { type: "drawers",      label: "Drawers",     width: 18 },
+      { type: "open-shelves", label: "Shelves",     width: 18 },
+      { type: "shoe-shelves", label: "Shoes",       width: 18 },
+      { type: "double-hang",  label: "Double Hang", width: 24 },
+    ],
+  },
+  {
+    name: "Kids Room",
+    desc: "Easy-reach shelves, small hang section, lots of drawers",
+    icon: "🧒",
+    modules: [
+      { type: "open-shelves", label: "Books & Toys", width: 18 },
+      { type: "double-hang",  label: "Short Hang",   width: 24 },
+      { type: "drawers",      label: "Drawers",      width: 18 },
+      { type: "shoe-shelves", label: "Shoe Shelves", width: 18 },
+    ],
+  },
+  {
+    name: "Studio Apartment",
+    desc: "Compact essentials — hang, fold, and shoes",
+    icon: "🏢",
+    modules: [
+      { type: "long-hang",    label: "Long Hang",   width: 30 },
+      { type: "drawers",      label: "Drawers",     width: 18 },
+      { type: "shoe-shelves", label: "Shoe Shelves",width: 18 },
+    ],
+  },
+  {
+    name: "Entryway",
+    desc: "Coats, bags, top shelf, and shoes by the door",
+    icon: "🚪",
+    modules: [
+      { type: "long-hang",   label: "Coats",      width: 30 },
+      { type: "top-shelves", label: "Bags & Hats", width: 24 },
+      { type: "shoe-shelves",label: "Shoes",       width: 18 },
+    ],
+  },
+  {
+    name: "Maximalist",
+    desc: "Every module type — maximum capacity",
+    icon: "✨",
+    modules: [
+      { type: "double-hang",  label: "Double Hang", width: 24 },
+      { type: "long-hang",    label: "Long Hang",   width: 30 },
+      { type: "open-shelves", label: "Shelves",     width: 18 },
+      { type: "drawers",      label: "Drawers",     width: 18 },
+      { type: "shoe-shelves", label: "Shoes",       width: 18 },
+      { type: "top-shelves",  label: "Top Shelves", width: 24 },
+    ],
+  },
+];
+
 let _uid = 0;
 const uid = () => `m${++_uid}_${Date.now().toString(36)}`;
 
@@ -143,11 +223,14 @@ function DimInput({ label, value, onChange, min, max, step = 6 }: {
 
 // ─── ModulePalette ────────────────────────────────────────────────────────────
 
-function ModulePalette({ catalogue, onAdd, onManage }: {
+function ModulePalette({ catalogue, onAdd, onManage, onLoadPreset }: {
   catalogue: CatalogueEntry[];
   onAdd: (type: ZoneType) => void;
   onManage: () => void;
+  onLoadPreset: (preset: PresetLayout) => void;
 }) {
+  const [showPresets, setShowPresets] = useState(false);
+
   const handleDragStart = (e: React.DragEvent, type: ZoneType) => {
     e.dataTransfer.effectAllowed = "copy";
     e.dataTransfer.setData("alveo-source", "palette");
@@ -169,39 +252,94 @@ function ModulePalette({ catalogue, onAdd, onManage }: {
           <Settings size={13} />
         </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-        {catalogue.map((mod) => (
-          <div
-            key={mod.type}
-            draggable
-            onDragStart={(e) => handleDragStart(e, mod.type)}
-            className="group flex items-center gap-2 p-2 rounded-lg border cursor-grab active:cursor-grabbing select-none hover:shadow-sm transition-all"
-            style={{ backgroundColor: mod.bg, borderColor: mod.border + "44" }}
-          >
-            <span className="text-sm w-5 text-center flex-shrink-0" style={{ color: mod.border }}>
-              {mod.icon}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold text-stone-700 leading-tight truncate">{mod.label}</p>
-              <p className="text-[9px] text-stone-500 leading-tight truncate">{mod.desc}</p>
-            </div>
-            <button
-              onClick={() => onAdd(mod.type)}
-              className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center transition-all bg-white/60 hover:bg-white text-stone-600 hover:text-stone-800"
-              title={`Add ${mod.label}`}
+
+      <div className="flex-1 overflow-y-auto">
+        {/* Module list */}
+        <div className="p-2 space-y-1.5">
+          {catalogue.map((mod) => (
+            <div
+              key={mod.type}
+              draggable
+              onDragStart={(e) => handleDragStart(e, mod.type)}
+              className="group flex items-center gap-2 p-2 rounded-lg border cursor-grab active:cursor-grabbing select-none hover:shadow-sm transition-all"
+              style={{ backgroundColor: mod.bg, borderColor: mod.border + "44" }}
             >
-              <Plus size={10} />
-            </button>
-          </div>
-        ))}
-        <button
-          onClick={onManage}
-          className="w-full py-2 rounded-lg border-2 border-dashed border-stone-200 hover:border-taupe-300 hover:bg-taupe-50 text-[10px] font-medium text-stone-400 hover:text-taupe-600 flex items-center justify-center gap-1 transition-all"
-        >
-          <Plus size={10} /> Add module type
-        </button>
+              <span className="text-sm w-5 text-center flex-shrink-0" style={{ color: mod.border }}>
+                {mod.icon}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-stone-700 leading-tight truncate">{mod.label}</p>
+                <p className="text-[9px] text-stone-500 leading-tight truncate">{mod.desc}</p>
+              </div>
+              <button
+                onClick={() => onAdd(mod.type)}
+                className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center transition-all bg-white/60 hover:bg-white text-stone-600 hover:text-stone-800"
+                title={`Add ${mod.label}`}
+              >
+                <Plus size={10} />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={onManage}
+            className="w-full py-2 rounded-lg border-2 border-dashed border-stone-200 hover:border-taupe-300 hover:bg-taupe-50 text-[10px] font-medium text-stone-400 hover:text-taupe-600 flex items-center justify-center gap-1 transition-all"
+          >
+            <Plus size={10} /> Add module type
+          </button>
+        </div>
+
+        {/* Presets accordion */}
+        <div className="border-t border-stone-100">
+          <button
+            onClick={() => setShowPresets((v) => !v)}
+            className="w-full px-3 py-2.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:bg-stone-50 transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <Layers size={10} />
+              Presets
+            </span>
+            <ChevronRight size={10} className={`transition-transform ${showPresets ? "rotate-90" : ""}`} />
+          </button>
+
+          {showPresets && (
+            <div className="px-2 pb-2 space-y-1.5">
+              {PRESET_LAYOUTS.map((preset) => (
+                <button
+                  key={preset.name}
+                  onClick={() => onLoadPreset(preset)}
+                  className="w-full text-left p-2 rounded-lg bg-stone-50 hover:bg-taupe-50 border border-stone-200 hover:border-taupe-300 transition-all group"
+                >
+                  <div className="flex items-start gap-1.5">
+                    <span className="text-base leading-none mt-0.5 flex-shrink-0">{preset.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-semibold text-stone-700 group-hover:text-taupe-700 leading-tight">{preset.name}</p>
+                      <p className="text-[9px] text-stone-400 leading-snug mt-0.5">{preset.desc}</p>
+                      <div className="flex gap-0.5 mt-1.5 flex-wrap">
+                        {preset.modules.map((m, i) => {
+                          const cat = getCat(catalogue, m.type);
+                          return (
+                            <span
+                              key={i}
+                              className="inline-block w-3 h-3 rounded-sm flex-shrink-0"
+                              title={`${m.label} (${m.width}″)`}
+                              style={{ backgroundColor: cat.border + "cc" }}
+                            />
+                          );
+                        })}
+                        <span className="text-[8px] text-stone-400 ml-0.5 self-center font-mono">
+                          {preset.modules.reduce((s, m) => s + m.width, 0)}″
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-      <div className="px-3 py-2.5 border-t border-stone-100">
+
+      <div className="px-3 py-2.5 border-t border-stone-100 flex-shrink-0">
         <p className="text-[9px] text-stone-300 leading-relaxed">
           Tip: drag resize handles between columns to adjust widths
         </p>
@@ -1453,7 +1591,16 @@ export default function BuilderPage() {
       {/* ── Body ── */}
       <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Left: Palette */}
-        <ModulePalette catalogue={catalogue} onAdd={(type) => addModule(type)} onManage={() => setShowManage(true)} />
+        <ModulePalette
+          catalogue={catalogue}
+          onAdd={(type) => addModule(type)}
+          onManage={() => setShowManage(true)}
+          onLoadPreset={(preset) => {
+            snapshot();
+            setModules(preset.modules.map((m) => ({ ...m, id: uid() })));
+            setSelectedId(null);
+          }}
+        />
 
         {/* Center: Canvas */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">

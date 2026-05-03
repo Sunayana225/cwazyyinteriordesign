@@ -545,9 +545,36 @@ function StatsPanel({
     .badge { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #9c9590; }
     .svg-wrap { width: min(92vw, 92vh); aspect-ratio: 1; background: #fff; border-radius: 12px; box-shadow: 0 2px 24px rgba(0,0,0,.08); padding: 24px; display: flex; align-items: center; justify-content: center; }
     .svg-wrap svg { width: 100%; height: 100%; }
+    .print-btn {
+      position: fixed; top: 16px; right: 16px;
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+      background: #2c2825; color: #fff;
+      font-family: system-ui, sans-serif; font-size: 13px; font-weight: 500;
+      box-shadow: 0 2px 8px rgba(0,0,0,.18); transition: background .15s;
+    }
+    .print-btn:hover { background: #1a1714; }
+    .print-btn svg { flex-shrink: 0; }
+    @media print {
+      html, body { background: #fff; height: auto; }
+      .print-btn { display: none; }
+      .badge { display: none; }
+      .svg-wrap {
+        width: 100%; height: 100vh; aspect-ratio: unset;
+        border-radius: 0; box-shadow: none; padding: 12mm;
+      }
+      @page { margin: 0; size: A4 landscape; }
+    }
   </style>
 </head>
 <body>
+  <button class="print-btn" onclick="window.print()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+      <rect x="6" y="14" width="12" height="8"/>
+    </svg>
+    Print / Save as PDF
+  </button>
   <span class="badge">Alvéo · ${label} Preview</span>
   <div class="svg-wrap">${svgContent}</div>
 </body>

@@ -1,8 +1,8 @@
 import { useState, useEffect } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { motion, AnimatePresence } from "framer-motion";
 import { Plus, X, ExternalLink, Pencil, Trash2, User, Phone, Mail, MapPin, Briefcase, StickyNote, DollarSign } from "lucide-react";
-import { makeAuthHeaders } from "@/lib/auth";
+import { useAuth, getStoredToken } from "@/lib/AuthContext";
 
 interface Client {
   id: string;
@@ -34,8 +34,14 @@ const BLANK: Omit<Client, "id" | "created_at" | "updated_at"> = {
   status: "active", notes: "", budget: "",
 };
 
+function authHeaders(): Record<string, string> {
+  const token = getStoredToken();
+  return { "Content-Type": "application/json", ...(token ? { Authorization: `Bearer ${token}` } : {}) };
+}
+
 export default function ClientsPage() {
-  const [userEmail, setUserEmail] = useState("");
+  const { user } = useAuth();
+  const [, navigate] = useLocation();
   const [clients, setClients] = useState<Client[]>([]);
   const [loading, setLoading] = useState(false);
   const [showModal, setShowModal] = useState(false);
@@ -47,16 +53,14 @@ export default function ClientsPage() {
   const [search, setSearch] = useState("");
 
   useEffect(() => {
-    const saved = localStorage.getItem("alveo-user-email") ?? "";
-    setUserEmail(saved);
-    if (saved) fetchClients(saved);
-  }, []);
+    if (!user) { navigate("/login"); return; }
+    fetchClients();
+  }, [user]);
 
-  async function fetchClients(email: string) {
+  async function fetchClients() {
     setLoading(true);
     try {
-      const headers = makeAuthHeaders(email);
-      const res = await fetch(`${BASE}/api/clients`, { headers });
+      const res = await fetch(`${BASE}/api/clients`, { headers: authHeaders() });
       if (res.ok) {
         const data = await res.json() as { clients: Client[] };
         setClients(data.clients ?? []);
@@ -80,13 +84,12 @@ export default function ClientsPage() {
   }
 
   async function saveClient() {
-    if (!form.name.trim() || !userEmail) return;
+    if (!form.name.trim()) return;
     setSaving(true);
     try {
-      const headers = makeAuthHeaders(userEmail);
       const res = await fetch(`${BASE}/api/clients`, {
         method: "POST",
-        headers,
+        headers: authHeaders(),
         body: JSON.stringify({
           client: {
             ...(editingClient ? { id: editingClient.id } : {}),
@@ -107,11 +110,9 @@ export default function ClientsPage() {
   }
 
   async function deleteClient(id: string) {
-    if (!userEmail) return;
-    const headers = makeAuthHeaders(userEmail);
     const res = await fetch(`${BASE}/api/clients`, {
       method: "DELETE",
-      headers,
+      headers: authHeaders(),
       body: JSON.stringify({ id }),
     });
     if (res.ok) {
@@ -139,49 +140,16 @@ export default function ClientsPage() {
             <h1 className="font-serif text-3xl font-bold text-charcoal-600">Clients</h1>
             <p className="text-stone-400 text-sm mt-1">Manage your client projects and design history</p>
           </div>
-          {userEmail ? (
-            <motion.button
-              whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
-              onClick={openCreate}
-              className="flex items-center gap-2 bg-charcoal-600 text-white text-sm font-medium px-5 py-2.5 rounded-xl hover:bg-charcoal-500 transition-colors"
-            >
-              <Plus size={16} /> New Client
-            </motion.button>
-          ) : null}
+          <motion.button
+            whileHover={{ scale: 1.02 }} whileTap={{ scale: 0.98 }}
+            onClick={openCreate}
+            className="flex items-center gap-2 bg-charcoal-600 text-white text-sm font-medium px-5 py-2.5 rounded-xl hover:bg-charcoal-500 transition-colors"
+          >
+            <Plus size={16} /> New Client
+          </motion.button>
         </div>
 
-        {/* Email gate */}
-        {!userEmail && (
-          <div className="bg-white rounded-2xl border border-cream-200 p-10 text-center">
-            <User size={40} className="mx-auto text-stone-300 mb-4" />
-            <p className="font-medium text-charcoal-600 mb-2">Sign in to manage clients</p>
-            <p className="text-stone-400 text-sm mb-6">Enter your designer email to access your client list.</p>
-            <div className="flex gap-3 max-w-sm mx-auto">
-              <input
-                type="email" placeholder="your@studio.com"
-                className="flex-1 border border-cream-200 rounded-lg px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-taupe-300"
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") {
-                    const v = (e.target as HTMLInputElement).value.trim();
-                    if (v) { localStorage.setItem("alveo-user-email", v); setUserEmail(v); fetchClients(v); }
-                  }
-                }}
-              />
-              <button
-                onClick={(e) => {
-                  const input = (e.currentTarget.previousSibling as HTMLInputElement);
-                  const v = input.value.trim();
-                  if (v) { localStorage.setItem("alveo-user-email", v); setUserEmail(v); fetchClients(v); }
-                }}
-                className="bg-charcoal-600 text-white text-sm px-4 py-2 rounded-lg hover:bg-charcoal-500 transition-colors"
-              >
-                Continue
-              </button>
-            </div>
-          </div>
-        )}
-
-        {userEmail && (
+        {(
           <>
             {/* Stats bar */}
             {!loading && clients.length > 0 && (
@@ -218,7 +186,7 @@ export default function ClientsPage() {
                   {s === "all" ? "All" : s}
                 </button>
               ))}
-              {userEmail && <span className="text-xs text-stone-400 ml-auto">{filtered.length} client{filtered.length !== 1 ? "s" : ""}</span>}
+              <span className="text-xs text-stone-400 ml-auto">{filtered.length} client{filtered.length !== 1 ? "s" : ""}</span>
             </div>
 
             {/* Loading */}

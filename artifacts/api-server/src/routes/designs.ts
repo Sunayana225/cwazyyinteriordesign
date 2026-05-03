@@ -21,7 +21,6 @@ pool.query(`
   )
 `).catch(() => {});
 
-// Use req.ip (set by Express with trust proxy) rather than raw x-forwarded-for
 function clientIp(req: Request): string {
   return req.ip ?? req.socket.remoteAddress ?? "unknown";
 }
@@ -52,6 +51,8 @@ const deleteDesignBodySchema = z.object({
   id: z.string().min(1).max(200),
 });
 
+// ─── List designs ─────────────────────────────────────────────────────────────
+
 router.get("/designs", requireAuth, async (req: Request, res: Response) => {
   const user = req.user?.email ?? null;
   if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -75,6 +76,28 @@ router.get("/designs", requireAuth, async (req: Request, res: Response) => {
   }
 });
 
+// ─── Get single design ────────────────────────────────────────────────────────
+
+router.get("/designs/:id", requireAuth, async (req: Request, res: Response) => {
+  const user = req.user?.email ?? null;
+  if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
+  const { id } = req.params;
+  try {
+    const result = await pool.query<{ id: string; name: string; config: unknown; saved_at: string }>(
+      `SELECT id, name, config, saved_at FROM alveo_designs WHERE user_email = $1 AND id = $2`,
+      [user, id],
+    );
+    if (result.rows.length === 0) { res.status(404).json({ error: "Not found" }); return; }
+    const r = result.rows[0];
+    const design = { ...(r.config as Record<string, unknown>), id: r.id, name: r.name, savedAt: r.saved_at };
+    res.json({ design });
+  } catch {
+    res.status(500).json({ error: "Database error" });
+  }
+});
+
+// ─── Save / upsert design (with version snapshotting) ────────────────────────
+
 router.post("/designs", requireAuth, async (req: Request, res: Response) => {
   const user = req.user?.email ?? null;
   if (!user) { res.status(401).json({ error: "Unauthorized" }); return; }
@@ -92,13 +115,55 @@ router.post("/designs", requireAuth, async (req: Request, res: Response) => {
   }
   const { id, name, ...rest } = parsed.data.design;
   const designName = (name as string | undefined) ?? "Design";
+
+  // ── Version snapshotting ──────────────────────────────────────────────────
+  // Before overwriting, capture the current saved version as a snapshot entry.
+  // Snapshots do NOT carry forward the nested versions array (avoids recursion).
+  let mergedVersions: object[] = (rest.versions as object[] | undefined) ?? [];
+
+  try {
+    const existing = await pool.query<{ config: unknown; name: string; saved_at: string }>(
+      `SELECT config, name, saved_at FROM alveo_designs WHERE user_email = $1 AND id = $2`,
+      [user, id],
+    );
+    if (existing.rows.length > 0) {
+      const prev = existing.rows[0];
+      const prevCfg = (prev.config as Record<string, unknown>) ?? {};
+      const prevVersions = (prevCfg.versions as object[] | undefined) ?? [];
+
+      // Build snapshot of the about-to-be-overwritten version
+      const snapshot: Record<string, unknown> = {
+        savedAt:        prev.saved_at,
+        name:           prev.name,
+        source:         prevCfg.source,
+        closetKind:     prevCfg.closetKind,
+        finish:         prevCfg.finish,
+        wallDimensions: prevCfg.wallDimensions,
+        builderModules: prevCfg.builderModules,
+        tags:           prevCfg.tags,
+      };
+      // Only snapshot if there's meaningful content (not just an empty first save)
+      const hasMeaningfulContent =
+        snapshot.builderModules !== undefined ||
+        snapshot.wallDimensions !== undefined;
+
+      if (hasMeaningfulContent) {
+        mergedVersions = [snapshot, ...prevVersions].slice(0, 20);
+      } else {
+        mergedVersions = prevVersions;
+      }
+    }
+  } catch { /* no existing row or DB error — continue without versions */ }
+
+  const configToSave = { ...rest, versions: mergedVersions };
+
   try {
     await pool.query(
       `INSERT INTO alveo_designs (id, user_email, name, config, saved_at)
        VALUES ($1, $2, $3, $4, NOW())
        ON CONFLICT (user_email, id) DO UPDATE
          SET name = EXCLUDED.name, config = EXCLUDED.config, saved_at = NOW()`,
-      [id, user, designName, JSON.stringify(rest)],
+      [id, user, designName, JSON.stringify(configToSave)],
     );
     const result = await pool.query<{ id: string; name: string; config: unknown; saved_at: string }>(
       `SELECT id, name, config, saved_at FROM alveo_designs WHERE user_email = $1 ORDER BY saved_at DESC LIMIT 100`,
@@ -112,6 +177,8 @@ router.post("/designs", requireAuth, async (req: Request, res: Response) => {
     res.status(500).json({ error: "Database error" });
   }
 });
+
+// ─── Delete design ────────────────────────────────────────────────────────────
 
 router.delete("/designs", requireAuth, async (req: Request, res: Response) => {
   const user = req.user?.email ?? null;

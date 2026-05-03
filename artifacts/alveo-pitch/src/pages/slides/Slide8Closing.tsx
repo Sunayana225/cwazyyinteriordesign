@@ -134,6 +134,18 @@ export default function Slide8Closing() {
         >
           alveocloset.com
         </p>
+        <p
+          style={{
+            fontFamily: "'DM Mono', monospace",
+            fontSize: "1vw",
+            fontWeight: 400,
+            color: "#CCCCCC",
+            letterSpacing: "0.05em",
+            margin: "1.5vh 0 0 0",
+          }}
+        >
+          Gallery · Compare · Present · Share
+        </p>
       </div>
 
       <div

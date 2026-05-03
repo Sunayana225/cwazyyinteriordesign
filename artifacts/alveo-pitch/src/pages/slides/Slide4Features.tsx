@@ -131,6 +131,29 @@ export default function Slide4Features() {
             <div style={{ fontSize: "1.3vw", color: "#333333", lineHeight: 1.4 }}>Professional-grade output ready to build</div>
           </div>
         </div>
+
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(4, 1fr)", gap: "1.5vw", marginTop: "1.5vw" }}>
+          <div style={{ border: "0.2vw solid #111111", padding: "1.5vw 1.4vw", backgroundColor: "#F9F8F4" }}>
+            <div style={{ fontSize: "1vw", fontFamily: "'DM Mono', monospace", color: "#B5956A", marginBottom: "1vh", letterSpacing: "0.05em" }}>005</div>
+            <div style={{ fontSize: "1.1vw", fontWeight: 700, marginBottom: "0.8vh", textTransform: "uppercase" }}>Presentation Mode</div>
+            <div style={{ fontSize: "1vw", color: "#444444", lineHeight: 1.4 }}>Full-screen client walkthroughs</div>
+          </div>
+          <div style={{ border: "0.2vw solid #111111", padding: "1.5vw 1.4vw", backgroundColor: "#F9F8F4" }}>
+            <div style={{ fontSize: "1vw", fontFamily: "'DM Mono', monospace", color: "#B5956A", marginBottom: "1vh", letterSpacing: "0.05em" }}>006</div>
+            <div style={{ fontSize: "1.1vw", fontWeight: 700, marginBottom: "0.8vh", textTransform: "uppercase" }}>Compare</div>
+            <div style={{ fontSize: "1vw", color: "#444444", lineHeight: 1.4 }}>Side-by-side saved design review</div>
+          </div>
+          <div style={{ border: "0.2vw solid #111111", padding: "1.5vw 1.4vw", backgroundColor: "#F9F8F4" }}>
+            <div style={{ fontSize: "1vw", fontFamily: "'DM Mono', monospace", color: "#B5956A", marginBottom: "1vh", letterSpacing: "0.05em" }}>007</div>
+            <div style={{ fontSize: "1.1vw", fontWeight: 700, marginBottom: "0.8vh", textTransform: "uppercase" }}>Share & Email</div>
+            <div style={{ fontSize: "1vw", color: "#444444", lineHeight: 1.4 }}>Read-only links and email handoff</div>
+          </div>
+          <div style={{ border: "0.2vw solid #111111", padding: "1.5vw 1.4vw", backgroundColor: "#F9F8F4" }}>
+            <div style={{ fontSize: "1vw", fontFamily: "'DM Mono', monospace", color: "#B5956A", marginBottom: "1vh", letterSpacing: "0.05em" }}>008</div>
+            <div style={{ fontSize: "1.1vw", fontWeight: 700, marginBottom: "0.8vh", textTransform: "uppercase" }}>Optimizer</div>
+            <div style={{ fontSize: "1vw", color: "#444444", lineHeight: 1.4 }}>Layout variants for faster decisions</div>
+          </div>
+        </div>
       </div>
 
       <div

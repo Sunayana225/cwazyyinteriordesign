@@ -1535,7 +1535,18 @@ export default function BuilderPage() {
 
         {/* Dimensions */}
         <div className="flex flex-wrap items-start gap-3">
-          <DimInput label="Width"  value={wallW} onChange={setWallW} min={36}  max={360} step={12} />
+          <div className="flex flex-col gap-1">
+            <DimInput label="Width"  value={wallW} onChange={setWallW} min={36}  max={360} step={12} />
+            {modules.length > 0 && totalUsed !== wallW && (
+              <button
+                onClick={() => setWallW(Math.min(360, Math.max(36, totalUsed)))}
+                className="text-[9px] font-semibold text-taupe-600 hover:text-taupe-700 bg-taupe-50 hover:bg-taupe-100 border border-taupe-200 rounded px-1.5 py-0.5 transition-colors leading-none whitespace-nowrap"
+                title={`Fit wall to modules (${totalUsed}″)`}
+              >
+                ↔ Fit to {totalUsed}″
+              </button>
+            )}
+          </div>
           <DimInput label="Height" value={wallH} onChange={setWallH} min={72}  max={120} step={6}  />
           <DimInput label="Depth"  value={wallD} onChange={setWallD} min={14}  max={30}  step={2}  />
         </div>

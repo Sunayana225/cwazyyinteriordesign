@@ -18,3 +18,9 @@ id = "7J405hGIZa5Q0YbT_YewV"
 uri = "file://artifacts/alveo-promo/precision-scene.png"
 type = "image"
 title = "Precision design scene"
+
+[[generated]]
+id = "AtSruHZ-KnWLCToGSYxMO"
+uri = "file://artifacts/alveo-mobile/assets/images/icon.png"
+type = "image"
+title = "generated_image"

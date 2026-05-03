@@ -50,6 +50,33 @@ export interface WardrobeItems {
   ties: number;
 }
 
+export interface LightingOptions {
+  underShelfLED?: boolean;   // warm LED strip under every shelf board
+  overheadRail?: boolean;    // ceiling-mounted track / rail lighting
+  puckLights?: boolean;      // individual puck lights recessed under shelves
+  islandPendant?: boolean;   // pendant fitting above island unit
+}
+
+export type DoorType =
+  | 'open'              // no doors — open closet
+  | 'sliding-mirror'    // sliding panels with mirror face
+  | 'sliding-glass'     // sliding frosted-glass panels
+  | 'bifold'            // bifold wood panels
+  | 'french-panel';     // swing-open French-style panels
+
+export interface AccessoryItem {
+  id: string;
+  name: string;
+  category: 'drawer-insert' | 'hanging' | 'storage' | 'mirror' | 'lighting';
+  qty: number;
+  unitPrice: number;
+}
+
+export interface RoomContext {
+  wallColor?: string;  // hex colour for the room wall visible behind the closet
+  floorType?: 'hardwood' | 'marble' | 'carpet' | 'tile' | 'herringbone';
+}
+
 export interface UserPreferences {
   userType: 'homeowner' | 'renter' | 'designer' | 'browsing';
   stylePreference: 'minimal' | 'glam' | 'rustic' | 'modern' | 'luxury';
@@ -168,6 +195,10 @@ export interface ClosetConfiguration {
   amenities?: VillaAmenities;        // villa mode only
   layout?: ClosetLayout;
   zoneOverrides?: ZoneOverrides;
+  lighting?: LightingOptions;        // lighting specification (T003)
+  doorType?: DoorType;               // door / opening type (T004)
+  accessories?: AccessoryItem[];     // selected accessories with qty (T005)
+  roomContext?: RoomContext;         // wall colour + floor type (T006)
 }
 
 // Calculation constants based on real closet design principles

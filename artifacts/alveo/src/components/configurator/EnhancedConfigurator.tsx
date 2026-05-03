@@ -13,6 +13,7 @@ import {
   DrawerPosition,
   FoldedStorageStyle,
   HardwareFinish,
+  DoorType,
 } from "@/types/closet";
 import {
   Calculator,
@@ -1732,6 +1733,41 @@ function PreferencesStep({
               <p className="text-xs font-medium text-charcoal-600 text-center">
                 {hw.name}
               </p>
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Door / Opening Type */}
+      <div>
+        <h3 className="font-medium text-charcoal-600 mb-1 uppercase text-xs tracking-widest">
+          Door Type
+        </h3>
+        <p className="text-xs text-charcoal-400 mb-3">
+          How the closet opening is finished — shown in the elevation drawing
+        </p>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+          {(
+            [
+              { id: "open",           label: "Open",            desc: "No doors",                   icon: "▭" },
+              { id: "sliding-mirror", label: "Sliding Mirror",  desc: "Mirror-face sliding panels",  icon: "⬜⬜" },
+              { id: "sliding-glass",  label: "Sliding Glass",   desc: "Frosted glass panels",        icon: "◻◻" },
+              { id: "bifold",         label: "Bifold",          desc: "Folding wood panels",         icon: "⊳⊲" },
+              { id: "french-panel",   label: "French Doors",    desc: "Swing-open panel pair",       icon: "◧◨" },
+            ] as { id: DoorType; label: string; desc: string; icon: string }[]
+          ).map((opt) => (
+            <button
+              key={opt.id}
+              onClick={() => onUpdate({ doorType: opt.id })}
+              className={`flex flex-col items-center p-4 rounded-xl border-2 transition-all ${
+                (config.doorType ?? "open") === opt.id
+                  ? "border-charcoal-500 bg-charcoal-50 ring-2 ring-charcoal-200"
+                  : "border-cream-200 bg-cream-50 hover:border-taupe-300"
+              }`}
+            >
+              <span className="text-xl mb-2">{opt.icon}</span>
+              <p className="font-medium text-sm text-charcoal-600">{opt.label}</p>
+              <p className="text-xs text-charcoal-400 mt-0.5 text-center">{opt.desc}</p>
             </button>
           ))}
         </div>

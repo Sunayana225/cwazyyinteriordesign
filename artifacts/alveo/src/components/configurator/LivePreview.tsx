@@ -10,6 +10,8 @@ import {
   LayoutWarning,
   SavedDesign,
 } from "@/types/closet";
+import { PresentationMode } from "./PresentationMode";
+import { AccessoriesTab } from "./AccessoriesTab";
 import { ClosetLayoutEngine } from "@/engine/ClosetLayoutEngine";
 import { ClosetSVGRenderer } from "@/renderer/ClosetSVGRenderer";
 import { ClosetIsometricRenderer } from "@/renderer/ClosetIsometricRenderer";
@@ -36,6 +38,8 @@ import {
   GitCompareArrows,
   Sparkles,
   MessageCircle,
+  ShoppingBag,
+  MonitorPlay,
 } from "lucide-react";
 import { StyleCustomizer } from "./StyleCustomizer";
 import { CostEstimatorTab } from "./CostEstimatorTab";
@@ -105,8 +109,9 @@ export function LivePreview({
     return h;
   };
   const [activeTab, setActiveTab] = useState<
-    "drawing" | "summary" | "tips" | "style" | "cost" | "cutList"
+    "drawing" | "summary" | "tips" | "style" | "cost" | "cutList" | "accessories"
   >("drawing");
+  const [showPresentation, setShowPresentation] = useState(false);
   const [activeWallIdx, setActiveWallIdx] = useState(0);
   const [isExporting, setIsExporting] = useState(false);
   const [zoneOverrides, setZoneOverrides] = useState<ZoneOverrides>({});
@@ -286,6 +291,9 @@ export function LivePreview({
           showLabels: true,
           style: config.userInfo!.stylePreference ?? "modern",
           woodFinish: config.userInfo!.woodFinish ?? "medium",
+          lighting: config.lighting,
+          doorType: config.doorType,
+          roomContext: config.roomContext,
         });
         setSvgContent(renderer.renderElevation());
       } catch {
@@ -550,13 +558,16 @@ export function LivePreview({
   ];
 
   const tabs = [
-    { id: "drawing" as const, label: "Drawing", Icon: Layers },
-    { id: "summary" as const, label: "Summary", Icon: BarChart2 },
-    { id: "tips" as const, label: "Suggestions", Icon: Lightbulb },
-    { id: "cost" as const, label: "Cost", Icon: Receipt },
-    { id: "cutList" as const, label: "Cut List", Icon: TableProperties },
+    { id: "drawing" as const,     label: "Drawing",     Icon: Layers        },
+    { id: "summary" as const,     label: "Summary",     Icon: BarChart2     },
+    { id: "tips" as const,        label: "Suggestions", Icon: Lightbulb     },
+    { id: "cost" as const,        label: "Cost",        Icon: Receipt       },
+    { id: "cutList" as const,     label: "Cut List",    Icon: TableProperties },
     ...(onConfigChange
-      ? [{ id: "style" as const, label: "Style", Icon: Palette }]
+      ? [
+          { id: "style" as const,       label: "Style",       Icon: Palette      },
+          { id: "accessories" as const, label: "Accessories", Icon: ShoppingBag  },
+        ]
       : []),
   ];
 
@@ -663,6 +674,19 @@ export function LivePreview({
               >
                 <Sparkles className="w-4 h-4" />
                 <span>Optimizer</span>
+              </motion.button>
+            )}
+
+            {layout && (
+              <motion.button
+                whileHover={{ scale: 1.03 }}
+                whileTap={{ scale: 0.97 }}
+                onClick={() => setShowPresentation(true)}
+                title="Full-screen client presentation"
+                className="inline-flex items-center whitespace-nowrap space-x-1.5 bg-charcoal-500 hover:bg-charcoal-600 text-white px-3 py-2.5 rounded-lg text-sm font-medium transition-colors"
+              >
+                <MonitorPlay className="w-4 h-4" />
+                <span>Present</span>
               </motion.button>
             )}
 
@@ -1322,6 +1346,21 @@ export function LivePreview({
           {activeTab === "style" && onConfigChange && (
             <StyleCustomizer config={config} onConfigChange={onConfigChange} />
           )}
+
+          {/* ─── Accessories tab ─── */}
+          {activeTab === "accessories" && onConfigChange && (
+            <div className="bg-white rounded-xl border border-cream-200 p-4">
+              <AccessoriesTab
+                accessories={config.accessories ?? []}
+                onChange={(items) => onConfigChange({ ...config, accessories: items })}
+              />
+            </div>
+          )}
+          {activeTab === "accessories" && !onConfigChange && (
+            <div className="bg-cream-50 rounded-xl border border-cream-200 p-8 text-center">
+              <p className="text-charcoal-400">Complete the configurator to manage accessories.</p>
+            </div>
+          )}
         </motion.div>
       </AnimatePresence>
 
@@ -1791,6 +1830,19 @@ export function LivePreview({
               </div>
             </motion.div>
           </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Presentation Mode full-screen overlay ── */}
+      <AnimatePresence>
+        {showPresentation && layout && (
+          <PresentationMode
+            layout={layout}
+            config={config}
+            clientName={clientName}
+            projectRef={projectRef}
+            onClose={() => setShowPresentation(false)}
+          />
         )}
       </AnimatePresence>
     </div>

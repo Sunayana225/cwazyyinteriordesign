@@ -1,4 +1,4 @@
-import { ClosetLayout, ClosetZone, UserPreferences } from '@/types/closet';
+import { ClosetLayout, ClosetZone, UserPreferences, LightingOptions, DoorType, RoomContext } from '@/types/closet';
 
 interface RenderOptions {
   showDimensions: boolean;
@@ -6,6 +6,9 @@ interface RenderOptions {
   style: UserPreferences['stylePreference'];
   woodFinish: UserPreferences['woodFinish'];
   hardwareFinish?: string;
+  lighting?: LightingOptions;
+  doorType?: DoorType;
+  roomContext?: RoomContext;
 }
 
 // ─── Helpers ────────────────────────────────────────────────────────────────
@@ -156,9 +159,12 @@ export class ClosetSVGRenderer {
       this.defs(),
       `</defs>`,
       `<rect width="${this.totalW}" height="${this.totalH}" fill="#f8f4ef"/>`,
+      this.renderRoomContext(),
       this.renderShell(),
       this.renderZoneContents(),
       this.renderTopShelf(),
+      this.renderLighting(),
+      this.renderDoors(),
       this.renderDimensions(),
       this.renderLabels(),
       this.renderTitleBlock(),
@@ -1141,6 +1147,190 @@ export class ClosetSVGRenderer {
   <text x="${x1 + 8}" y="${blockY - 3}" text-anchor="end"
         font-size="7" fill="#aaaaaa" letter-spacing="1.2"
         font-family="'Helvetica Neue',Arial,sans-serif">Carved for you.</text>`;
+  }
+
+  // ── Room context (wall colour + floor strip) ─────────────────────────────
+
+  private renderRoomContext(): string {
+    const rc = this.options.roomContext;
+    if (!rc?.wallColor && !rc?.floorType) return '';
+
+    let out = '\n  <!-- ═══ ROOM CONTEXT ═══ -->';
+
+    if (rc?.wallColor) {
+      out += `
+  <rect x="${this.cx(0)}" y="${this.cy(this.drawH)}" width="${this.cW}" height="${this.cH}"
+        fill="${rc.wallColor}" opacity="0.14"/>`;
+    }
+
+    const floorFill: Record<string, string> = {
+      hardwood:    '#c8a870',
+      herringbone: '#c4a86c',
+      marble:      '#e8e0d8',
+      carpet:      '#d4c4b8',
+      tile:        '#d8d8d4',
+    };
+
+    if (rc?.floorType && floorFill[rc.floorType]) {
+      const fy  = this.cy(0);
+      const fh  = Math.min(22, this.MB * 0.36);
+      const col = floorFill[rc.floorType];
+      out += `
+  <rect x="${this.cx(0)}" y="${fy}" width="${this.cW}" height="${fh}"
+        fill="${col}" opacity="0.75"/>`;
+      if (rc.floorType === 'hardwood' || rc.floorType === 'herringbone') {
+        for (let lx = 0; lx <= this.layout.dimensions.width; lx += 12) {
+          out += `<line x1="${this.cx(lx)}" y1="${fy}" x2="${this.cx(lx)}" y2="${fy + fh}" stroke="rgba(0,0,0,0.09)" stroke-width="0.5"/>`;
+        }
+      } else if (rc.floorType === 'tile') {
+        for (let lx = 0; lx <= this.layout.dimensions.width; lx += 12) {
+          out += `<line x1="${this.cx(lx)}" y1="${fy}" x2="${this.cx(lx)}" y2="${fy + fh}" stroke="rgba(0,0,0,0.1)" stroke-width="0.5"/>`;
+        }
+      }
+      const typeLbl = rc.floorType.replace('-', ' ').toUpperCase();
+      out += `
+  <text x="${this.cx(this.layout.dimensions.width / 2)}" y="${fy + fh - 3}"
+        text-anchor="middle" font-size="5.5" fill="rgba(0,0,0,0.35)"
+        font-family="'Helvetica Neue',Arial,sans-serif" letter-spacing="0.8">${typeLbl}</text>`;
+    }
+    return out;
+  }
+
+  // ── LED / lighting overlay ────────────────────────────────────────────────
+
+  private renderLighting(): string {
+    const L = this.options.lighting;
+    if (!L?.underShelfLED && !L?.overheadRail && !L?.puckLights) return '';
+
+    let out = '\n  <!-- ═══ LIGHTING ═══ -->';
+
+    if (L?.overheadRail) {
+      const railY = this.cy(this.drawH) + 3;
+      const x0    = this.cx(0);
+      const x1    = this.cx(this.layout.dimensions.width);
+      out += `
+  <rect x="${x0}" y="${railY - 2}" width="${x1 - x0}" height="4" rx="2"
+        fill="#e8d58a" opacity="0.9"/>`;
+      for (let ix = 0; ix <= this.layout.dimensions.width; ix += 18) {
+        const sx = this.cx(ix);
+        out += `
+  <polygon points="${sx},${railY + 2} ${sx - 4},${railY + 13} ${sx + 4},${railY + 13}"
+           fill="#fff9c4" opacity="0.65"/>`;
+      }
+      out += `
+  <text x="${this.cx(this.layout.dimensions.width / 2)}" y="${railY - 5}"
+        text-anchor="middle" font-size="5.5" fill="#b8a040" opacity="0.9"
+        font-family="'Helvetica Neue',Arial,sans-serif" letter-spacing="0.7">OVERHEAD RAIL</text>`;
+    }
+
+    if (L?.underShelfLED || L?.puckLights) {
+      for (const zone of this.layout.zones ?? []) {
+        if (!zone.shelves?.length) continue;
+        const zx = this.cx(zone.x);
+        const zw = zone.width * this.scale;
+        for (const shelf of zone.shelves) {
+          const shelfY = this.cy(zone.y + shelf.height);
+          if (L?.underShelfLED) {
+            out += `
+  <line x1="${zx + 3}" y1="${shelfY + 1.5}" x2="${zx + zw - 3}" y2="${shelfY + 1.5}"
+        stroke="#ffe082" stroke-width="2.5" stroke-linecap="round" opacity="0.9"/>
+  <line x1="${zx + 3}" y1="${shelfY + 2.5}" x2="${zx + zw - 3}" y2="${shelfY + 2.5}"
+        stroke="#fff8e1" stroke-width="1" stroke-linecap="round" opacity="0.5"/>`;
+          }
+          if (L?.puckLights) {
+            const step = Math.max(24, zw / 3);
+            for (let px = zx + step / 2; px < zx + zw; px += step) {
+              out += `<circle cx="${px}" cy="${shelfY + 2}" r="2.5" fill="#fffde7" stroke="#f9a825" stroke-width="0.8" opacity="0.85"/>`;
+            }
+          }
+        }
+      }
+    }
+    return out;
+  }
+
+  // ── Door / opening overlay ────────────────────────────────────────────────
+
+  private renderDoors(): string {
+    const dt = this.options.doorType;
+    if (!dt || dt === 'open') return '';
+
+    const x0   = this.cx(0);
+    const x1   = this.cx(this.layout.dimensions.width);
+    const yTop = this.cy(this.drawH);
+    const yBot = this.cy(0);
+    const W    = x1 - x0;
+    const H    = yBot - yTop;
+    const midX = x0 + W / 2;
+
+    let out = '\n  <!-- ═══ DOORS ═══ -->';
+
+    switch (dt) {
+      case 'sliding-mirror':
+      case 'sliding-glass': {
+        const isMirror = dt === 'sliding-mirror';
+        const fill   = isMirror ? 'rgba(200,220,240,0.24)' : 'rgba(180,210,230,0.13)';
+        const stroke = isMirror ? 'rgba(150,190,220,0.7)' : 'rgba(170,200,220,0.45)';
+        out += `
+  <rect x="${x0}" y="${yTop}" width="${W * 0.52}" height="${H}"
+        fill="${fill}" stroke="${stroke}" stroke-width="2"/>
+  <rect x="${midX - W * 0.02}" y="${yTop}" width="${W * 0.52}" height="${H}"
+        fill="${fill}" stroke="${stroke}" stroke-width="2"/>`;
+        if (isMirror) {
+          out += `
+  <line x1="${x0 + W * 0.06}" y1="${yTop + 5}" x2="${x0 + W * 0.06}" y2="${yBot - 5}"
+        stroke="rgba(255,255,255,0.35)" stroke-width="8" stroke-linecap="round"/>
+  <line x1="${midX - W * 0.02 + W * 0.06}" y1="${yTop + 5}" x2="${midX - W * 0.02 + W * 0.06}" y2="${yBot - 5}"
+        stroke="rgba(255,255,255,0.35)" stroke-width="8" stroke-linecap="round"/>`;
+        }
+        out += `
+  <line x1="${midX}" y1="${yTop}" x2="${midX}" y2="${yBot}"
+        stroke="${stroke}" stroke-width="3"/>`;
+        break;
+      }
+      case 'bifold': {
+        const pw = W / 4;
+        const my = (yTop + yBot) / 2;
+        [[x0, x0 + pw * 1.4, x0 + pw * 2], [x1, x1 - pw * 1.4, x1 - pw * 2]].forEach(([a, b, c]) => {
+          out += `
+  <line x1="${a}" y1="${yTop}" x2="${b}" y2="${my}" stroke="rgba(160,140,110,0.65)" stroke-width="2"/>
+  <line x1="${b}" y1="${my}" x2="${c}" y2="${yTop}" stroke="rgba(160,140,110,0.65)" stroke-width="2"/>
+  <line x1="${a}" y1="${yBot}" x2="${b}" y2="${my}" stroke="rgba(160,140,110,0.65)" stroke-width="2"/>
+  <line x1="${b}" y1="${my}" x2="${c}" y2="${yBot}" stroke="rgba(160,140,110,0.65)" stroke-width="2"/>
+  <rect x="${Math.min(a, c)}" y="${yTop}" width="${pw * 2}" height="${H}"
+        fill="rgba(180,160,120,0.09)" stroke="rgba(160,140,110,0.35)" stroke-width="1.5"/>`;
+        });
+        break;
+      }
+      case 'french-panel': {
+        const pw = W / 2 - 3;
+        const hy = (yTop + yBot) / 2;
+        out += `
+  <rect x="${x0}" y="${yTop}" width="${pw}" height="${H}"
+        fill="rgba(180,160,130,0.11)" stroke="rgba(160,140,110,0.5)" stroke-width="2"/>
+  <rect x="${midX + 3}" y="${yTop}" width="${pw}" height="${H}"
+        fill="rgba(180,160,130,0.11)" stroke="rgba(160,140,110,0.5)" stroke-width="2"/>
+  <line x1="${midX}" y1="${yTop}" x2="${midX}" y2="${yBot}"
+        stroke="rgba(130,110,80,0.8)" stroke-width="3"/>
+  <circle cx="${midX - 10}" cy="${hy}" r="3.5" fill="rgba(160,140,110,0.75)"/>
+  <circle cx="${midX + 10}" cy="${hy}" r="3.5" fill="rgba(160,140,110,0.75)"/>`;
+        break;
+      }
+    }
+
+    const labelMap: Record<string, string> = {
+      'sliding-mirror': 'SLIDING MIRROR DOORS',
+      'sliding-glass':  'SLIDING GLASS DOORS',
+      'bifold':         'BIFOLD DOORS',
+      'french-panel':   'FRENCH PANEL DOORS',
+    };
+    if (labelMap[dt]) {
+      out += `
+  <text x="${midX}" y="${yTop - 6}" text-anchor="middle" font-size="6"
+        fill="#999" opacity="0.85" font-family="'Helvetica Neue',Arial,sans-serif"
+        letter-spacing="0.8">${labelMap[dt]}</text>`;
+    }
+    return out;
   }
 
   private closetTypeLabel(): string {

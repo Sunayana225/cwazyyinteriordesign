@@ -10,6 +10,7 @@ import AboutPage from "@/pages/AboutPage";
 import FAQPage from "@/pages/FAQPage";
 import AdminAnalyticsPage from "@/pages/AdminAnalyticsPage";
 import BuilderPage from "@/pages/BuilderPage";
+import ClientsPage from "@/pages/ClientsPage";
 import NotFound from "@/pages/not-found";
 
 const queryClient = new QueryClient();
@@ -24,6 +25,7 @@ function Router() {
       <Route path="/faq" component={FAQPage} />
       <Route path="/admin/analytics" component={AdminAnalyticsPage} />
       <Route path="/builder" component={BuilderPage} />
+      <Route path="/clients" component={ClientsPage} />
       <Route component={NotFound} />
     </Switch>
   );

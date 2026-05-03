@@ -5,6 +5,7 @@ import {
   Plus, FolderOpen, Users, LayoutGrid, Clock, CheckCircle2,
   AlertCircle, Pencil, Trash2, X, ChevronRight, BarChart2,
   Sparkles, Send, ArrowRight, Tag, GitCompare, Share2, Bell, Copy, Check,
+  History, RotateCcw,
 } from "lucide-react";
 import { useAuth } from "@/lib/AuthContext";
 import { getStoredToken } from "@/lib/AuthContext";
@@ -22,6 +23,16 @@ interface Approval {
 }
 interface SavedDesign {
   id: string; name: string; savedAt: string; config?: Record<string, unknown>;
+}
+interface DesignVersion {
+  savedAt: string;
+  name?: string;
+  finish?: string;
+  closetKind?: string;
+  source?: string;
+  tags?: string[];
+  wallDimensions?: { width?: number; height?: number; depth?: number };
+  builderModules?: Array<{ type?: string; label?: string; width?: number }>;
 }
 
 const STATUS_COLORS: Record<string, string> = {
@@ -168,6 +179,152 @@ function ShareModal({ design, approvals, onClose }: { design: SavedDesign; appro
   );
 }
 
+// ─── Version history modal ────────────────────────────────────────────────────
+
+const FINISH_SWATCHES: Record<string, { bg: string; label: string }> = {
+  light:  { bg: "#f0ebe3", label: "Light Oak"     },
+  medium: { bg: "#d4c2a8", label: "Warm Walnut"   },
+  dark:   { bg: "#8d7060", label: "Dark Espresso" },
+  white:  { bg: "#f8f8f6", label: "Painted White" },
+};
+
+function VersionHistoryModal({
+  design, onClose, onRestore, restoring,
+}: {
+  design: SavedDesign;
+  onClose: () => void;
+  onRestore: (versionIdx: number) => void;
+  restoring: number | null;
+}) {
+  const versions = (design.config?.versions as DesignVersion[] | undefined) ?? [];
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4 bg-black/40 backdrop-blur-sm" onClick={onClose}>
+      <motion.div
+        initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, y: 24 }}
+        className="relative bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden"
+        style={{ maxHeight: "85vh" }}
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100 bg-white sticky top-0 z-10">
+          <div className="flex items-center gap-2.5">
+            <div className="p-1.5 bg-taupe-50 rounded-lg border border-taupe-100">
+              <History size={14} className="text-taupe-600"/>
+            </div>
+            <div>
+              <p className="font-semibold text-charcoal-700 text-sm leading-tight">Version History</p>
+              <p className="text-[10px] text-stone-400 mt-0.5">{design.name}</p>
+            </div>
+          </div>
+          <button onClick={onClose} className="p-1.5 rounded-lg hover:bg-stone-100 text-stone-400 transition-colors"><X size={14}/></button>
+        </div>
+
+        {/* Timeline */}
+        <div className="overflow-y-auto" style={{ maxHeight: "calc(85vh - 64px)" }}>
+          {versions.length === 0 ? (
+            <div className="flex flex-col items-center justify-center py-14 px-6 text-center">
+              <div className="p-3 bg-stone-50 rounded-full mb-3">
+                <History size={22} className="text-stone-300"/>
+              </div>
+              <p className="text-sm font-medium text-charcoal-500 mb-1">No previous versions yet</p>
+              <p className="text-xs text-stone-400 max-w-xs">Each time you save this design, the previous state is automatically stored here. Save a new version to start tracking history.</p>
+            </div>
+          ) : (
+            <div className="p-5">
+              {/* Current version entry */}
+              <div className="flex gap-3 mb-1">
+                <div className="flex flex-col items-center">
+                  <div className="w-7 h-7 rounded-full bg-emerald-500 flex items-center justify-center shrink-0 shadow-sm">
+                    <Check size={12} className="text-white"/>
+                  </div>
+                  {versions.length > 0 && <div className="w-px flex-1 bg-stone-200 mt-1"/>}
+                </div>
+                <div className="pb-5 flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className="text-xs font-semibold text-charcoal-700">Current version</span>
+                    <span className="text-[9px] font-bold uppercase tracking-widest bg-emerald-50 border border-emerald-200 text-emerald-600 rounded-full px-2 py-0.5">Latest</span>
+                  </div>
+                  <p className="text-[10px] text-stone-400">{new Date(design.savedAt).toLocaleString()}</p>
+                  {(() => {
+                    const cfg = design.config ?? {};
+                    const mods = (cfg.builderModules as unknown[] | undefined) ?? [];
+                    const dims = cfg.wallDimensions as { width?: number; height?: number; depth?: number } | undefined;
+                    const finish = cfg.finish as string | undefined;
+                    return (
+                      <div className="mt-2 flex flex-wrap gap-2 items-center">
+                        {mods.length > 0 && <span className="text-[10px] text-stone-500 bg-stone-50 border border-stone-100 rounded-md px-2 py-0.5">{mods.length} module{mods.length !== 1 ? "s" : ""}</span>}
+                        {dims?.width && <span className="text-[10px] text-stone-500 bg-stone-50 border border-stone-100 rounded-md px-2 py-0.5 font-mono">{dims.width}″ × {dims.height}″</span>}
+                        {finish && FINISH_SWATCHES[finish] && (
+                          <span className="flex items-center gap-1 text-[10px] text-stone-500">
+                            <span className="w-3 h-3 rounded-full border border-stone-200 shrink-0 inline-block" style={{ background: FINISH_SWATCHES[finish]!.bg }}/>
+                            {FINISH_SWATCHES[finish]!.label}
+                          </span>
+                        )}
+                      </div>
+                    );
+                  })()}
+                </div>
+              </div>
+
+              {/* Past versions */}
+              {versions.map((v, idx) => {
+                const mods = v.builderModules ?? [];
+                const dims = v.wallDimensions;
+                const isRestoring = restoring === idx;
+                const vNum = versions.length - idx;
+                return (
+                  <div key={idx} className="flex gap-3 mb-1">
+                    <div className="flex flex-col items-center">
+                      <div className="w-7 h-7 rounded-full bg-white border-2 border-stone-200 flex items-center justify-center shrink-0 text-[9px] font-bold text-stone-400">
+                        v{vNum}
+                      </div>
+                      {idx < versions.length - 1 && <div className="w-px flex-1 bg-stone-200 mt-1"/>}
+                    </div>
+                    <div className={`pb-5 flex-1 min-w-0 ${idx < versions.length - 1 ? "" : ""}`}>
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <p className="text-xs font-medium text-charcoal-600">Version {vNum}</p>
+                          <p className="text-[10px] text-stone-400 mt-0.5">{new Date(v.savedAt).toLocaleString()}</p>
+                          <div className="mt-2 flex flex-wrap gap-2 items-center">
+                            {mods.length > 0 && <span className="text-[10px] text-stone-500 bg-stone-50 border border-stone-100 rounded-md px-2 py-0.5">{mods.length} module{mods.length !== 1 ? "s" : ""}</span>}
+                            {dims?.width && <span className="text-[10px] text-stone-500 bg-stone-50 border border-stone-100 rounded-md px-2 py-0.5 font-mono">{dims.width}″ × {dims.height}″</span>}
+                            {v.finish && FINISH_SWATCHES[v.finish] && (
+                              <span className="flex items-center gap-1 text-[10px] text-stone-500">
+                                <span className="w-3 h-3 rounded-full border border-stone-200 shrink-0 inline-block" style={{ background: FINISH_SWATCHES[v.finish]!.bg }}/>
+                                {FINISH_SWATCHES[v.finish]!.label}
+                              </span>
+                            )}
+                            {v.closetKind && <span className="text-[10px] text-stone-500 bg-stone-50 border border-stone-100 rounded-md px-2 py-0.5 capitalize">{v.closetKind}</span>}
+                            {v.tags && v.tags.length > 0 && v.tags.map((t) => (
+                              <span key={t} className="text-[9px] px-1.5 py-0.5 rounded-full bg-taupe-50 border border-taupe-100 text-taupe-600">{t}</span>
+                            ))}
+                          </div>
+                        </div>
+                        <button
+                          onClick={() => onRestore(idx)}
+                          disabled={isRestoring}
+                          className="shrink-0 flex items-center gap-1.5 text-[10px] font-semibold px-2.5 py-1.5 rounded-lg border transition-all
+                            bg-white border-stone-200 text-stone-500 hover:border-taupe-400 hover:text-taupe-600 hover:bg-taupe-50 disabled:opacity-50">
+                          {isRestoring ? (
+                            <span className="flex items-center gap-1"><motion.span animate={{ rotate: 360 }} transition={{ repeat: Infinity, duration: 0.8, ease: "linear" }} className="inline-block"><RotateCcw size={10}/></motion.span> Restoring…</span>
+                          ) : (
+                            <><RotateCcw size={10}/> Restore</>
+                          )}
+                        </button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      </motion.div>
+    </div>
+  );
+}
+
 // ─── DashboardPage ─────────────────────────────────────────────────────────────
 
 export default function DashboardPage() {
@@ -195,6 +352,10 @@ export default function DashboardPage() {
 
   // Share modal
   const [shareDesign, setShareDesign] = useState<SavedDesign|null>(null);
+
+  // Version history modal
+  const [historyDesign,  setHistoryDesign]  = useState<SavedDesign|null>(null);
+  const [restoringIdx,   setRestoringIdx]   = useState<number|null>(null);
 
   // Reminder feedback
   const [sentReminder, setSentReminder] = useState<string|null>(null);
@@ -250,6 +411,34 @@ export default function DashboardPage() {
     setSentReminder(approvalId);
     setTimeout(() => setSentReminder(null), 3000);
   };
+
+  async function restoreVersion(design: SavedDesign, versionIdx: number) {
+    const versions = (design.config?.versions as DesignVersion[] | undefined) ?? [];
+    const snapshot = versions[versionIdx];
+    if (!snapshot) return;
+    setRestoringIdx(versionIdx);
+    try {
+      // Build the restored config from the snapshot, keep the full versions array
+      const restoredConfig: Record<string, unknown> = {
+        source:         snapshot.source,
+        closetKind:     snapshot.closetKind,
+        finish:         snapshot.finish,
+        wallDimensions: snapshot.wallDimensions,
+        builderModules: snapshot.builderModules,
+        tags:           snapshot.tags,
+        versions:       design.config?.versions,
+      };
+      await fetch(`${BASE}/api/designs`, {
+        method: "POST",
+        headers: authHeaders(),
+        body: JSON.stringify({ design: { id: design.id, name: design.name, ...restoredConfig } }),
+      });
+      await loadAll();
+      setHistoryDesign(null);
+    } finally {
+      setRestoringIdx(null);
+    }
+  }
 
   // Tags from all designs
   const allTags = useMemo(() => {
@@ -427,6 +616,10 @@ export default function DashboardPage() {
                           )}
                         </div>
                         <div className="flex items-center gap-1 shrink-0">
+                          <button onClick={() => setHistoryDesign(d)} title="Version history"
+                            className="p-1.5 rounded-lg bg-cream-50 border border-cream-200 text-charcoal-400 hover:text-taupe-600 hover:bg-taupe-50 hover:border-taupe-200 transition-colors">
+                            <History size={13}/>
+                          </button>
                           <button onClick={() => setShareDesign(d)} title="Share design"
                             className="p-1.5 rounded-lg bg-cream-50 border border-cream-200 text-charcoal-400 hover:text-taupe-600 hover:bg-taupe-50 hover:border-taupe-200 transition-colors">
                             <Share2 size={13}/>
@@ -595,6 +788,17 @@ export default function DashboardPage() {
       <AnimatePresence>
         {shareDesign && (
           <ShareModal design={shareDesign} approvals={approvals} onClose={() => setShareDesign(null)}/>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {historyDesign && (
+          <VersionHistoryModal
+            design={historyDesign}
+            onClose={() => { setHistoryDesign(null); setRestoringIdx(null); }}
+            onRestore={(idx) => restoreVersion(historyDesign, idx)}
+            restoring={restoringIdx}
+          />
         )}
       </AnimatePresence>
     </div>

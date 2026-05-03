@@ -515,6 +515,15 @@ interface AnyDesign {
   };
 }
 
+function _localDelete(id: string) {
+  for (const key of ["alveo_saved_designs", "alveo_designs"]) {
+    try {
+      const arr = JSON.parse(localStorage.getItem(key) || "[]") as AnyDesign[];
+      localStorage.setItem(key, JSON.stringify(arr.filter((d) => d.id !== id)));
+    } catch { /* ignore */ }
+  }
+}
+
 function _localLoad(): AnyDesign[] {
   try {
     const a = JSON.parse(localStorage.getItem("alveo_saved_designs") || "[]") as AnyDesign[];
@@ -543,6 +552,7 @@ function LoadModal({ onLoad, onClose }: LoadModalProps) {
   const [designs, setDesigns] = useState<AnyDesign[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -595,6 +605,22 @@ function LoadModal({ onLoad, onClose }: LoadModalProps) {
       width: m.width,
     }));
     onLoad(kind, wallW, wallH, wallD, modules);
+  };
+
+  const executeDelete = async (id: string) => {
+    setDesigns((prev) => prev.filter((d) => d.id !== id));
+    setDeletingId(null);
+    _localDelete(id);
+    const token = getStoredToken();
+    if (token) {
+      try {
+        await fetch(`${BASE}/api/designs`, {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${token}` },
+          body: JSON.stringify({ id }),
+        });
+      } catch { /* already removed from UI */ }
+    }
   };
 
   return (
@@ -652,35 +678,68 @@ function LoadModal({ onLoad, onClose }: LoadModalProps) {
             const modCount = cfg.builderModules?.length ?? 0;
             const isStudio = cfg.source === "studio";
             const kindLabel = KIND_LABELS[cfg.closetKind ?? ""] ?? "";
+            const isPendingDelete = deletingId === d.id;
             return (
-              <button key={d.id} onClick={() => handleLoad(d)}
-                className="w-full flex items-start gap-3 p-3.5 rounded-xl border border-stone-200 hover:border-taupe-300 hover:bg-taupe-50 text-left transition-all group">
-                <span className="w-9 h-9 rounded-lg bg-stone-100 group-hover:bg-taupe-100 flex items-center justify-center text-lg flex-shrink-0 transition-colors">
-                  {isStudio ? "🛋️" : "🔨"}
-                </span>
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm font-semibold text-charcoal-600 truncate">{d.name}</p>
-                  <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
-                    {kindLabel && (
-                      <span className="text-[10px] font-medium text-taupe-600 bg-taupe-50 border border-taupe-100 rounded-full px-1.5 py-0.5">{kindLabel}</span>
-                    )}
-                    {dims && (
-                      <span className="text-[10px] text-stone-400 font-mono">{dims.width}″ × {dims.height}″ × {dims.depth}″</span>
-                    )}
-                    {modCount > 0 && (
-                      <span className="text-[10px] text-stone-400">{modCount} module{modCount !== 1 ? "s" : ""}</span>
+              <div key={d.id}
+                className={`w-full flex items-stretch gap-0 rounded-xl border transition-all group overflow-hidden
+                  ${isPendingDelete ? "border-red-300 bg-red-50" : "border-stone-200 hover:border-taupe-300 hover:bg-taupe-50"}`}>
+
+                {/* Load area — click to load */}
+                <button onClick={() => handleLoad(d)}
+                  className="flex items-start gap-3 flex-1 min-w-0 p-3.5 text-left">
+                  <span className={`w-9 h-9 rounded-lg flex items-center justify-center text-lg flex-shrink-0 transition-colors
+                    ${isPendingDelete ? "bg-red-100" : "bg-stone-100 group-hover:bg-taupe-100"}`}>
+                    {isStudio ? "🛋️" : "🔨"}
+                  </span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-semibold text-charcoal-600 truncate">{d.name}</p>
+                    <div className="flex flex-wrap items-center gap-x-2 gap-y-0.5 mt-0.5">
+                      {kindLabel && (
+                        <span className="text-[10px] font-medium text-taupe-600 bg-taupe-50 border border-taupe-100 rounded-full px-1.5 py-0.5">{kindLabel}</span>
+                      )}
+                      {dims && (
+                        <span className="text-[10px] text-stone-400 font-mono">{dims.width}″ × {dims.height}″ × {dims.depth}″</span>
+                      )}
+                      {modCount > 0 && (
+                        <span className="text-[10px] text-stone-400">{modCount} module{modCount !== 1 ? "s" : ""}</span>
+                      )}
+                    </div>
+                    {d.savedAt && (
+                      <span className="flex items-center gap-1 text-[10px] text-stone-300 mt-1">
+                        <Clock size={9}/>{fmtDate(d.savedAt)}
+                      </span>
                     )}
                   </div>
-                </div>
-                <div className="flex-shrink-0 flex flex-col items-end gap-1">
-                  {d.savedAt && (
-                    <span className="flex items-center gap-1 text-[10px] text-stone-300">
-                      <Clock size={9}/>{fmtDate(d.savedAt)}
-                    </span>
+                  <span className="text-[10px] font-semibold text-taupe-500 self-center flex-shrink-0 opacity-0 group-hover:opacity-100 transition-opacity pr-1">
+                    Load →
+                  </span>
+                </button>
+
+                {/* Delete column */}
+                <div className="flex-shrink-0 flex flex-col items-center justify-center border-l border-stone-100 px-2 gap-1.5 min-w-[52px]">
+                  {isPendingDelete ? (
+                    <>
+                      <button
+                        onClick={() => executeDelete(d.id)}
+                        className="w-full text-[10px] font-bold text-white bg-red-500 hover:bg-red-600 rounded-lg px-2 py-1 transition-colors">
+                        Delete
+                      </button>
+                      <button
+                        onClick={() => setDeletingId(null)}
+                        className="w-full text-[10px] text-stone-400 hover:text-stone-600 rounded-lg px-2 py-1 hover:bg-stone-100 transition-colors">
+                        Cancel
+                      </button>
+                    </>
+                  ) : (
+                    <button
+                      onClick={(e) => { e.stopPropagation(); setDeletingId(d.id); }}
+                      title="Delete this design"
+                      className="p-1.5 rounded-lg text-stone-300 hover:text-red-500 hover:bg-red-50 opacity-0 group-hover:opacity-100 transition-all">
+                      <Trash2 size={13}/>
+                    </button>
                   )}
-                  <span className="text-[10px] font-semibold text-taupe-500 opacity-0 group-hover:opacity-100 transition-opacity">Load →</span>
                 </div>
-              </button>
+              </div>
             );
           })}
         </div>

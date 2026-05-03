@@ -57,8 +57,8 @@ export function UserTypeSelector() {
   };
 
   return (
-    <div className="max-w-4xl mx-auto">
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+    <div className="max-w-4xl mx-auto px-2 sm:px-0">
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
         {userTypes.map((option, index) => {
           const Icon = option.icon;
           const isSelected = selectedType === option.type;
@@ -77,21 +77,22 @@ export function UserTypeSelector() {
               whileTap={{ scale: 0.98 }}
               onClick={() => handleSelection(option.type)}
               className={`
-                relative p-8 rounded-2xl border-2 text-left transition-all duration-300
+                relative p-5 sm:p-8 rounded-2xl border-2 text-left transition-all duration-300
+                min-h-[11rem] sm:min-h-[13rem]
                 ${option.color}
                 ${isSelected ? "ring-4 ring-charcoal-300 border-charcoal-400" : ""}
               `}
             >
-              <div className="flex items-start space-x-4">
-                <div className="bg-white p-3 rounded-lg shadow-sm">
+              <div className="flex items-start gap-3 sm:gap-4">
+                <div className="bg-white p-3 rounded-lg shadow-sm shrink-0">
                   <Icon className="w-6 h-6 text-charcoal-500" />
                 </div>
 
                 <div className="flex-1">
-                  <h3 className="font-serif text-2xl font-semibold text-charcoal-600 mb-2">
+                  <h3 className="font-serif text-xl sm:text-2xl font-semibold text-charcoal-600 mb-2 pr-8 sm:pr-0 leading-tight">
                     {option.title}
                   </h3>
-                  <p className="text-charcoal-500 text-lg">
+                  <p className="text-charcoal-500 text-base sm:text-lg leading-snug">
                     {option.description}
                   </p>
                 </div>

@@ -2,7 +2,8 @@ import { useState, useRef, useMemo, useCallback, useEffect } from "react";
 import { Link } from "wouter";
 import {
   ArrowLeft, Trash2, GripVertical, Box, RotateCcw, Plus, Minus,
-  ChevronRight, Layers, Ruler, Info, Save, CheckCircle2, FolderPlus, X,
+  ChevronRight, Layers, Ruler, Info, Save, CheckCircle2, FolderPlus, X, ExternalLink,
+  Settings, Pencil,
 } from "lucide-react";
 import { ClosetSVGRenderer } from "@/renderer/ClosetSVGRenderer";
 import { ClosetIsometricRenderer } from "@/renderer/ClosetIsometricRenderer";
@@ -11,22 +12,93 @@ import { getStoredToken } from "@/lib/AuthContext";
 import {
   ClosetLayout, ClosetZone, ClosetWall, ShelfConfig, DrawerConfig,
 } from "@/types/closet";
+import { StorageClass, CatalogueEntry, BUILTIN_CATALOGUE, getCat } from "@/types/catalogue";
 
 // ─── Module catalogue ────────────────────────────────────────────────────────
 
-const MODULE_CATALOGUE = [
-  { type: "double-hang" as const,  label: "Double Hang",   desc: "Upper + lower rods",          defaultWidth: 24, bg: "#dbeafe", border: "#3b82f6", icon: "⬛" },
-  { type: "long-hang"  as const,  label: "Long Hang",     desc: "Full-length rod",              defaultWidth: 30, bg: "#fce7f3", border: "#ec4899", icon: "🔱" },
-  { type: "drawers"    as const,  label: "Drawers",       desc: "Pull-out drawer stack",        defaultWidth: 18, bg: "#fef3c7", border: "#f59e0b", icon: "☰" },
-  { type: "open-shelves" as const,label: "Open Shelves",  desc: "Horizontal folded storage",   defaultWidth: 18, bg: "#d1fae5", border: "#10b981", icon: "≡" },
-  { type: "shoe-shelves" as const,label: "Shoe Shelves",  desc: "Tiered footwear display",     defaultWidth: 18, bg: "#ede9fe", border: "#8b5cf6", icon: "◫" },
-  { type: "top-shelves"  as const,label: "Top Shelves",   desc: "High seasonal storage",       defaultWidth: 24, bg: "#fee2e2", border: "#ef4444", icon: "▤" },
-] as const;
+type ZoneType = string;
 
-type ZoneType = (typeof MODULE_CATALOGUE)[number]["type"];
-const getCat = (type: ZoneType) => MODULE_CATALOGUE.find((m) => m.type === type)!;
+interface BuilderModule { id: string; type: string; label: string; width: number }
 
-interface BuilderModule { id: string; type: ZoneType; label: string; width: number }
+// ─── Preset layouts ───────────────────────────────────────────────────────────
+
+interface PresetLayout {
+  name: string;
+  desc: string;
+  icon: string;
+  modules: Array<{ type: string; label: string; width: number }>;
+}
+
+const PRESET_LAYOUTS: PresetLayout[] = [
+  {
+    name: "His & Hers",
+    desc: "Symmetric long hang with shared centre storage",
+    icon: "👫",
+    modules: [
+      { type: "long-hang",    label: "Her Side",    width: 30 },
+      { type: "drawers",      label: "Drawers",     width: 18 },
+      { type: "shoe-shelves", label: "Shoe Shelves",width: 18 },
+      { type: "long-hang",    label: "His Side",    width: 30 },
+    ],
+  },
+  {
+    name: "Master Suite",
+    desc: "Full-featured walk-in with every storage type",
+    icon: "🏠",
+    modules: [
+      { type: "double-hang",  label: "Double Hang", width: 24 },
+      { type: "long-hang",    label: "Long Hang",   width: 30 },
+      { type: "drawers",      label: "Drawers",     width: 18 },
+      { type: "open-shelves", label: "Shelves",     width: 18 },
+      { type: "shoe-shelves", label: "Shoes",       width: 18 },
+      { type: "double-hang",  label: "Double Hang", width: 24 },
+    ],
+  },
+  {
+    name: "Kids Room",
+    desc: "Easy-reach shelves, small hang section, lots of drawers",
+    icon: "🧒",
+    modules: [
+      { type: "open-shelves", label: "Books & Toys", width: 18 },
+      { type: "double-hang",  label: "Short Hang",   width: 24 },
+      { type: "drawers",      label: "Drawers",      width: 18 },
+      { type: "shoe-shelves", label: "Shoe Shelves", width: 18 },
+    ],
+  },
+  {
+    name: "Studio Apartment",
+    desc: "Compact essentials — hang, fold, and shoes",
+    icon: "🏢",
+    modules: [
+      { type: "long-hang",    label: "Long Hang",   width: 30 },
+      { type: "drawers",      label: "Drawers",     width: 18 },
+      { type: "shoe-shelves", label: "Shoe Shelves",width: 18 },
+    ],
+  },
+  {
+    name: "Entryway",
+    desc: "Coats, bags, top shelf, and shoes by the door",
+    icon: "🚪",
+    modules: [
+      { type: "long-hang",   label: "Coats",      width: 30 },
+      { type: "top-shelves", label: "Bags & Hats", width: 24 },
+      { type: "shoe-shelves",label: "Shoes",       width: 18 },
+    ],
+  },
+  {
+    name: "Maximalist",
+    desc: "Every module type — maximum capacity",
+    icon: "✨",
+    modules: [
+      { type: "double-hang",  label: "Double Hang", width: 24 },
+      { type: "long-hang",    label: "Long Hang",   width: 30 },
+      { type: "open-shelves", label: "Shelves",     width: 18 },
+      { type: "drawers",      label: "Drawers",     width: 18 },
+      { type: "shoe-shelves", label: "Shoes",       width: 18 },
+      { type: "top-shelves",  label: "Top Shelves", width: 24 },
+    ],
+  },
+];
 
 let _uid = 0;
 const uid = () => `m${++_uid}_${Date.now().toString(36)}`;
@@ -41,14 +113,15 @@ const DEFAULT_MODULES: BuilderModule[] = [
 
 // ─── Layout converter ────────────────────────────────────────────────────────
 
-function buildLayout(modules: BuilderModule[], wallW: number, wallH: number, wallD: number): ClosetLayout {
+function buildLayout(modules: BuilderModule[], catalogue: CatalogueEntry[], wallW: number, wallH: number, wallD: number): ClosetLayout {
   const TOE = 3.5;
   let curX = 0;
   const zones: ClosetZone[] = [];
 
   for (const mod of modules) {
+    const storageClass = getCat(catalogue, mod.type).storageClass;
     const x = curX, w = mod.width, yBot = TOE, h = wallH - TOE;
-    switch (mod.type) {
+    switch (storageClass) {
       case "double-hang":
         zones.push({ type: "double-hang", x, y: yBot, width: w, height: h,
           rods: [
@@ -70,7 +143,7 @@ function buildLayout(modules: BuilderModule[], wallW: number, wallH: number, wal
         }
         zones.push({ type: "drawers", x, y: yBot, width: w, height: h, drawers }); break;
       }
-      case "open-shelves": {
+      case "shelves": {
         const shelves: ShelfConfig[] = [];
         let relH = 2;
         while (relH + 0.75 <= h - 4 && shelves.length < 8) {
@@ -79,7 +152,7 @@ function buildLayout(modules: BuilderModule[], wallW: number, wallH: number, wal
         }
         zones.push({ type: "open-shelves", x, y: yBot, width: w, height: h, shelves }); break;
       }
-      case "shoe-shelves": {
+      case "shoes": {
         const shelves: ShelfConfig[] = [];
         let relH = 2;
         const purposes = ["boots", "heels", "sneakers", "flats", "sneakers", "heels"];
@@ -150,7 +223,14 @@ function DimInput({ label, value, onChange, min, max, step = 6 }: {
 
 // ─── ModulePalette ────────────────────────────────────────────────────────────
 
-function ModulePalette({ onAdd }: { onAdd: (type: ZoneType) => void }) {
+function ModulePalette({ catalogue, onAdd, onManage, onLoadPreset }: {
+  catalogue: CatalogueEntry[];
+  onAdd: (type: ZoneType) => void;
+  onManage: () => void;
+  onLoadPreset: (preset: PresetLayout) => void;
+}) {
+  const [showPresets, setShowPresets] = useState(false);
+
   const handleDragStart = (e: React.DragEvent, type: ZoneType) => {
     e.dataTransfer.effectAllowed = "copy";
     e.dataTransfer.setData("alveo-source", "palette");
@@ -159,37 +239,107 @@ function ModulePalette({ onAdd }: { onAdd: (type: ZoneType) => void }) {
 
   return (
     <aside className="w-48 flex-shrink-0 bg-white border-r border-stone-200 flex flex-col overflow-hidden">
-      <div className="px-3 py-3 border-b border-stone-100">
-        <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Modules</p>
-        <p className="text-[10px] text-stone-400 mt-0.5">Drag to canvas or click +</p>
+      <div className="px-3 py-3 border-b border-stone-100 flex items-center justify-between gap-1">
+        <div>
+          <p className="text-[10px] font-bold uppercase tracking-widest text-stone-500">Modules</p>
+          <p className="text-[10px] text-stone-400 mt-0.5">Drag to canvas or click +</p>
+        </div>
+        <button
+          onClick={onManage}
+          title="Manage module types"
+          className="p-1.5 rounded-lg text-stone-400 hover:text-stone-600 hover:bg-stone-100 transition-colors flex-shrink-0"
+        >
+          <Settings size={13} />
+        </button>
       </div>
-      <div className="flex-1 overflow-y-auto p-2 space-y-1.5">
-        {MODULE_CATALOGUE.map((mod) => (
-          <div
-            key={mod.type}
-            draggable
-            onDragStart={(e) => handleDragStart(e, mod.type)}
-            className="group flex items-center gap-2 p-2 rounded-lg border cursor-grab active:cursor-grabbing select-none hover:shadow-sm transition-all"
-            style={{ backgroundColor: mod.bg, borderColor: mod.border + "44" }}
-          >
-            <span className="text-sm w-5 text-center flex-shrink-0 font-mono" style={{ color: mod.border }}>
-              {mod.icon}
-            </span>
-            <div className="flex-1 min-w-0">
-              <p className="text-[11px] font-semibold text-stone-700 leading-tight truncate">{mod.label}</p>
-              <p className="text-[9px] text-stone-500 leading-tight truncate">{mod.desc}</p>
-            </div>
-            <button
-              onClick={() => onAdd(mod.type)}
-              className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center transition-all bg-white/60 hover:bg-white text-stone-600 hover:text-stone-800"
-              title={`Add ${mod.label}`}
+
+      <div className="flex-1 overflow-y-auto">
+        {/* Module list */}
+        <div className="p-2 space-y-1.5">
+          {catalogue.map((mod) => (
+            <div
+              key={mod.type}
+              draggable
+              onDragStart={(e) => handleDragStart(e, mod.type)}
+              className="group flex items-center gap-2 p-2 rounded-lg border cursor-grab active:cursor-grabbing select-none hover:shadow-sm transition-all"
+              style={{ backgroundColor: mod.bg, borderColor: mod.border + "44" }}
             >
-              <Plus size={10} />
-            </button>
-          </div>
-        ))}
+              <span className="text-sm w-5 text-center flex-shrink-0" style={{ color: mod.border }}>
+                {mod.icon}
+              </span>
+              <div className="flex-1 min-w-0">
+                <p className="text-[11px] font-semibold text-stone-700 leading-tight truncate">{mod.label}</p>
+                <p className="text-[9px] text-stone-500 leading-tight truncate">{mod.desc}</p>
+              </div>
+              <button
+                onClick={() => onAdd(mod.type)}
+                className="flex-shrink-0 w-5 h-5 rounded-md flex items-center justify-center transition-all bg-white/60 hover:bg-white text-stone-600 hover:text-stone-800"
+                title={`Add ${mod.label}`}
+              >
+                <Plus size={10} />
+              </button>
+            </div>
+          ))}
+          <button
+            onClick={onManage}
+            className="w-full py-2 rounded-lg border-2 border-dashed border-stone-200 hover:border-taupe-300 hover:bg-taupe-50 text-[10px] font-medium text-stone-400 hover:text-taupe-600 flex items-center justify-center gap-1 transition-all"
+          >
+            <Plus size={10} /> Add module type
+          </button>
+        </div>
+
+        {/* Presets accordion */}
+        <div className="border-t border-stone-100">
+          <button
+            onClick={() => setShowPresets((v) => !v)}
+            className="w-full px-3 py-2.5 flex items-center justify-between text-[10px] font-bold uppercase tracking-widest text-stone-500 hover:bg-stone-50 transition-colors"
+          >
+            <span className="flex items-center gap-1.5">
+              <Layers size={10} />
+              Presets
+            </span>
+            <ChevronRight size={10} className={`transition-transform ${showPresets ? "rotate-90" : ""}`} />
+          </button>
+
+          {showPresets && (
+            <div className="px-2 pb-2 space-y-1.5">
+              {PRESET_LAYOUTS.map((preset) => (
+                <button
+                  key={preset.name}
+                  onClick={() => onLoadPreset(preset)}
+                  className="w-full text-left p-2 rounded-lg bg-stone-50 hover:bg-taupe-50 border border-stone-200 hover:border-taupe-300 transition-all group"
+                >
+                  <div className="flex items-start gap-1.5">
+                    <span className="text-base leading-none mt-0.5 flex-shrink-0">{preset.icon}</span>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-[11px] font-semibold text-stone-700 group-hover:text-taupe-700 leading-tight">{preset.name}</p>
+                      <p className="text-[9px] text-stone-400 leading-snug mt-0.5">{preset.desc}</p>
+                      <div className="flex gap-0.5 mt-1.5 flex-wrap">
+                        {preset.modules.map((m, i) => {
+                          const cat = getCat(catalogue, m.type);
+                          return (
+                            <span
+                              key={i}
+                              className="inline-block w-3 h-3 rounded-sm flex-shrink-0"
+                              title={`${m.label} (${m.width}″)`}
+                              style={{ backgroundColor: cat.border + "cc" }}
+                            />
+                          );
+                        })}
+                        <span className="text-[8px] text-stone-400 ml-0.5 self-center font-mono">
+                          {preset.modules.reduce((s, m) => s + m.width, 0)}″
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                </button>
+              ))}
+            </div>
+          )}
+        </div>
       </div>
-      <div className="px-3 py-2.5 border-t border-stone-100">
+
+      <div className="px-3 py-2.5 border-t border-stone-100 flex-shrink-0">
         <p className="text-[9px] text-stone-300 leading-relaxed">
           Tip: drag resize handles between columns to adjust widths
         </p>
@@ -219,13 +369,14 @@ function DropZone({ active, onDragOver, onDrop, height }: {
 
 interface WallCanvasProps {
   modules: BuilderModule[]; selectedId: string | null; wallW: number;
+  catalogue: CatalogueEntry[];
   onSelect: (id: string | null) => void; onDelete: (id: string) => void;
-  onInsert: (type: ZoneType, atIndex: number) => void;
+  onInsert: (type: string, atIndex: number) => void;
   onReorder: (fromId: string, toIndex: number) => void;
   onResizeAdj: (leftIdx: number, newLeftW: number, newRightW: number) => void;
 }
 
-function WallCanvas({ modules, selectedId, wallW, onSelect, onDelete, onInsert, onReorder, onResizeAdj }: WallCanvasProps) {
+function WallCanvas({ modules, selectedId, wallW, catalogue, onSelect, onDelete, onInsert, onReorder, onResizeAdj }: WallCanvasProps) {
   const [dragOverIdx, setDragOverIdx] = useState<number | null>(null);
   const resizing = useRef<{ idx: number; startX: number; leftW: number; rightW: number } | null>(null);
 
@@ -322,7 +473,7 @@ function WallCanvas({ modules, selectedId, wallW, onSelect, onDelete, onInsert, 
           <DropZone active={dragOverIdx === 0} height={CANVAS_H} onDragOver={(e) => handleDragOver(e, 0)} onDrop={(e) => readDrop(e, 0)} />
 
           {modules.map((mod, i) => {
-            const cat = getCat(mod.type);
+            const cat = getCat(catalogue, mod.type);
             const colW = Math.max(20, mod.width * scale);
             const isSelected = mod.id === selectedId;
 
@@ -426,10 +577,10 @@ function WallCanvas({ modules, selectedId, wallW, onSelect, onDelete, onInsert, 
 // ─── StatsPanel ───────────────────────────────────────────────────────────────
 
 function StatsPanel({
-  modules, wallW, wallH, wallD, woodFinish, onWoodFinishChange,
+  modules, catalogue, wallW, wallH, wallD, woodFinish, onWoodFinishChange,
   drawingMode, onDrawingModeChange, svgContent,
 }: {
-  modules: BuilderModule[]; wallW: number; wallH: number; wallD: number;
+  modules: BuilderModule[]; catalogue: CatalogueEntry[]; wallW: number; wallH: number; wallD: number;
   woodFinish: string; onWoodFinishChange: (v: string) => void;
   drawingMode: "elevation" | "3d"; onDrawingModeChange: (v: "elevation" | "3d") => void;
   svgContent: string | null;
@@ -437,8 +588,8 @@ function StatsPanel({
   const totalUsed = modules.reduce((s, m) => s + m.width, 0);
   const layout = useMemo(() => {
     if (!modules.length) return null;
-    try { return buildLayout(modules, Math.max(totalUsed, wallW), wallH, wallD); } catch { return null; }
-  }, [modules, wallW, wallH, wallD, totalUsed]);
+    try { return buildLayout(modules, catalogue, Math.max(totalUsed, wallW), wallH, wallD); } catch { return null; }
+  }, [modules, catalogue, wallW, wallH, wallD, totalUsed]);
 
   const stats = layout?.totalStorage;
   const utilization = layout?.utilizationScore ?? 0;
@@ -513,18 +664,96 @@ function StatsPanel({
       <div className="flex-1 flex flex-col min-h-0">
         <div className="px-3 py-2 border-b border-stone-100 flex items-center justify-between">
           <p className="text-[10px] font-bold uppercase tracking-widest text-stone-400">Preview</p>
-          <div className="flex items-center gap-0.5 bg-stone-100 rounded-md p-0.5">
+          <div className="flex items-center gap-1">
+            <div className="flex items-center gap-0.5 bg-stone-100 rounded-md p-0.5">
+              <button
+                onClick={() => onDrawingModeChange("elevation")}
+                className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${drawingMode === "elevation" ? "bg-white text-charcoal-600 shadow-sm" : "text-stone-400"}`}
+              >
+                2D
+              </button>
+              <button
+                onClick={() => onDrawingModeChange("3d")}
+                className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${drawingMode === "3d" ? "bg-white text-charcoal-600 shadow-sm" : "text-stone-400"}`}
+              >
+                3D
+              </button>
+            </div>
             <button
-              onClick={() => onDrawingModeChange("elevation")}
-              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${drawingMode === "elevation" ? "bg-white text-charcoal-600 shadow-sm" : "text-stone-400"}`}
+              onClick={() => {
+                if (!svgContent) return;
+                const label = drawingMode === "3d" ? "3D" : "2D";
+                const html = `<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Alvéo — ${label} Preview</title>
+  <style>
+    *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
+    html, body { width: 100%; height: 100%; background: #f7f6f4; }
+    body { display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; font-family: system-ui, sans-serif; }
+    .badge { font-size: 11px; font-weight: 600; letter-spacing: .08em; text-transform: uppercase; color: #9c9590; }
+    .svg-wrap { width: min(92vw, 92vh); aspect-ratio: 1; background: #fff; border-radius: 12px; box-shadow: 0 2px 24px rgba(0,0,0,.08); padding: 24px; display: flex; align-items: center; justify-content: center; }
+    .svg-wrap svg { width: 100%; height: 100%; }
+    .print-btn {
+      position: fixed; top: 16px; right: 16px;
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 16px; border-radius: 8px; border: none; cursor: pointer;
+      background: #2c2825; color: #fff;
+      font-family: system-ui, sans-serif; font-size: 13px; font-weight: 500;
+      box-shadow: 0 2px 8px rgba(0,0,0,.18); transition: background .15s;
+    }
+    .print-btn:hover { background: #1a1714; }
+    .print-btn svg { flex-shrink: 0; }
+    .kbd {
+      display: inline-flex; align-items: center; justify-content: center;
+      width: 18px; height: 18px; border-radius: 4px;
+      background: rgba(255,255,255,.15); border: 1px solid rgba(255,255,255,.25);
+      font-size: 11px; font-weight: 600; line-height: 1; margin-left: 2px;
+    }
+    @media print {
+      html, body { background: #fff; height: auto; }
+      .print-btn { display: none; }
+      .badge { display: none; }
+      .svg-wrap {
+        width: 100%; height: 100vh; aspect-ratio: unset;
+        border-radius: 0; box-shadow: none; padding: 12mm;
+      }
+      @page { margin: 0; size: A4 landscape; }
+    }
+  </style>
+</head>
+<body>
+  <button class="print-btn" onclick="window.print()">
+    <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <polyline points="6 9 6 2 18 2 18 9"/><path d="M6 18H4a2 2 0 0 1-2-2v-5a2 2 0 0 1 2-2h16a2 2 0 0 1 2 2v5a2 2 0 0 1-2 2h-2"/>
+      <rect x="6" y="14" width="12" height="8"/>
+    </svg>
+    Print / Save as PDF
+    <span class="kbd">P</span>
+  </button>
+  <span class="badge">Alvéo · ${label} Preview</span>
+  <div class="svg-wrap">${svgContent}</div>
+  <script>
+    document.addEventListener('keydown', function(e) {
+      if (e.target.tagName === 'INPUT' || e.target.tagName === 'TEXTAREA') return;
+      if (e.key === 'p' || e.key === 'P') { e.preventDefault(); window.print(); }
+      if (e.key === 'Escape') { window.close(); }
+    });
+  </script>
+</body>
+</html>`;
+                const blob = new Blob([html], { type: "text/html" });
+                const url = URL.createObjectURL(blob);
+                const w = window.open(url, "_blank");
+                if (w) setTimeout(() => URL.revokeObjectURL(url), 60_000);
+              }}
+              disabled={!svgContent}
+              title="Open preview in new tab"
+              className="p-1 rounded text-stone-400 hover:text-charcoal-600 hover:bg-stone-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
             >
-              2D
-            </button>
-            <button
-              onClick={() => onDrawingModeChange("3d")}
-              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${drawingMode === "3d" ? "bg-white text-charcoal-600 shadow-sm" : "text-stone-400"}`}
-            >
-              3D
+              <ExternalLink size={12} />
             </button>
           </div>
         </div>
@@ -565,11 +794,12 @@ function StatRow({ icon, label, value }: { icon: string; label: string; value: s
 
 // ─── SelectedModulePanel ──────────────────────────────────────────────────────
 
-function SelectedModulePanel({ module, onUpdate, onDelete, onClose }: {
-  module: BuilderModule; onUpdate: (changes: Partial<BuilderModule>) => void;
+function SelectedModulePanel({ module, catalogue, onUpdate, onDelete, onClose }: {
+  module: BuilderModule; catalogue: CatalogueEntry[];
+  onUpdate: (changes: Partial<BuilderModule>) => void;
   onDelete: () => void; onClose: () => void;
 }) {
-  const cat = getCat(module.type);
+  const cat = getCat(catalogue, module.type);
   return (
     <div
       className="mt-3 p-3 rounded-xl border bg-white shadow-sm"
@@ -604,10 +834,10 @@ function SelectedModulePanel({ module, onUpdate, onDelete, onClose }: {
         <div className="col-span-1 flex flex-col gap-1">
           <label className="text-[9px] text-stone-400 uppercase tracking-wider font-semibold">Type</label>
           <select value={module.type}
-            onChange={(e) => { const t = e.target.value as ZoneType; onUpdate({ type: t, label: getCat(t).label }); }}
+            onChange={(e) => { const t = e.target.value; onUpdate({ type: t, label: getCat(catalogue, t).label }); }}
             className="text-xs border border-stone-200 rounded-md px-2 py-1.5 bg-white text-charcoal-700 focus:outline-none focus:ring-1 focus:ring-taupe-400 w-full"
           >
-            {MODULE_CATALOGUE.map((m) => <option key={m.type} value={m.type}>{m.label}</option>)}
+            {catalogue.map((m) => <option key={m.type} value={m.type}>{m.label}</option>)}
           </select>
         </div>
 
@@ -899,11 +1129,288 @@ function SaveToProjectModal({
   );
 }
 
+// ─── ManageCatalogueModal ─────────────────────────────────────────────────────
+
+const PRESET_COLORS: Array<{ bg: string; border: string; name: string }> = [
+  { bg: "#dbeafe", border: "#3b82f6", name: "Blue" },
+  { bg: "#fce7f3", border: "#ec4899", name: "Pink" },
+  { bg: "#fef3c7", border: "#f59e0b", name: "Amber" },
+  { bg: "#d1fae5", border: "#10b981", name: "Green" },
+  { bg: "#ede9fe", border: "#8b5cf6", name: "Purple" },
+  { bg: "#fee2e2", border: "#ef4444", name: "Red" },
+  { bg: "#ccfbf1", border: "#14b8a6", name: "Teal" },
+  { bg: "#ffedd5", border: "#f97316", name: "Orange" },
+  { bg: "#fdf4ff", border: "#c026d3", name: "Fuchsia" },
+  { bg: "#f0fdf4", border: "#16a34a", name: "Lime" },
+];
+
+const PRESET_ICONS = ["☰", "≡", "▤", "◫", "⬛", "🔱", "👔", "👗", "👟", "🧥", "👜", "🎒", "💼", "👞", "🩴", "🧤", "🎩", "👒", "🕶️", "⌚", "💍", "🧣", "🧦", "📦", "🗄️", "🪝", "🪞"];
+
+const STORAGE_CLASS_LABELS: Record<StorageClass, string> = {
+  "double-hang": "Double Hang (upper + lower rods)",
+  "long-hang":   "Long Hang (full-length rod)",
+  "drawers":     "Drawers (pull-out stack)",
+  "shelves":     "Open Shelves (horizontal)",
+  "shoes":       "Shoe Shelves (angled tiers)",
+  "top-shelves": "Top Shelves (high storage)",
+};
+
+interface EntryFormState {
+  label: string; desc: string; defaultWidth: number;
+  bg: string; border: string; icon: string; storageClass: StorageClass;
+}
+
+const blankForm = (): EntryFormState => ({
+  label: "", desc: "", defaultWidth: 24, bg: "#dbeafe", border: "#3b82f6", icon: "📦", storageClass: "shelves",
+});
+
+function EntryForm({ initial, onSave, onCancel, submitLabel }: {
+  initial: EntryFormState; onSave: (v: EntryFormState) => void;
+  onCancel: () => void; submitLabel: string;
+}) {
+  const [form, setForm] = useState<EntryFormState>(initial);
+  const set = <K extends keyof EntryFormState>(k: K, v: EntryFormState[K]) =>
+    setForm((f) => ({ ...f, [k]: v }));
+
+  return (
+    <div className="space-y-3 p-3 bg-stone-50 rounded-xl border border-stone-200">
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[9px] uppercase tracking-wider font-semibold text-stone-400 block mb-1">Name *</label>
+          <input value={form.label} onChange={(e) => set("label", e.target.value)}
+            placeholder="e.g. Tie Rack"
+            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-taupe-400 bg-white" />
+        </div>
+        <div>
+          <label className="text-[9px] uppercase tracking-wider font-semibold text-stone-400 block mb-1">Description</label>
+          <input value={form.desc} onChange={(e) => set("desc", e.target.value)}
+            placeholder="e.g. Hanging tie organiser"
+            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 focus:outline-none focus:ring-1 focus:ring-taupe-400 bg-white" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-2">
+        <div>
+          <label className="text-[9px] uppercase tracking-wider font-semibold text-stone-400 block mb-1">Storage Behaviour</label>
+          <select value={form.storageClass} onChange={(e) => set("storageClass", e.target.value as StorageClass)}
+            className="w-full text-xs border border-stone-200 rounded-lg px-2 py-1.5 bg-white focus:outline-none focus:ring-1 focus:ring-taupe-400">
+            {(Object.keys(STORAGE_CLASS_LABELS) as StorageClass[]).map((k) => (
+              <option key={k} value={k}>{STORAGE_CLASS_LABELS[k]}</option>
+            ))}
+          </select>
+        </div>
+        <div>
+          <label className="text-[9px] uppercase tracking-wider font-semibold text-stone-400 block mb-1">Default Width (in)</label>
+          <div className="flex items-center gap-1">
+            <button onClick={() => set("defaultWidth", Math.max(12, form.defaultWidth - 3))}
+              className="w-6 h-6 rounded bg-stone-200 hover:bg-stone-300 text-xs text-stone-600 flex items-center justify-center">−</button>
+            <input type="number" min={12} max={96} value={form.defaultWidth}
+              onChange={(e) => { const v = parseInt(e.target.value); if (!isNaN(v)) set("defaultWidth", Math.min(96, Math.max(12, v))); }}
+              className="flex-1 text-center text-xs border border-stone-200 rounded-lg px-1 py-1.5 font-mono focus:outline-none focus:ring-1 focus:ring-taupe-400 bg-white" />
+            <button onClick={() => set("defaultWidth", Math.min(96, form.defaultWidth + 3))}
+              className="w-6 h-6 rounded bg-stone-200 hover:bg-stone-300 text-xs text-stone-600 flex items-center justify-center">+</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <label className="text-[9px] uppercase tracking-wider font-semibold text-stone-400 block mb-1.5">Color</label>
+        <div className="flex flex-wrap gap-1.5">
+          {PRESET_COLORS.map((c) => (
+            <button key={c.name} title={c.name}
+              onClick={() => { set("bg", c.bg); set("border", c.border); }}
+              className="w-7 h-7 rounded-lg border-2 transition-all"
+              style={{
+                backgroundColor: c.bg,
+                borderColor: form.border === c.border ? c.border : "transparent",
+                outline: form.border === c.border ? `2px solid ${c.border}` : "none",
+                outlineOffset: 1,
+              }} />
+          ))}
+        </div>
+      </div>
+
+      <div>
+        <label className="text-[9px] uppercase tracking-wider font-semibold text-stone-400 block mb-1.5">Icon</label>
+        <div className="flex flex-wrap items-center gap-1">
+          {PRESET_ICONS.map((ic) => (
+            <button key={ic} onClick={() => set("icon", ic)}
+              className={`w-7 h-7 rounded-lg text-base flex items-center justify-center transition-all
+                ${form.icon === ic ? "ring-2 ring-taupe-400 bg-taupe-50" : "hover:bg-stone-100"}`}>
+              {ic}
+            </button>
+          ))}
+          <input value={form.icon} onChange={(e) => { const v = [...e.target.value].slice(-2).join(""); if (v) set("icon", v); }}
+            placeholder="✏️"
+            title="Type any emoji"
+            className="w-10 text-center text-sm border border-stone-200 rounded-lg px-1 py-1 focus:outline-none focus:ring-1 focus:ring-taupe-400 bg-white" />
+        </div>
+      </div>
+
+      <div className="flex items-center gap-2 p-2 rounded-lg" style={{ backgroundColor: form.bg, border: `1px solid ${form.border}44` }}>
+        <span className="text-lg" style={{ color: form.border }}>{form.icon}</span>
+        <div className="flex-1 min-w-0">
+          <p className="text-[11px] font-semibold text-stone-700 truncate">{form.label || "Module Name"}</p>
+          <p className="text-[9px] text-stone-500 truncate">{form.desc || "Description"}</p>
+        </div>
+        <span className="text-[9px] text-stone-400 font-mono flex-shrink-0">{form.defaultWidth}″ · {STORAGE_CLASS_LABELS[form.storageClass].split(" (")[0]}</span>
+      </div>
+
+      <div className="flex items-center gap-2 pt-1">
+        <button onClick={() => { if (form.label.trim()) onSave(form); }}
+          disabled={!form.label.trim()}
+          className="flex-1 py-1.5 rounded-lg text-xs font-semibold bg-charcoal-600 text-white hover:bg-charcoal-500 disabled:opacity-40 disabled:cursor-not-allowed transition-colors">
+          {submitLabel}
+        </button>
+        <button onClick={onCancel}
+          className="px-3 py-1.5 rounded-lg text-xs text-stone-500 bg-stone-100 hover:bg-stone-200 transition-colors">
+          Cancel
+        </button>
+      </div>
+    </div>
+  );
+}
+
+function ManageCatalogueModal({ catalogue, onUpdate, onClose }: {
+  catalogue: CatalogueEntry[];
+  onUpdate: (next: CatalogueEntry[]) => void;
+  onClose: () => void;
+}) {
+  const [editing, setEditing] = useState<string | null>(null);
+  const [adding, setAdding] = useState(false);
+
+  const saveEdit = (type: string, form: EntryFormState) => {
+    onUpdate(catalogue.map((e) => e.type === type ? { ...e, ...form } : e));
+    setEditing(null);
+  };
+
+  const deleteEntry = (type: string) => {
+    onUpdate(catalogue.filter((e) => e.type !== type));
+  };
+
+  const addEntry = (form: EntryFormState) => {
+    const slug = form.label.toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
+    const newType = `custom-${slug}-${Date.now().toString(36)}`;
+    onUpdate([...catalogue, { ...form, type: newType, isBuiltIn: false }]);
+    setAdding(false);
+  };
+
+  const resetBuiltin = (type: string) => {
+    const original = BUILTIN_CATALOGUE.find((b) => b.type === type);
+    if (original) onUpdate(catalogue.map((e) => e.type === type ? { ...original } : e));
+  };
+
+  const customCount = catalogue.filter((e) => !e.isBuiltIn).length;
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 backdrop-blur-sm p-4">
+      <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg max-h-[90vh] flex flex-col">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-stone-100">
+          <div>
+            <h2 className="font-serif text-base font-bold text-charcoal-600">Module Catalogue</h2>
+            <p className="text-[10px] text-stone-400 mt-0.5">
+              Add custom types · Edit names, colours &amp; icons · Built-ins can be reset
+            </p>
+          </div>
+          <button onClick={onClose}
+            className="text-stone-400 hover:text-stone-600 p-1.5 rounded-lg hover:bg-stone-100 transition-colors">
+            <X size={16} />
+          </button>
+        </div>
+
+        <div className="flex-1 overflow-y-auto px-5 py-4 space-y-2">
+          {catalogue.map((entry) => (
+            <div key={entry.type}>
+              {editing === entry.type ? (
+                <EntryForm
+                  initial={{ label: entry.label, desc: entry.desc, defaultWidth: entry.defaultWidth, bg: entry.bg, border: entry.border, icon: entry.icon, storageClass: entry.storageClass }}
+                  onSave={(form) => saveEdit(entry.type, form)}
+                  onCancel={() => setEditing(null)}
+                  submitLabel="Save Changes"
+                />
+              ) : (
+                <div className="flex items-center gap-2 p-2.5 rounded-xl group transition-all"
+                  style={{ backgroundColor: entry.bg, border: `1px solid ${entry.border}33` }}>
+                  <span className="text-base w-6 text-center flex-shrink-0" style={{ color: entry.border }}>{entry.icon}</span>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-[11px] font-semibold text-stone-700 truncate">{entry.label}</p>
+                    <p className="text-[9px] text-stone-500 truncate">{entry.desc || <span className="italic opacity-60">no description</span>}</p>
+                  </div>
+                  <span className="text-[8px] text-stone-400 italic hidden sm:block flex-shrink-0">
+                    {STORAGE_CLASS_LABELS[entry.storageClass]?.split(" (")[0]}
+                  </span>
+                  <span className="text-[9px] text-stone-400 font-mono flex-shrink-0">{entry.defaultWidth}″</span>
+                  <button onClick={() => { setEditing(entry.type); setAdding(false); }}
+                    className="p-1 rounded-md hover:bg-white/80 text-stone-400 hover:text-stone-700 transition-colors flex-shrink-0"
+                    title="Edit">
+                    <Pencil size={11} />
+                  </button>
+                  {entry.isBuiltIn ? (
+                    <button onClick={() => resetBuiltin(entry.type)}
+                      title="Reset to default"
+                      className="p-1 rounded-md hover:bg-white/80 text-stone-300 hover:text-stone-500 transition-colors flex-shrink-0">
+                      <RotateCcw size={11} />
+                    </button>
+                  ) : (
+                    <button onClick={() => deleteEntry(entry.type)}
+                      title="Delete"
+                      className="p-1 rounded-md hover:bg-red-100 text-stone-300 hover:text-red-500 transition-colors flex-shrink-0">
+                      <Trash2 size={11} />
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
+
+          {adding ? (
+            <EntryForm
+              initial={blankForm()}
+              onSave={addEntry}
+              onCancel={() => setAdding(false)}
+              submitLabel="Add to Catalogue"
+            />
+          ) : (
+            <button
+              onClick={() => { setAdding(true); setEditing(null); }}
+              className="w-full py-3 rounded-xl border-2 border-dashed border-stone-200 hover:border-taupe-300 hover:bg-taupe-50 text-xs font-medium text-stone-400 hover:text-taupe-600 flex items-center justify-center gap-1.5 transition-all">
+              <Plus size={13} /> Add Module Type
+            </button>
+          )}
+        </div>
+
+        <div className="px-5 py-3 border-t border-stone-100 flex items-center justify-between">
+          <p className="text-[10px] text-stone-400">
+            {customCount} custom type{customCount !== 1 ? "s" : ""} · {catalogue.length} total
+          </p>
+          <button onClick={onClose}
+            className="px-4 py-1.5 rounded-lg text-xs font-semibold bg-charcoal-600 text-white hover:bg-charcoal-500 transition-colors">
+            Done
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ─── BuilderPage ──────────────────────────────────────────────────────────────
 
 export default function BuilderPage() {
   const { user } = useAuth();
   const [showSave, setShowSave] = useState(false);
+  const [showManage, setShowManage] = useState(false);
+
+  // ── Catalogue state ──
+  const [catalogue, setCatalogue] = useState<CatalogueEntry[]>(() => {
+    try {
+      const raw = localStorage.getItem("alveo_catalogue");
+      if (!raw) return [...BUILTIN_CATALOGUE];
+      const saved = JSON.parse(raw) as CatalogueEntry[];
+      const builtinMap = new Map(saved.filter((e) => e.isBuiltIn).map((e) => [e.type, e]));
+      const customs = saved.filter((e) => !e.isBuiltIn);
+      return [...BUILTIN_CATALOGUE.map((b) => builtinMap.get(b.type) ?? b), ...customs];
+    } catch { return [...BUILTIN_CATALOGUE]; }
+  });
 
   const [modules, setModules] = useState<BuilderModule[]>(() => {
     try {
@@ -914,9 +1421,15 @@ export default function BuilderPage() {
     } catch { return DEFAULT_MODULES; }
   });
   const [history, setHistory] = useState<BuilderModule[][]>([]);
-  const [wallW, setWallW] = useState(120);
-  const [wallH, setWallH] = useState(96);
-  const [wallD, setWallD] = useState(24);
+  const [wallW, setWallW] = useState(() => {
+    try { const d = JSON.parse(localStorage.getItem("alveo_studio_dims") || "null"); return d?.wallW ?? 120; } catch { return 120; }
+  });
+  const [wallH, setWallH] = useState(() => {
+    try { const d = JSON.parse(localStorage.getItem("alveo_studio_dims") || "null"); return d?.wallH ?? 96; } catch { return 96; }
+  });
+  const [wallD, setWallD] = useState(() => {
+    try { const d = JSON.parse(localStorage.getItem("alveo_studio_dims") || "null"); return d?.wallD ?? 24; } catch { return 24; }
+  });
   const [woodFinish, setWoodFinish] = useState<"light" | "medium" | "dark" | "white">("medium");
   const [drawingMode, setDrawingMode] = useState<"elevation" | "3d">("elevation");
   const [selectedId, setSelectedId] = useState<string | null>(null);
@@ -928,15 +1441,16 @@ export default function BuilderPage() {
   const svgContent = useMemo(() => {
     if (!modules.length) return null;
     try {
-      const layout = buildLayout(modules, effectiveW, wallH, wallD);
+      const layout = buildLayout(modules, catalogue, effectiveW, wallH, wallD);
       return drawingMode === "3d"
         ? new ClosetIsometricRenderer(layout, { woodFinish }).renderIsometric()
         : new ClosetSVGRenderer(layout, { showDimensions: true, showLabels: true, woodFinish, style: "modern" }).renderElevation();
     } catch { return null; }
-  }, [modules, effectiveW, wallH, wallD, woodFinish, drawingMode]);
+  }, [modules, catalogue, effectiveW, wallH, wallD, woodFinish, drawingMode]);
 
   // Save to localStorage
   useEffect(() => { localStorage.setItem("alveo_builder_modules", JSON.stringify(modules)); }, [modules]);
+  useEffect(() => { localStorage.setItem("alveo_catalogue", JSON.stringify(catalogue)); }, [catalogue]);
 
   // Keyboard shortcuts
   useEffect(() => {
@@ -956,11 +1470,11 @@ export default function BuilderPage() {
   const snapshot = () => setHistory((h) => [...h.slice(-19), modules]);
 
   const addModule = useCallback((type: ZoneType, atIndex?: number) => {
-    const cat = getCat(type);
+    const cat = getCat(catalogue, type);
     const newMod: BuilderModule = { id: uid(), type, label: cat.label, width: cat.defaultWidth };
     setHistory((h) => [...h.slice(-19), modules]);
     setModules((prev) => { const arr = [...prev]; arr.splice(atIndex ?? arr.length, 0, newMod); return arr; });
-  }, [modules]);
+  }, [modules, catalogue]);
 
   const insertModule = useCallback((type: ZoneType, atIndex: number) => addModule(type, atIndex), [addModule]);
 
@@ -1027,7 +1541,18 @@ export default function BuilderPage() {
 
         {/* Dimensions */}
         <div className="flex flex-wrap items-start gap-3">
-          <DimInput label="Width"  value={wallW} onChange={setWallW} min={36}  max={360} step={12} />
+          <div className="flex flex-col gap-1">
+            <DimInput label="Width"  value={wallW} onChange={setWallW} min={36}  max={360} step={12} />
+            {modules.length > 0 && totalUsed !== wallW && (
+              <button
+                onClick={() => setWallW(Math.min(360, Math.max(36, totalUsed)))}
+                className="text-[9px] font-semibold text-taupe-600 hover:text-taupe-700 bg-taupe-50 hover:bg-taupe-100 border border-taupe-200 rounded px-1.5 py-0.5 transition-colors leading-none whitespace-nowrap"
+                title={`Fit wall to modules (${totalUsed}″)`}
+              >
+                ↔ Fit to {totalUsed}″
+              </button>
+            )}
+          </div>
           <DimInput label="Height" value={wallH} onChange={setWallH} min={72}  max={120} step={6}  />
           <DimInput label="Depth"  value={wallD} onChange={setWallD} min={14}  max={30}  step={2}  />
         </div>
@@ -1083,13 +1608,22 @@ export default function BuilderPage() {
       {/* ── Body ── */}
       <div className="flex flex-1 overflow-hidden min-h-0">
         {/* Left: Palette */}
-        <ModulePalette onAdd={(type) => addModule(type)} />
+        <ModulePalette
+          catalogue={catalogue}
+          onAdd={(type) => addModule(type)}
+          onManage={() => setShowManage(true)}
+          onLoadPreset={(preset) => {
+            snapshot();
+            setModules(preset.modules.map((m) => ({ ...m, id: uid() })));
+            setSelectedId(null);
+          }}
+        />
 
         {/* Center: Canvas */}
         <div className="flex-1 flex flex-col overflow-hidden min-w-0">
           <div className="flex-1 overflow-auto p-4">
             <WallCanvas
-              modules={modules} selectedId={selectedId} wallW={wallW}
+              modules={modules} selectedId={selectedId} wallW={wallW} catalogue={catalogue}
               onSelect={setSelectedId} onDelete={deleteModule}
               onInsert={insertModule} onReorder={reorderModule} onResizeAdj={resizeAdj}
             />
@@ -1097,7 +1631,7 @@ export default function BuilderPage() {
             {/* Selected module editor */}
             {selectedModule && (
               <SelectedModulePanel
-                module={selectedModule} onUpdate={updateSelected}
+                module={selectedModule} catalogue={catalogue} onUpdate={updateSelected}
                 onDelete={() => deleteModule(selectedModule.id)}
                 onClose={() => setSelectedId(null)}
               />
@@ -1117,7 +1651,7 @@ export default function BuilderPage() {
 
         {/* Right: Stats + Preview */}
         <StatsPanel
-          modules={modules} wallW={wallW} wallH={wallH} wallD={wallD}
+          modules={modules} catalogue={catalogue} wallW={wallW} wallH={wallH} wallD={wallD}
           woodFinish={woodFinish} onWoodFinishChange={(v) => setWoodFinish(v as typeof woodFinish)}
           drawingMode={drawingMode} onDrawingModeChange={setDrawingMode}
           svgContent={svgContent}
@@ -1129,6 +1663,15 @@ export default function BuilderPage() {
         <SaveToProjectModal
           modules={modules} wallW={wallW} wallH={wallH} wallD={wallD}
           woodFinish={woodFinish} onClose={() => setShowSave(false)}
+        />
+      )}
+
+      {/* Manage Catalogue modal */}
+      {showManage && (
+        <ManageCatalogueModal
+          catalogue={catalogue}
+          onUpdate={setCatalogue}
+          onClose={() => setShowManage(false)}
         />
       )}
     </div>

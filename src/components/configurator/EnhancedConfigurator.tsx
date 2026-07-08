@@ -246,7 +246,7 @@ export function EnhancedConfigurator({
   const baseSteps: {
     key: ConfigStep;
     title: string;
-    icon: React.ComponentType<any>;
+    icon: React.ComponentType<{ className?: string }>;
     color: string;
   }[] = [
     { key: "shape", title: "Shape", icon: LayoutGrid, color: "bg-amber-500" },
@@ -1068,6 +1068,23 @@ function NumberInput({
   );
 }
 
+// Default wardrobe values used when no saved config exists
+const DEFAULT_WARDROBE: WardrobeItems = {
+  longDresses: 8,
+  shortJackets: 5,
+  suits: 4,
+  shirts: 22,
+  pants: 12,
+  tShirts: 18,
+  sweaters: 7,
+  jeans: 9,
+  underwear: 24,
+  bags: 6,
+  belts: 5,
+  jewelry: true,
+  ties: 8,
+};
+
 // ─── Wardrobe Step ─────────────────────────────────────────────────────────
 function WardrobeStep({
   config,
@@ -1076,24 +1093,8 @@ function WardrobeStep({
   config: Partial<ClosetConfiguration>;
   onUpdate: (updates: Partial<ClosetConfiguration>) => void;
 }) {
-  const defaultWardrobe: WardrobeItems = {
-    longDresses: 8,
-    shortJackets: 5,
-    suits: 4,
-    shirts: 22,
-    pants: 12,
-    tShirts: 18,
-    sweaters: 7,
-    jeans: 9,
-    underwear: 24,
-    bags: 6,
-    belts: 5,
-    jewelry: true,
-    ties: 8,
-  };
-
   const [wardrobe, setWardrobe] = useState<WardrobeItems>(
-    config.wardrobe || defaultWardrobe,
+    config.wardrobe || DEFAULT_WARDROBE,
   );
 
   const updateField = (field: keyof WardrobeItems, value: number | boolean) => {

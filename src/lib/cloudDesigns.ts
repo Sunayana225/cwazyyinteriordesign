@@ -38,7 +38,10 @@ export async function listDesigns(userEmail: string): Promise<SavedDesign[]> {
   const res = await supabaseRequest(
     `${table}?user_email=eq.${encodeURIComponent(userEmail)}&select=payload`,
   );
-  if (!res.ok) throw new Error("Failed to load designs");
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Failed to load designs (${res.status}): ${body}`);
+  }
 
   const rows = (await res.json()) as Array<{ payload: SavedDesign }>;
   return rows.map((r) => r.payload);
@@ -61,7 +64,10 @@ export async function addDesign(
     headers: { Prefer: "return=representation" },
     body: JSON.stringify([{ user_email: userEmail, design_id: design.id, payload: design }]),
   });
-  if (!res.ok) throw new Error("Failed to save design");
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Failed to save design (${res.status}): ${body}`);
+  }
   return listDesigns(userEmail);
 }
 
@@ -84,6 +90,9 @@ export async function removeDesign(
       headers: { Prefer: "return=minimal" },
     },
   );
-  if (!res.ok) throw new Error("Failed to delete design");
+  if (!res.ok) {
+    const body = await res.text().catch(() => '');
+    throw new Error(`Failed to delete design (${res.status}): ${body}`);
+  }
   return listDesigns(userEmail);
 }

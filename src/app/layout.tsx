@@ -16,7 +16,11 @@ const playfair = Playfair_Display({
 })
 
 export const metadata: Metadata = {
-  metadataBase: new URL(process.env.NEXTAUTH_URL || process.env.VERCEL_URL || 'http://localhost:3000'),
+  metadataBase: new URL(
+    process.env.NEXTAUTH_URL
+    || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : undefined)
+    || 'http://localhost:3000'
+  ),
   title: {
     default: 'Alvéo - Carved for you',
     template: '%s | Alvéo',

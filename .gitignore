@@ -32,8 +32,5 @@ yarn-error.log*
 # Testing
 coverage/
 
-# Temp files
-COMMIT_MSG.txt
-
 # CommandCode
 .commandcode/

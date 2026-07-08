@@ -1,54 +1,39 @@
-# See https://docs.github.com/en/get-started/getting-started-with-git/ignoring-files for more about ignoring files.
+# Dependencies
+node_modules/
 
-# compiled output
-dist
-tmp
-out-tsc
-*.tsbuildinfo
-.expo
-.expo-shared
+# Next.js build output
+.next/
 
-# dependencies
-node_modules
-
-# IDEs and editors
-/.idea
-.project
-.classpath
-.c9/
-*.launch
-.settings/
-*.sublime-workspace
-
-# IDE - VSCode
-.vscode/*
-!.vscode/settings.json
-!.vscode/tasks.json
-!.vscode/launch.json
-!.vscode/extensions.json
-
-# local env — never commit real secrets
+# Environment variables
 .env
 .env.local
-.env.*.local
+.env.production
+.env.development
 
-# misc
-/.sass-cache
-/connect.lock
-/coverage
-/libpeerconnection.log
-npm-debug.log
-yarn-error.log
-testem.log
-/typings
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
 
-# System Files
+# OS
 .DS_Store
 Thumbs.db
 
-.cursor/rules/nx-rules.mdc
-.github/instructions/nx.instructions.md
+# TypeScript
+tsconfig.tsbuildinfo
+*.tsbuildinfo
 
-# Replit
-.cache/
-.local/
+# Logs
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Testing
+coverage/
+
+# Temp files
+COMMIT_MSG.txt
+
+# CommandCode
+.commandcode/

@@ -1,8 +1,8 @@
 import { SavedDesign } from "@/types/closet";
 
-const memoryStore: Map<string, SavedDesign[]> =
-  (globalThis as any).__alveoDesignStore || new Map<string, SavedDesign[]>();
-(globalThis as any).__alveoDesignStore = memoryStore;
+// In-memory fallback store. Only used when Supabase is not configured.
+// All data is lost on server restart — Supabase config is required for persistence.
+const memoryStore: Map<string, SavedDesign[]> = new Map();
 
 function useSupabase() {
   return !!(

@@ -862,8 +862,9 @@ export class ClosetLayoutEngine {
     const wrd     = this.wardrobe;
 
     // Hanging demand: ~2.5" per long-hang item, ~1.8" per short-hang item → linear feet
-    const longHang  = (wrd.longDresses ?? 0) + (wrd.suits ?? 0);
-    const shortHang = (wrd.shirts ?? 0) + (wrd.shortJackets ?? 0) + (wrd.pants ?? 0);
+    // Long-hang: dresses, coats, robes only. Suits go in short-hang (per ISSUE-04).
+    const longHang  = (wrd.longDresses ?? 0);
+    const shortHang = (wrd.shirts ?? 0) + (wrd.shortJackets ?? 0) + (wrd.pants ?? 0) + (wrd.suits ?? 0);
     const hangDemand  = (longHang * 2.5 + shortHang * 1.8) / 12;
     const hangSupply  = Math.max(storage.hangingRods, 0.01);
 
@@ -915,8 +916,8 @@ export class ClosetLayoutEngine {
     if (note) recs.push(note);
 
     // Hanging inventory analysis
-    const longHang  = (wrd.longDresses ?? 0) + (wrd.suits ?? 0);
-    const shortHang = (wrd.shirts ?? 0) + (wrd.shortJackets ?? 0) + (wrd.pants ?? 0);
+    const longHang  = (wrd.longDresses ?? 0);
+    const shortHang = (wrd.shirts ?? 0) + (wrd.shortJackets ?? 0) + (wrd.pants ?? 0) + (wrd.suits ?? 0);
     const totalHang = longHang + shortHang;
     if (totalHang > 0) {
       const ftNeeded = Math.ceil((longHang * 2.5 + shortHang * 1.8) / 12);

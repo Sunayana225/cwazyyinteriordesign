@@ -46,6 +46,12 @@ const shoeSchema = z.object({
   flats: z.number().min(0),
 });
 
+const zoneOverridesSchema = z
+  .object({
+    drawerPosition: z.enum(["bottom", "middle", "top"]).optional(),
+  })
+  .optional();
+
 export const savedDesignSchema = z.object({
   id: z.string().min(1).max(200),
   name: z.string().min(1).max(200),
@@ -67,6 +73,7 @@ export const savedDesignSchema = z.object({
     roomDimensions: roomDimensionsSchema,
     wardrobe: wardrobeSchema.optional(),
     shoes: shoeSchema.optional(),
+    zoneOverrides: zoneOverridesSchema,
   }),
 });
 

@@ -261,14 +261,9 @@ export function LivePreview({
       return;
     }
     setIsComputing(true);
-    setComputePhase(0);
     setSvgContent(null);
-    const phaseTimer = setInterval(
-      () => setComputePhase((p) => (p + 1) % 4),
-      105,
-    );
-    const renderTimer = setTimeout(() => {
-      clearInterval(phaseTimer);
+    // Use requestAnimationFrame to yield to the browser before rendering
+    const renderTimer = requestAnimationFrame(() => {
       try {
         const renderer = new ClosetSVGRenderer(wallLayout, {
           showDimensions: true,
@@ -281,10 +276,9 @@ export function LivePreview({
         setSvgContent(null);
       }
       setIsComputing(false);
-    }, 420);
+    });
     return () => {
-      clearInterval(phaseTimer);
-      clearTimeout(renderTimer);
+      cancelAnimationFrame(renderTimer);
     };
   }, [wallLayout, config.userInfo]);
 

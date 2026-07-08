@@ -2,8 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { reportServerError } from "@/lib/monitoring";
 import { EventRecord, handleEventsGet, handleEventsPost } from "./handlers";
 
-const eventStore: EventRecord[] = (globalThis as any).__alveoEvents || [];
-(globalThis as any).__alveoEvents = eventStore;
+// In-memory event buffer. Events are never persisted — this is a best-effort
+// analytics buffer that may be lost on server restart or cold start.
+const eventStore: EventRecord[] = [];
 
 function getIp(request: NextRequest): string {
   return (

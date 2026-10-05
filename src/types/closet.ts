@@ -83,6 +83,7 @@ export interface ClosetZone {
   shelves?: ShelfConfig[];
   rods?: RodConfig[];
   drawers?: DrawerConfig[];
+  supports?: number[]; // divider offsets from zone.x
   contentLabel?: string;   // e.g. "15 shirts · 8 blazers" — populated by engine
 }
 
@@ -106,7 +107,7 @@ export interface ShelfConfig {
 }
 
 export interface RodConfig {
-  height: number; // inches from bottom of zone
+  height: number; // absolute inches above finished floor
   depth: number;
   length: number;
   purpose: string; // "short hang", "long hang", etc.
@@ -116,16 +117,20 @@ export interface DrawerConfig {
   height: number;
   width: number; 
   depth: number;
-  position: number; // height from bottom
+  position: number; // absolute inches above finished floor
   purpose: string; // "jewelry", "ties", "folded tees", etc.
 }
 
 export interface ClosetLayout {
+  planning?: PlanningOptions;
   closetType: ClosetType;              // what shape this closet is
   dimensions: ClosetDimensions;        // primary wall / room dimensions
   walls: ClosetWall[];                 // all fitted walls (1 for single-wall, 2-3 for walk-in)
   zones: ClosetZone[];                 // backward-compat: first (or selected) wall's zones
+  roomDimensions?: RoomDimensions;
+  capacity?: import('@/lib/design').CapacityRow[];
   aisleWarnings: string[];             // flagged if any aisle < 36"
+  inputCorrections?: { field: string; requested: number; effective: number }[];
   inputWarnings?: string[];            // values clamped by the input normaliser
   layoutWarnings: LayoutWarning[];     // soft warnings for zone positioning choices
   totalStorage: {
@@ -150,6 +155,8 @@ export interface VillaAmenities {
 }
 
 export interface ClosetConfiguration {
+  inventoryPlanning?: import('@/lib/inventoryPlanning').InventoryPlanning;
+  planning?: PlanningOptions;
   closetType?: ClosetType;           // set in step 0 — the shape question
   userInfo: UserPreferences;
   dimensions: ClosetDimensions;
@@ -159,48 +166,13 @@ export interface ClosetConfiguration {
   amenities?: VillaAmenities;        // villa mode only
   layout?: ClosetLayout;
   zoneOverrides?: ZoneOverrides;
+  drawerInteriors?: Record<string, import('@/lib/drawers').DrawerInterior>;
 }
-
-// Calculation constants based on real closet design principles
-export const CLOSET_CONSTANTS = {
-  // Hanging heights (from floor)
-  LONG_HANG_MIN: 50, // dresses, coats
-  SHORT_HANG_MIN: 32, // shirts, jackets
-  DOUBLE_HANG_UPPER: 80, // upper rod in double hang
-  DOUBLE_HANG_LOWER: 40, // lower rod in double hang
-  
-  // Shoe shelving
-  SHOE_SHELF_DEPTHS: {
-    sneakers: 12,
-    heels: 10, 
-    boots: 14,
-    flats: 10
-  },
-  SHOE_HEIGHTS: {
-    sneakers: 5,
-    heels: 6,
-    boots: 12, 
-    flats: 4
-  },
-  
-  // Standard measurements
-  STANDARD_DEPTH: 24, // standard closet depth
-  MIN_WALKWAY: 36, // minimum space to walk/dress
-  SHELF_THICKNESS: 0.75,
-  ROD_CLEARANCE: 2, // space above hanging items
-  
-  // Drawer specifications  
-  DRAWER_HEIGHTS: {
-    jewelry: 3,
-    ties: 4,
-    underwear: 6,
-    tShirts: 8,
-    sweaters: 10
-  }
-} as const;
 
 /** Input to the layout engine — explicit interface so all fields are visible */
 export interface ClosetCalculationInput {
+  inventoryPlanning?: import('@/lib/inventoryPlanning').InventoryPlanning;
+  planning?: PlanningOptions;
   closetType?: ClosetType;         // defaults to 'reach-in' if omitted
   dimensions: ClosetDimensions;
   roomDimensions?: RoomDimensions;
@@ -212,6 +184,17 @@ export interface ClosetCalculationInput {
 }
 export type CalculationResult = ClosetLayout;
 
+export interface PlanningOptions {
+  garmentLengths?:{long:number;short:number};
+  shoeHeights?:ShoeCollection;
+  supportSpan?:number;
+  clearanceTarget?:number;
+  walls?:Partial<Record<ClosetWall['wallId'],{depth?:number;priority?:'default'|'hanging'|'shoes'|'folded'|'accessories';ceilingHeight?:number;baseboard?:number;floorOffset?:number}>>;
+  door?:{wall:'front'|'back'|'left'|'right';offset:number;width:number;hinge:'left'|'right';swing:'in'|'out';check?:'envelope'|'sector'};
+  windows?:Array<{id:string;label?:string;wall:ClosetWall['wallId'];offset:number;width:number;sill:number;height:number}>;
+  obstacles?:Array<{id:string;label:string;x:number;y:number;width:number;depth:number}>;
+}
+
 // ─── Saved design entry ──────────────────────────────────────────────────────
 // Persisted in localStorage; one entry per saved closet configuration.
 export interface SavedDesign {
@@ -219,4 +202,9 @@ export interface SavedDesign {
   name: string;
   config: Partial<ClosetConfiguration>;
   savedAt: string; // ISO date string (JSON-serialisable)
+  modifiedAt?: string;
+  tags?: string[];
+  folder?:string;
+  pinnedOrder?:number;
+  revisions?:Array<{id:string;savedAt:string;note?:string;config:Partial<ClosetConfiguration>}>;
 }

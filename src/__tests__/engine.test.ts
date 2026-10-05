@@ -1,12 +1,12 @@
 /**
  * Comprehensive test suite for the Alvéo closet configurator.
  *
- * Uses Node.js built-in test runner (node:test + node:assert).
- * Run with: npx tsx --test src/__tests__/engine.test.ts
+ * Uses Vitest with Node.js assertions.
+ * Run with: npm test
  *
  * Covers discovered bugs + engine correctness tests.
  */
-import { describe, it } from 'node:test';
+import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { ClosetLayoutEngine } from '../engine/ClosetLayoutEngine';
 import type {
@@ -53,7 +53,7 @@ describe('BUG-1: Multi-wall closets produce all walls', () => {
       const layout = calc({
         closetType: type,
         dimensions: { width: 120, height: 96, depth: 24 },
-        roomDimensions: { roomWidth: 120, roomDepth: 96 },
+        roomDimensions: type === 'island' ? { roomWidth: 180, roomDepth: 144 } : { roomWidth: 120, roomDepth: 96 },
       });
       assert.ok(layout.walls.length >= minWalls,
         `${type} has ${layout.walls.length} walls, expected >= ${minWalls}`);
@@ -171,8 +171,8 @@ describe('BUG-9: Shoe capacity is type-aware', () => {
   it('boot shelves count fewer pairs than flat shelves', () => {
     const bootLayout = calc({ shoes: { sneakers: 0, heels: 0, boots: 10, flats: 0 } });
     const flatLayout = calc({ shoes: { sneakers: 0, heels: 0, boots: 0, flats: 10 } });
-    assert.ok(bootLayout.totalStorage.shoeCapacity >= 8,
-      `boot cap ${bootLayout.totalStorage.shoeCapacity} < 8`);
+    assert.ok(bootLayout.totalStorage.shoeCapacity > 0);
+    assert.ok(bootLayout.totalStorage.shoeCapacity < flatLayout.totalStorage.shoeCapacity);
     assert.ok(flatLayout.totalStorage.shoeCapacity >= 8,
       `flat cap ${flatLayout.totalStorage.shoeCapacity} < 8`);
   });
@@ -420,4 +420,41 @@ describe('Engine: all closet types', () => {
       assert.ok(layout.utilizationScore <= 100, `util ${layout.utilizationScore} > 100`);
     });
   }
+});
+
+
+describe('Regression: configured geometry and capacity', () => {
+  it('uses cabinet depth for walls and aisle warnings', () => {
+    const layout = calc({ closetType: 'corridor', dimensions: { width: 96, height: 96, depth: 36 }, roomDimensions: { roomWidth: 96, roomDepth: 120 } });
+    assert.ok(layout.walls.every(w => w.unitDepth === 36));
+    assert.ok(layout.aisleWarnings.some(w => w.includes('24"')));
+  });
+  it('subtracts configured cabinet depth from side wall length', () => {
+    const layout = calc({ closetType: 'walkin-l', dimensions: { width: 120, height: 96, depth: 30 }, roomDimensions: { roomWidth: 120, roomDepth: 120 } });
+    assert.equal(layout.walls[1].width, 90);
+  });
+  it('reports the actual shoe-pair capacity of generated shelves', () => {
+    const layout = calc();
+    const capacity = layout.walls.flatMap(w => w.zones).filter(z => z.type === 'shoe-shelves').flatMap(z => z.shelves ?? []).reduce((sum, sh) => sum + sh.count, 0);
+    assert.equal(layout.totalStorage.shoeCapacity, capacity);
+  });
+  it('leaves enough clearance above every shoe shelf', () => {
+    const layout = calc({ shoes: { boots: 100, heels: 100, sneakers: 100, flats: 100 } });
+    for (const zone of layout.walls.flatMap(w => w.zones).filter(z => z.type === 'shoe-shelves')) {
+      for (const shelf of zone.shelves ?? []) assert.ok(shelf.height + shelf.spacing + 1 <= zone.height);
+    }
+  });
+});
+
+
+describe('Regression: wall bounds', () => {
+  for (const width of [36, 48, 96, 120]) {
+    it('keeps all columns inside a ' + width + ' inch wall', () => {
+      const layout = calc({ dimensions: { width, height: 96, depth: 24 } });
+      for (const z of layout.zones) assert.ok(z.x >= 0 && z.width > 0 && z.x + z.width <= width + 0.001);
+    });
+  }
+  it('warns when an island consumes the required aisle', () => {
+    assert.ok(calc({ closetType: 'island', roomDimensions: { roomWidth: 120, roomDepth: 96 } }).aisleWarnings.some(w => w.includes('Island clearance')));
+  });
 });

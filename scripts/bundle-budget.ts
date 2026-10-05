@@ -1,0 +1,11 @@
+import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { gzipSync } from 'node:zlib';
+import { join } from 'node:path';
+const manifest='.next/server/app/configure/page_client-reference-manifest.js';
+if(!existsSync(manifest))throw new Error('Run npm run build before measuring bundles.');
+const files=Array.from(new Set(readFileSync(manifest,'utf8').match(/static\/chunks\/[^"\s]+\.js/g)??[])).filter(file=>existsSync(join('.next',file)));
+if(!files.length)throw new Error('No configurator client chunks found; review the manifest parser.');
+const gzipBytes=files.reduce((n,file)=>n+gzipSync(readFileSync(join('.next',file))).length,0),baselinePath='scripts/bundle-baseline.json';
+if(process.argv.includes('--baseline'))writeFileSync(baselinePath,JSON.stringify({gzipBytes,tolerancePercent:15,description:'Unique JavaScript chunks referenced by the configurator client manifest, gzip level default. Includes shared chunks; not a cold network trace.'},null,2));
+const baseline=JSON.parse(readFileSync(baselinePath,'utf8')),budgetBytes=Math.ceil(baseline.gzipBytes*(1+baseline.tolerancePercent/100));
+const report={generatedAt:new Date().toISOString(),chunks:files.length,gzipBytes,baselineBytes:baseline.gzipBytes,budgetBytes,passed:gzipBytes<=budgetBytes};mkdirSync('test-results',{recursive:true});writeFileSync('test-results/bundle-report.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));if(!report.passed)process.exitCode=1;

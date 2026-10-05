@@ -1,0 +1,5 @@
+{
+  "gzipBytes": 135409,
+  "tolerancePercent": 15,
+  "description": "Unique JavaScript chunks referenced by the configurator client manifest, gzip level default. Includes shared chunks; not a cold network trace."
+}

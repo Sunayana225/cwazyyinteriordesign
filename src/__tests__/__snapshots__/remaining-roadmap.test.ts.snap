@@ -1,0 +1,421 @@
+// Vitest Snapshot v1, https://vitest.dev/guide/snapshot.html
+
+exports[`has a deterministic geometry fixture for corridor 1`] = `
+[
+  {
+    "depth": 24,
+    "id": "corridor-a",
+    "width": 144,
+    "zones": [
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "long-hang",
+        "width": 65,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 2,
+        "type": "double-hang",
+        "width": 79,
+        "x": 65,
+      },
+    ],
+  },
+  {
+    "depth": 24,
+    "id": "corridor-b",
+    "width": 144,
+    "zones": [
+      {
+        "drawers": 5,
+        "rods": 0,
+        "type": "drawers",
+        "width": 96,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "double-hang",
+        "width": 96,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "shoe-shelves",
+        "width": 24,
+        "x": 96,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "top-shelves",
+        "width": 24,
+        "x": 120,
+      },
+    ],
+  },
+]
+`;
+
+exports[`has a deterministic geometry fixture for island 1`] = `
+[
+  {
+    "depth": 24,
+    "id": "back",
+    "width": 192,
+    "zones": [
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "long-hang",
+        "width": 86,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 2,
+        "type": "double-hang",
+        "width": 106,
+        "x": 86,
+      },
+    ],
+  },
+  {
+    "depth": 24,
+    "id": "left",
+    "width": 120,
+    "zones": [
+      {
+        "drawers": 5,
+        "rods": 0,
+        "type": "drawers",
+        "width": 96,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "double-hang",
+        "width": 96,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "top-shelves",
+        "width": 24,
+        "x": 96,
+      },
+    ],
+  },
+  {
+    "depth": 24,
+    "id": "right",
+    "width": 120,
+    "zones": [
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "shoe-shelves",
+        "width": 120,
+        "x": 0,
+      },
+    ],
+  },
+  {
+    "depth": 24,
+    "id": "island-unit",
+    "width": 72,
+    "zones": [
+      {
+        "drawers": 3,
+        "rods": 0,
+        "type": "drawers",
+        "width": 43,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "top-shelves",
+        "width": 29,
+        "x": 43,
+      },
+    ],
+  },
+]
+`;
+
+exports[`has a deterministic geometry fixture for reach-in 1`] = `
+[
+  {
+    "depth": 24,
+    "id": "back",
+    "width": 96,
+    "zones": [
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "long-hang",
+        "width": 24,
+        "x": 0,
+      },
+      {
+        "drawers": 5,
+        "rods": 0,
+        "type": "drawers",
+        "width": 24,
+        "x": 24,
+      },
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "double-hang",
+        "width": 24,
+        "x": 24,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "shoe-shelves",
+        "width": 24,
+        "x": 48,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "top-shelves",
+        "width": 24,
+        "x": 72,
+      },
+    ],
+  },
+]
+`;
+
+exports[`has a deterministic geometry fixture for walkin-l 1`] = `
+[
+  {
+    "depth": 24,
+    "id": "back",
+    "width": 192,
+    "zones": [
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "long-hang",
+        "width": 86,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 2,
+        "type": "double-hang",
+        "width": 106,
+        "x": 86,
+      },
+    ],
+  },
+  {
+    "depth": 24,
+    "id": "left",
+    "width": 120,
+    "zones": [
+      {
+        "drawers": 5,
+        "rods": 0,
+        "type": "drawers",
+        "width": 72,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "double-hang",
+        "width": 72,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "shoe-shelves",
+        "width": 24,
+        "x": 72,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "top-shelves",
+        "width": 24,
+        "x": 96,
+      },
+    ],
+  },
+]
+`;
+
+exports[`has a deterministic geometry fixture for walkin-single 1`] = `
+[
+  {
+    "depth": 24,
+    "id": "back",
+    "width": 192,
+    "zones": [
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "long-hang",
+        "width": 65,
+        "x": 0,
+      },
+      {
+        "drawers": 5,
+        "rods": 0,
+        "type": "drawers",
+        "width": 79,
+        "x": 65,
+      },
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "double-hang",
+        "width": 79,
+        "x": 65,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "shoe-shelves",
+        "width": 24,
+        "x": 144,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "top-shelves",
+        "width": 24,
+        "x": 168,
+      },
+    ],
+  },
+]
+`;
+
+exports[`has a deterministic geometry fixture for walkin-u 1`] = `
+[
+  {
+    "depth": 24,
+    "id": "back",
+    "width": 192,
+    "zones": [
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "long-hang",
+        "width": 86,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 2,
+        "type": "double-hang",
+        "width": 106,
+        "x": 86,
+      },
+    ],
+  },
+  {
+    "depth": 24,
+    "id": "left",
+    "width": 120,
+    "zones": [
+      {
+        "drawers": 5,
+        "rods": 0,
+        "type": "drawers",
+        "width": 96,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "double-hang",
+        "width": 96,
+        "x": 0,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "top-shelves",
+        "width": 24,
+        "x": 96,
+      },
+    ],
+  },
+  {
+    "depth": 24,
+    "id": "right",
+    "width": 120,
+    "zones": [
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "shoe-shelves",
+        "width": 120,
+        "x": 0,
+      },
+    ],
+  },
+]
+`;
+
+exports[`has a deterministic geometry fixture for wardrobe-wall 1`] = `
+[
+  {
+    "depth": 24,
+    "id": "back",
+    "width": 96,
+    "zones": [
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "long-hang",
+        "width": 24,
+        "x": 0,
+      },
+      {
+        "drawers": 5,
+        "rods": 0,
+        "type": "drawers",
+        "width": 24,
+        "x": 24,
+      },
+      {
+        "drawers": 0,
+        "rods": 1,
+        "type": "double-hang",
+        "width": 24,
+        "x": 24,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "shoe-shelves",
+        "width": 24,
+        "x": 48,
+      },
+      {
+        "drawers": 0,
+        "rods": 0,
+        "type": "top-shelves",
+        "width": 24,
+        "x": 72,
+      },
+    ],
+  },
+]
+`;

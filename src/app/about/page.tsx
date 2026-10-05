@@ -24,7 +24,7 @@ const timeline = [
   { year: 'Step 1', label: 'Tell us your space', detail: 'Dimensions, shape, constraints.' },
   { year: 'Step 2', label: 'Catalog your wardrobe', detail: 'What you own, down to shoe types.' },
   { year: 'Step 3', label: 'Choose your style', detail: 'From minimal to glam — materials, finishes.' },
-  { year: 'Step 4', label: 'Get your layout', detail: 'A precision elevation, ready to build or share.' },
+  { year: 'Step 4', label: 'Get your layout', detail: 'A labeled planning elevation to review and share.' },
 ];
 
 const fadeUp = {
@@ -37,10 +37,9 @@ const fadeUp = {
 };
 
 export default function AboutPage() {
-  useEffect(() => { document.title = 'About | Alvéo'; }, []);
 
   return (
-    <main className="min-h-screen bg-white pt-16">
+    <main id="main-content" className="min-h-screen bg-white pt-16">
       {/* Hero */}
       <section className="relative py-24 bg-cream-50 border-b border-cream-200 overflow-hidden">
         <div className="max-w-4xl mx-auto px-6 text-center relative z-10">
@@ -177,7 +176,7 @@ export default function AboutPage() {
             className="text-charcoal-400 leading-relaxed mb-10 max-w-xl mx-auto"
           >
             Alvéo runs a proprietary layout engine that balances zone allocation, rod heights, shelf spacing,
-            and drawer stacking against your actual wardrobe profile. The result is a precision SVG elevation
+            and drawer stacking against your actual wardrobe profile. The result is a dimensioned planning SVG elevation
             drawing — the same output format professional closet designers use — generated in your browser
             in milliseconds.
           </motion.p>

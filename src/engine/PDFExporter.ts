@@ -1,258 +1,97 @@
-"use client";
+'use client';
+import type { ClosetConfiguration, ClosetLayout, SavedDesign } from '@/types/closet';
+import { ClosetLayoutEngine } from './ClosetLayoutEngine';
+import { ClosetSVGRenderer } from '@/renderer/ClosetSVGRenderer';
+import { renderFloorPlan } from '@/renderer/FloorPlanRenderer';
+import { capacityReport, escapeHTML as esc, isWalkIn } from '@/lib/design';
+import { validConfig } from '@/lib/storage';
+import { drawerTargets, cellSize, interiorSVG, interiorWarnings, resolveOrganizers } from '@/lib/drawers';
+import { combinedInventory, EMPTY_INVENTORY, INVENTORY_KEYS, inventoryValue, inventoryLabel } from '@/lib/inventoryPlanning';
+import { DEFAULT_PRINT, dividerEstimate, configurationChanges } from '@/lib/printSettings';
+import type { PrintSettings } from '@/lib/printSettings';
 
-import { jsPDF } from "jspdf";
-import { svg2pdf } from "svg2pdf.js";
-import {
-  ClosetConfiguration,
-  ClosetLayout,
-  ClosetWall,
-  SavedDesign,
-  UserPreferences,
-} from "@/types/closet";
-import { ClosetSVGRenderer } from "@/renderer/ClosetSVGRenderer";
-import { ClosetLayoutEngine } from "@/engine/ClosetLayoutEngine";
-
-interface PDFExportOptions {
+export interface PDFExportOptions {
   layout: ClosetLayout;
   config: Partial<ClosetConfiguration>;
   fileName?: string;
-  clientName?: string;
-  projectRef?: string;
-  logoDataUrl?: string;
-  comments?: Array<{ author: string; text: string; createdAt: string; parentId?: string }>;
+  showDimensions?: boolean;
+  showLabels?: boolean;
+  settings?:PrintSettings;
 }
-
-function buildWallLayout(layout: ClosetLayout, wall: ClosetWall): ClosetLayout {
-  return {
-    ...layout,
-    dimensions: {
-      width: wall.width,
-      height: wall.height,
-      depth: wall.unitDepth,
-    },
-    zones: wall.zones,
-    walls: [wall],
-  };
+function renderDesign({ layout, config, fileName = 'Current design', showDimensions = true, showLabels = true, settings=DEFAULT_PRINT }: PDFExportOptions) {
+  const p = config.userInfo;
+  const options = { showDimensions, showLabels, style: p?.stylePreference ?? 'modern' as const, woodFinish: p?.woodFinish ?? 'medium' as const, hardwareFinish: p?.hardwareFinish, accentColor: p?.accentColor };
+  const drawings = layout.walls.filter(w=>!settings.walls||settings.walls.includes(w.wallId)).map(w => `<section class="drawing"><h2>${esc(w.label)} (${esc(w.elevationRef)})</h2>${new ClosetSVGRenderer({ ...layout, dimensions: { width: w.width, height: w.height, depth: w.unitDepth }, zones: w.zones, walls: [w] }, options).renderElevation()}</section>`).join('');
+  const room = layout.roomDimensions;
+  const floor = settings.floorPlan&&isWalkIn(layout.closetType) && room ? `<section class="drawing"><h2>Floor plan</h2>${renderFloorPlan(layout, { ...room, unitDepth: layout.dimensions.depth })}<p>${layout.planning?.door?'Configured door; verify swing clearance on site.':'Door location and 30-inch width are illustrative; confirm on site.'}</p></section>` : '';
+  const capacity = layout.capacity ?? (validConfig(config) ? capacityReport(config, layout.walls) : []);
+  const table = (rows: string[][], header=true) => `<table>${header&&rows.length?`<thead><tr>${rows[0].map(v=>`<th>${esc(v)}</th>`).join('')}</tr></thead>`:''}<tbody>${rows.slice(header?1:0).map(row => `<tr>${row.map(value => `<td>${esc(value)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const warnings = [...(layout.inputWarnings ?? []), ...layout.aisleWarnings, ...layout.layoutWarnings.map(w => w.message + ': ' + w.designerNote)];
+  const specs = [
+    ['Closet type', layout.closetType], ['Height', layout.dimensions.height + ' in'], ['Cabinet depth', layout.dimensions.depth + ' in'],
+    ...(isWalkIn(layout.closetType) && room ? [['Room width', room.roomWidth + ' in'], ['Room depth', room.roomDepth + ' in']] : [['Wall width', layout.dimensions.width + ' in']]),
+    ['Total zones', String(layout.walls.reduce((n,w) => n+w.zones.length,0))],
+    ['Style / finish', (p?.stylePreference ?? 'modern') + ' / ' + (p?.woodFinish ?? 'medium')],
+    ['Hardware / accent', (p?.hardwareFinish ?? 'wood tone') + ' / ' + (p?.accentColor ?? 'none')],
+    ['Drawer preference', p?.drawerPreference ?? 'mixed'],
+  ];
+  const targets=drawerTargets(layout),plans=resolveOrganizers(config.drawerInteriors??{},targets);
+  const organizers=(settings.organizers?targets:[]).filter(d=>plans[d.id]).map(d=>{
+    const plan=plans[d.id];
+    return `<section class="drawing organizer"><h2>Drawer organizer: ${esc(plan.name)}</h2>${settings.notes?`<p>${esc(d.label)} · ${esc(plan.material)} dividers · ${esc(plan.liner)} liner · ${plan.thickness} in dividers · ${plan.clearance} in edge allowance</p>`:''}${interiorSVG(plan,d.drawer,settings.notes,settings.notes)}<p>Top view; front at bottom. ${plan.measured?'Measured':'Estimated'} interior dimensions, not to scale.</p></section><section class="schedule"><h2>Organizer schedule: ${esc(plan.name)}</h2>${table([['Compartment','Contents','Width × depth (in)','Planned items',...(settings.notes?['Notes']:[])],...plan.cells.map(c=>{const s=cellSize(c,d.drawer,plan);return [c.label,c.category,`${s.width.toFixed(2)} × ${s.depth.toFixed(2)}`,String(c.quantity),...(settings.notes?[c.notes??'']:[])];})])}${settings.notes?`<p>${esc(plan.notes)}</p>`:''}${interiorWarnings(plan,d.drawer).map(w=>`<p>${esc(w)}</p>`).join('')}</section>`;
+  }).join('');
+  const materials=settings.materials?`<section class="schedule"><h2>Estimated organizer materials</h2><p>Planning worksheet only, not a fabrication cut list. Centerline lengths exclude joinery, kerf, waste and intersections. Verify measured interiors and divider height separately.</p>${table([['Organizer','Divider material','Thickness (in)','Continuous segments','Total centerline length (in)','Liner area (sq ft)'],...targets.filter(d=>plans[d.id]).map(d=>{const p=plans[d.id],estimate=dividerEstimate(p,d.drawer);return[p.name,p.material,p.dividerThickness?`H ${p.dividerThickness.horizontal} / V ${p.dividerThickness.vertical}`:String(p.thickness),String(estimate.segments.length),estimate.totalLength.toFixed(2),estimate.linerArea.toFixed(2)];})])}</section>`:'';
+  const roomSchedule=settings.roomSchedule?`<section class="schedule"><h2>Room openings and obstacle schedule</h2>${table([['Object','Location','Measurements (in)'],...(layout.planning?.windows??[]).map((w,i)=>[`Window ${i+1}: ${w.label??''}`,w.wall,`Offset ${w.offset}; width ${w.width}; sill ${w.sill}; height ${w.height}`]),...(layout.planning?.obstacles??[]).map((o,i)=>[`Obstacle ${i+1}: ${o.label}`,`X ${o.x}; Y ${o.y}`,`${o.width} × ${o.depth}`]),...(layout.planning?.door?[[`Door (${layout.planning.door.swing})`,layout.planning.door.wall,`Offset ${layout.planning.door.offset}; width ${layout.planning.door.width}; ${layout.planning.door.hinge} hinge`]]:[])])}</section>`:'';
+  const members=config.inventoryPlanning?.members??[];
+  const household=settings.household?`<section class="schedule"><h2>Household and season totals</h2><p>Stored profile totals; these may differ from the active inventory.</p>${table([['Profile','Season','Category','Count'],...members.flatMap(m=>INVENTORY_KEYS.map(k=>[m.name,m.season,inventoryLabel(k),String(inventoryValue(m.inventory,k))])),...(['everyday','seasonal'] as const).flatMap(season=>{const total=combinedInventory(members.filter(m=>m.season===season));return INVENTORY_KEYS.map(k=>['Season total',season,inventoryLabel(k),String(inventoryValue(total,k))]);})])}</section>`:'';
+  const reserveNotes=settings.reserveNotes?`<section class="schedule"><h2>Reserve percentages and inventory notes</h2>${table([['Category','Reserve (%)'],...INVENTORY_KEYS.filter(k=>(config.inventoryPlanning?.reserve?.[k]??0)>0).map(k=>[inventoryLabel(k),String(config.inventoryPlanning?.reserve?.[k])])])}${Object.entries(config.inventoryPlanning?.notes??{}).map(([k,v])=>`<p>${esc(k)}: ${esc(v??'')}</p>`).join('')}</section>`:'';
+  const changes=settings.comparison?`<section class="schedule"><h2>Changes from ${esc(settings.comparisonName??'reference design')}</h2>${table([['Dimension or quantity','Before','Current'],...configurationChanges(settings.comparison,config)])}</section>`:'';
+  return `<article><h1>${esc(settings.project||fileName)}</h1><p>${esc(fileName)} · ${esc(settings.contact)}</p><p>Alvéo · ${esc(new Date().toLocaleDateString())} · Planning layout</p>
+    <h2>Space specifications — effective dimensions</h2>${table(specs,false)}
+    <h2>Capacity and fit</h2><p>Utilization: ${layout.utilizationScore}%. A high utilization score does not mean every item fits.</p>
+    ${table([['Storage', 'Required', 'Provided', 'Shortfall'], ...capacity.map(r => [r.label, r.required.toFixed(1) + ' ' + r.unit, r.available.toFixed(1), Math.max(0,r.required-r.available).toFixed(1)])])}
+    <h2>Warnings</h2>${warnings.length ? `<ul>${warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : '<p>No calculated warnings.</p>'}
+    <h2>Recommendations</h2><ul>${layout.recommendations.map(r => `<li>${esc(r)}</li>`).join('')}</ul>
+    <h2>Inventory</h2>${table(Object.entries({ ...config.wardrobe, ...config.shoes }).map(([k,v]) => [k.replace(/([A-Z])/g, ' $1'), typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)]),false)}
+    ${floor}${drawings}${organizers}${materials}${roomSchedule}${household}${reserveNotes}${changes}<footer>Planning purposes only. Not to scale. Verify dimensions, support, door clearance, and installation requirements before construction.</footer></article>`;
 }
-
-function getRendererOptions(config: Partial<ClosetConfiguration>) {
-  return {
-    showDimensions: true,
-    showLabels: true,
-    style: (config.userInfo?.stylePreference ?? "modern") as UserPreferences["stylePreference"],
-    woodFinish: (config.userInfo?.woodFinish ?? "medium") as UserPreferences["woodFinish"],
-  };
+export function buildPrintDocument(designs: PDFExportOptions[]): string {
+  const settings=designs[0]?.settings??DEFAULT_PRINT,paper=settings.paper==='Letter'?'Letter':'A4',orientation=settings.orientation==='landscape'?'landscape':'portrait';
+  return `<!doctype html><html lang="en"><head><meta charset="utf-8"><title>${esc(designs.length === 1 ? designs[0].fileName ?? 'Alvéo current design' : 'Alvéo designs')}</title><style>
+    *{box-sizing:border-box}body{font-family:Arial,sans-serif;color:#242424;margin:24px auto;max-width:1000px;padding:16px}h1{font-size:26px}h2{font-size:18px;margin-top:24px}p,li,td,th{font-size:12px;line-height:1.5}td,th{padding:6px;border-bottom:1px solid #bbb}table{width:100%;border-collapse:collapse}thead{display:table-header-group}th{text-align:left}td,th{overflow-wrap:anywhere}svg{width:100%;max-height:220mm;height:auto}footer{font-size:11px;margin-top:24px}article+article{break-before:page}.drawing{break-before:page;break-inside:avoid}.drawing h2{margin-top:0}@page{size:A4 portrait;margin:15mm}@media print{body{margin:0;padding:0}a{color:inherit}}
+    .organizer svg{max-height:170mm}tr{break-inside:avoid}.schedule{break-before:page}.print-revision{font-size:9px;color:#444}@page{size:${paper} ${orientation}}${orientation==='landscape'?'svg,.organizer svg{max-height:130mm}':''}@media print{.print-revision{position:fixed;bottom:-10mm;left:0}}
+    </style></head><body><div class="print-revision">Alvéo plan v1 · ${esc(new Date().toISOString())} · NOT TO SCALE</div>${designs.map(renderDesign).join('')}</body></html>`;
 }
-
-function collectWallSvgs(
-  layout: ClosetLayout,
-  config: Partial<ClosetConfiguration>,
-): Array<{ wallLabel: string; elevationRef: string; svg: string }> {
-  const opts = getRendererOptions(config);
-  const walls = layout.walls?.length
-    ? layout.walls
-    : [
-        {
-          wallId: "back",
-          label: "BACK WALL",
-          elevationRef: "EL-A",
-          width: layout.dimensions.width,
-          height: layout.dimensions.height,
-          unitDepth: layout.dimensions.depth,
-          zones: layout.zones,
-        } as ClosetWall,
-      ];
-
-  return walls.map((wall) => {
-    const wallLayout = buildWallLayout(layout, wall);
-    const renderer = new ClosetSVGRenderer(wallLayout, opts);
-    return {
-      wallLabel: wall.label,
-      elevationRef: wall.elevationRef,
-      svg: renderer.renderElevation(),
-    };
-  });
-}
-
-async function drawSvgToPdf(
-  doc: jsPDF,
-  svgMarkup: string,
-  x: number,
-  y: number,
-  maxWidth: number,
-  maxHeight: number,
-): Promise<void> {
-  const parser = new DOMParser();
-  const xml = parser.parseFromString(svgMarkup, "image/svg+xml");
-  const svgEl = xml.documentElement as unknown as SVGSVGElement;
-
-  const viewBox = svgEl.viewBox.baseVal;
-  const sourceW = viewBox?.width || Number(svgEl.getAttribute("width") ?? 800);
-  const sourceH = viewBox?.height || Number(svgEl.getAttribute("height") ?? 600);
-  const scale = Math.min(maxWidth / sourceW, maxHeight / sourceH);
-
-  await svg2pdf(svgEl, doc, {
-    x,
-    y,
-    width: sourceW * scale,
-    height: sourceH * scale,
-  });
-}
-
-function sanitizeFileName(raw: string): string {
-  const compact = raw.trim().toLowerCase().replace(/\s+/g, "-");
-  return compact.replace(/[^a-z0-9\-_.]/g, "").slice(0, 80) || "alveo-closet-layout";
-}
-
-export async function exportLayoutToPDF({
-  layout,
-  config,
-  fileName = "alveo-closet-layout",
-  clientName,
-  projectRef,
-  logoDataUrl,
-  comments,
-}: PDFExportOptions): Promise<void> {
-  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-  const wallSvgs = collectWallSvgs(layout, config);
-
-  for (let i = 0; i < wallSvgs.length; i++) {
-    if (i > 0) doc.addPage("a4", "portrait");
-
-    const pageW = doc.internal.pageSize.getWidth();
-    const pageH = doc.internal.pageSize.getHeight();
-
-    const top = 40;
-    doc.setFont("helvetica", "bold");
-    doc.setFontSize(14);
-    doc.text("ALVEO CLOSET ELEVATION", 36, top);
-
-    doc.setFont("helvetica", "normal");
-    doc.setFontSize(10);
-    doc.text(
-      `${wallSvgs[i].elevationRef} · ${wallSvgs[i].wallLabel}`,
-      36,
-      top + 16,
-    );
-
-    const details: string[] = [];
-    if (clientName) details.push(`Client: ${clientName}`);
-    if (projectRef) details.push(`Project: ${projectRef}`);
-    details.push(new Date().toLocaleDateString());
-    doc.text(details.join("  |  "), 36, top + 30);
-
-    if (logoDataUrl) {
+async function printHTML(html: string) {
+  const popup = window.open('', '_blank');
+  if (!popup) throw new Error('Print window was blocked. Allow pop-ups and try again.');
+  await new Promise<void>((resolve, reject) => {
+    let started = false;
+    const timeout = window.setTimeout(() => { popup.close(); reject(new Error('Print preparation timed out. Please try again.')); }, 15000);
+    popup.document.open();
+    popup.onload = async () => {
+      if (started) return;
+      started = true;
       try {
-        const format = logoDataUrl.startsWith("data:image/jpeg")
-          ? "JPEG"
-          : "PNG";
-        doc.addImage(logoDataUrl, format, pageW - 116, 24, 80, 28);
-      } catch {
-        // ignore malformed image data
-      }
-    }
-
-    const commentArea = comments?.length ? 86 : 0;
-    await drawSvgToPdf(
-      doc,
-      wallSvgs[i].svg,
-      36,
-      86,
-      pageW - 72,
-      pageH - 132 - commentArea,
-    );
-
-    if (comments?.length) {
-      doc.setFontSize(9);
-      doc.setTextColor(90, 90, 90);
-      doc.text('Comments', 36, pageH - 84);
-
-      const visible = comments.slice(0, 3);
-      visible.forEach((comment, idx) => {
-        const prefix = comment.parentId ? '->' : '-';
-        const line = `${prefix} ${comment.author}: ${comment.text}`;
-        doc.text(line.slice(0, 140), 36, pageH - 68 + idx * 13);
-      });
-      doc.setTextColor(0, 0, 0);
-    }
-  }
-
-  doc.save(`${sanitizeFileName(fileName)}.pdf`);
+        if (popup.document.fonts) await popup.document.fonts.ready;
+        if (popup.closed) throw new Error('The print window was closed before printing.');
+        window.clearTimeout(timeout);
+        popup.focus(); popup.print(); resolve();
+      } catch (error) { reject(error); }
+      finally { window.clearTimeout(timeout); }
+    };
+    popup.document.write(html); popup.document.close();
+  });
+}
+export async function exportLayoutToPDF(options: PDFExportOptions) {
+  await printHTML(buildPrintDocument([options]));
+}
+export async function exportMultipleDesignsToPDF(designs: SavedDesign[]) {
+  if (!designs.length) throw new Error('Select at least one saved design.');
+  const invalid = designs.filter(d => !validConfig(d.config));
+  if (invalid.length) throw new Error('Cannot export invalid designs: ' + invalid.map(d => d.name).join(', '));
+  const prepared = designs.map(d => ({ config: d.config, fileName: d.name, layout: new ClosetLayoutEngine(d.config as ClosetConfiguration).calculateLayout() }));
+  await printHTML(buildPrintDocument(prepared));
 }
 
-export async function exportMultipleDesignsToPDF(
-  designs: SavedDesign[],
-  options?: {
-    commentsByDesignId?: Record<
-      string,
-      Array<{ author: string; text: string; createdAt: string; parentId?: string }>
-    >;
-  },
-): Promise<void> {
-  if (!designs.length) return;
 
-  const doc = new jsPDF({ orientation: "portrait", unit: "pt", format: "a4" });
-  let pageIndex = 0;
-
-  for (const design of designs) {
-    const c = design.config;
-    if (!c.dimensions || !c.wardrobe || !c.shoes || !c.userInfo) continue;
-
-    let layout: ClosetLayout;
-    try {
-      const engine = new ClosetLayoutEngine({
-        closetType: c.closetType,
-        dimensions: c.dimensions,
-        roomDimensions: c.roomDimensions,
-        wardrobe: c.wardrobe,
-        shoes: c.shoes,
-        userInfo: c.userInfo,
-        amenities: c.amenities,
-        zoneOverrides: c.zoneOverrides,
-      });
-      layout = engine.calculateLayout();
-    } catch {
-      continue;
-    }
-
-    const walls = collectWallSvgs(layout, c);
-    for (const wall of walls) {
-      if (pageIndex > 0) doc.addPage("a4", "portrait");
-      pageIndex += 1;
-
-      const pageW = doc.internal.pageSize.getWidth();
-      const pageH = doc.internal.pageSize.getHeight();
-
-      doc.setFont("helvetica", "bold");
-      doc.setFontSize(13);
-      doc.text(design.name, 36, 40);
-
-      doc.setFont("helvetica", "normal");
-      doc.setFontSize(10);
-      doc.text(`${wall.elevationRef} · ${wall.wallLabel}`, 36, 56);
-      doc.text(new Date(design.savedAt).toLocaleDateString(), 36, 70);
-
-      const comments = options?.commentsByDesignId?.[design.id] ?? [];
-      const commentArea = comments.length ? 86 : 0;
-      await drawSvgToPdf(doc, wall.svg, 36, 88, pageW - 72, pageH - 132 - commentArea);
-
-      if (comments.length) {
-        doc.setFont("helvetica", "normal");
-        doc.setFontSize(9);
-        doc.setTextColor(90, 90, 90);
-        doc.text("Comments", 36, pageH - 84);
-
-        comments.slice(0, 3).forEach((comment, idx) => {
-          const prefix = comment.parentId ? "->" : "-";
-          const line = `${prefix} ${comment.author}: ${comment.text}`;
-          doc.text(line.slice(0, 140), 36, pageH - 68 + idx * 13);
-        });
-
-        doc.setTextColor(0, 0, 0);
-      }
-    }
-  }
-
-  if (pageIndex === 0) return;
-  doc.save(`alveo-saved-designs-${new Date().toISOString().slice(0, 10)}.pdf`);
-}

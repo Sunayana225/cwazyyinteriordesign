@@ -4,39 +4,41 @@
   "description": "Custom closet layouts designed around your wardrobe, your life, your space",
   "private": true,
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
+    "dev": "next dev --webpack",
+    "build": "next build --webpack",
     "start": "next start",
-    "lint": "next lint",
-    "type-check": "tsc --noEmit",
-    "test": "tsx --test src/__tests__/*.test.ts"
+    "lint": "eslint src tests",
+    "type-check": "next typegen && tsc --noEmit",
+    "test": "vitest run",
+    "test:browser": "playwright test",
+    "test:visual": "playwright test --config=playwright.visual.config.ts",
+    "benchmark": "tsx scripts/benchmark.ts",
+    "test:production": "playwright test --config=playwright.production.config.ts",
+    "check:bundle": "tsx scripts/bundle-budget.ts"
   },
   "dependencies": {
     "clsx": "^2.1.0",
     "framer-motion": "^11.0.0",
-    "jspdf": "^2.5.1",
-    "lucide-react": "^0.344.0",
-    "lz-string": "^1.5.0",
-    "next": "^14.1.0",
-    "next-auth": "^4.24.13",
-    "next-themes": "^0.4.6",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "svg2pdf.js": "^2.2.3",
+    "lucide-react": "^1.47.0",
+    "next": "^16.3.5",
+    "react": "^19.3.0",
+    "react-dom": "^19.3.0",
     "tailwindcss": "^3.4.0",
-    "typescript": "^5.3.0",
-    "zod": "^4.3.6"
+    "typescript": "^5.3.0"
   },
   "devDependencies": {
-    "@types/node": "^20.11.0",
-    "@types/react": "^18.2.0",
-    "@types/react-dom": "^18.2.0",
+    "@axe-core/playwright": "^4.13.0",
+    "@playwright/test": "^1.63.0",
+    "@types/node": "^22.20.3",
+    "@types/react": "^19.3.0",
+    "@types/react-dom": "^19.3.0",
     "autoprefixer": "^10.4.0",
-    "eslint": "^8.56.0",
-    "eslint-config-next": "^14.1.0",
+    "eslint": "^9.39.5",
+    "eslint-config-next": "^16.3.5",
     "postcss": "^8.4.0",
-    "tsx": "^4.21.0",
-    "vitest": "^2.1.0"
+    "tsx": "^4.23.13",
+    "vite": "^8.3.0",
+    "vitest": "^5.0.1"
   },
   "keywords": [
     "closet",
@@ -45,5 +47,8 @@
     "storage",
     "wardrobe",
     "layout-generator"
-  ]
+  ],
+  "engines": {
+    "node": ">=22.12.0"
+  }
 }

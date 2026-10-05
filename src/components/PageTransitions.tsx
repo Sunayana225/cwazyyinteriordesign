@@ -1,13 +1,8 @@
-"use client";
+'use client';
 
-import {
-  motion,
-  AnimatePresence,
-  useScroll,
-  useTransform,
-} from "framer-motion";
-import { usePathname } from "next/navigation";
-import { ReactNode, useRef } from "react";
+import { motion, AnimatePresence } from 'framer-motion';
+import { usePathname } from 'next/navigation';
+import { ReactNode } from 'react';
 
 interface PageTransitionProps {
   children: ReactNode;
@@ -28,7 +23,7 @@ export function PageTransition({ children }: PageTransitionProps) {
         exit={{ opacity: 0, y: -20 }}
         transition={{
           duration: 0.3,
-          ease: [0.25, 0.46, 0.45, 0.94],
+          ease: [0.25, 0.46, 0.45, 0.94]
         }}
       >
         {children}
@@ -40,13 +35,13 @@ export function PageTransition({ children }: PageTransitionProps) {
 /**
  * FadeIn - Simple fade in animation wrapper
  */
-export function FadeIn({
-  children,
+export function FadeIn({ 
+  children, 
   delay = 0,
   duration = 0.5,
-  className = "",
-}: {
-  children: ReactNode;
+  className = ''
+}: { 
+  children: ReactNode; 
   delay?: number;
   duration?: number;
   className?: string;
@@ -55,7 +50,7 @@ export function FadeIn({
     <motion.div
       initial={{ opacity: 0, y: 16 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ duration, delay, ease: "easeOut" }}
+      transition={{ duration, delay, ease: 'easeOut' }}
       className={className}
     >
       {children}
@@ -66,14 +61,14 @@ export function FadeIn({
 /**
  * SlideIn - Slide in from specified direction
  */
-export function SlideIn({
-  children,
-  direction = "left",
+export function SlideIn({ 
+  children, 
+  direction = 'left',
   delay = 0,
-  className = "",
-}: {
-  children: ReactNode;
-  direction?: "left" | "right" | "up" | "down";
+  className = ''
+}: { 
+  children: ReactNode; 
+  direction?: 'left' | 'right' | 'up' | 'down';
   delay?: number;
   className?: string;
 }) {
@@ -99,12 +94,12 @@ export function SlideIn({
 /**
  * StaggerContainer - Stagger children animations
  */
-export function StaggerContainer({
-  children,
+export function StaggerContainer({ 
+  children, 
   staggerDelay = 0.1,
-  className = "",
-}: {
-  children: ReactNode;
+  className = ''
+}: { 
+  children: ReactNode; 
   staggerDelay?: number;
   className?: string;
 }) {
@@ -116,9 +111,9 @@ export function StaggerContainer({
         hidden: {},
         visible: {
           transition: {
-            staggerChildren: staggerDelay,
-          },
-        },
+            staggerChildren: staggerDelay
+          }
+        }
       }}
       className={className}
     >
@@ -130,18 +125,18 @@ export function StaggerContainer({
 /**
  * StaggerItem - Individual item in stagger container
  */
-export function StaggerItem({
-  children,
-  className = "",
-}: {
-  children: ReactNode;
+export function StaggerItem({ 
+  children, 
+  className = ''
+}: { 
+  children: ReactNode; 
   className?: string;
 }) {
   return (
     <motion.div
       variants={{
         hidden: { opacity: 0, y: 20 },
-        visible: { opacity: 1, y: 0, transition: { duration: 0.4 } },
+        visible: { opacity: 1, y: 0, transition: { duration: 0.4 } }
       }}
       className={className}
     >
@@ -153,7 +148,7 @@ export function StaggerItem({
 /**
  * PulseGlow - Subtle pulsing glow effect
  */
-export function PulseGlow({ className = "" }: { className?: string }) {
+export function PulseGlow({ className = '' }: { className?: string }) {
   return (
     <motion.div
       className={`absolute rounded-full blur-3xl ${className}`}
@@ -164,7 +159,7 @@ export function PulseGlow({ className = "" }: { className?: string }) {
       transition={{
         duration: 4,
         repeat: Infinity,
-        ease: "easeInOut",
+        ease: 'easeInOut'
       }}
     />
   );
@@ -173,13 +168,13 @@ export function PulseGlow({ className = "" }: { className?: string }) {
 /**
  * FloatingElement - Gentle floating animation
  */
-export function FloatingElement({
-  children,
+export function FloatingElement({ 
+  children, 
   amplitude = 10,
   duration = 3,
-  className = "",
-}: {
-  children: ReactNode;
+  className = ''
+}: { 
+  children: ReactNode; 
   amplitude?: number;
   duration?: number;
   className?: string;
@@ -192,7 +187,7 @@ export function FloatingElement({
       transition={{
         duration,
         repeat: Infinity,
-        ease: "easeInOut",
+        ease: 'easeInOut'
       }}
       className={className}
     >
@@ -204,12 +199,12 @@ export function FloatingElement({
 /**
  * HoverScale - Scale on hover with spring
  */
-export function HoverScale({
-  children,
+export function HoverScale({ 
+  children, 
   scale = 1.02,
-  className = "",
-}: {
-  children: ReactNode;
+  className = ''
+}: { 
+  children: ReactNode; 
   scale?: number;
   className?: string;
 }) {
@@ -217,7 +212,7 @@ export function HoverScale({
     <motion.div
       whileHover={{ scale }}
       whileTap={{ scale: 0.98 }}
-      transition={{ type: "spring", stiffness: 400, damping: 17 }}
+      transition={{ type: 'spring', stiffness: 400, damping: 17 }}
       className={className}
     >
       {children}
@@ -228,14 +223,14 @@ export function HoverScale({
 /**
  * DrawLine - SVG line that draws itself
  */
-export function DrawLine({
+export function DrawLine({ 
   d,
-  stroke = "#1a1512",
+  stroke = '#1a1512',
   strokeWidth = 2,
   duration = 1,
   delay = 0,
-  className = "",
-}: {
+  className = ''
+}: { 
   d: string;
   stroke?: string;
   strokeWidth?: number;
@@ -251,7 +246,7 @@ export function DrawLine({
       strokeWidth={strokeWidth}
       initial={{ pathLength: 0 }}
       animate={{ pathLength: 1 }}
-      transition={{ duration, delay, ease: "easeInOut" }}
+      transition={{ duration, delay, ease: 'easeInOut' }}
       className={className}
     />
   );
@@ -260,12 +255,12 @@ export function DrawLine({
 /**
  * RevealOnScroll - Reveal element when scrolled into view
  */
-export function RevealOnScroll({
-  children,
+export function RevealOnScroll({ 
+  children, 
   threshold = 0.2,
-  className = "",
-}: {
-  children: ReactNode;
+  className = ''
+}: { 
+  children: ReactNode; 
   threshold?: number;
   className?: string;
 }) {
@@ -285,28 +280,23 @@ export function RevealOnScroll({
 /**
  * ParallaxScroll - Parallax effect on scroll
  */
-export function ParallaxScroll({
-  children,
+export function ParallaxScroll({ 
+  children, 
   speed = 0.5,
-  className = "",
-}: {
-  children: ReactNode;
+  className = ''
+}: { 
+  children: ReactNode; 
   speed?: number;
   className?: string;
 }) {
-  const ref = useRef<HTMLDivElement>(null);
-  const { scrollYProgress } = useScroll({
-    target: ref,
-    offset: ["start end", "end start"],
-  });
-  const y = useTransform(
-    scrollYProgress,
-    [0, 1],
-    [`${-speed * 60}px`, `${speed * 60}px`],
-  );
-
   return (
-    <motion.div ref={ref} style={{ y }} className={className}>
+    <motion.div
+      initial={{ y: 0 }}
+      whileInView={{ y: 0 }}
+      viewport={{ once: false }}
+      style={{ willChange: 'transform' }}
+      className={className}
+    >
       {children}
     </motion.div>
   );
@@ -315,19 +305,19 @@ export function ParallaxScroll({
 /**
  * MorphingShape - Background shape that morphs between states
  */
-export function MorphingShape({ className = "" }: { className?: string }) {
+export function MorphingShape({ className = '' }: { className?: string }) {
   return (
     <motion.div
       className={`absolute bg-gradient-to-br from-taupe-200/30 to-cream-200/30 blur-3xl ${className}`}
       animate={{
         scale: [1, 1.2, 1],
         rotate: [0, 90, 0],
-        borderRadius: ["30% 70% 70% 30%", "50% 50% 50% 50%", "30% 70% 70% 30%"],
+        borderRadius: ['30% 70% 70% 30%', '50% 50% 50% 50%', '30% 70% 70% 30%'],
       }}
       transition={{
         duration: 10,
         repeat: Infinity,
-        ease: "easeInOut",
+        ease: 'easeInOut'
       }}
     />
   );

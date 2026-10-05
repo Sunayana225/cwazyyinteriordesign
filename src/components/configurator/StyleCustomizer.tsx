@@ -1,4 +1,6 @@
 'use client';
+import { STYLE_OPTIONS, WOOD_OPTIONS, HARDWARE } from '@/lib/design';
+
 
 import React, { useState } from 'react';
 import { ClosetConfiguration, UserPreferences } from '@/types/closet';
@@ -22,30 +24,20 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
     });
   };
 
-  const woodFinishes = [
-    { id: 'white', name: 'White Painted', description: 'Clean, crisp white finish', color: '#ffffff' },
-    { id: 'light', name: 'Light Oak', description: 'Natural light wood grain', color: '#f5f1eb' },
-    { id: 'medium', name: 'Medium Walnut', description: 'Rich medium brown tone', color: '#d4c2a8' },
-    { id: 'dark', name: 'Dark Espresso', description: 'Deep, sophisticated dark', color: '#8d6e63' }
-  ];
+  const woodFinishes = WOOD_OPTIONS;
 
-  const stylePreferences = [
-    { id: 'minimal', name: 'Minimal', description: 'Clean lines, hidden storage', icon: '⬜' },
-    { id: 'modern', name: 'Modern', description: 'Sleek contemporary design', icon: '🔳' },
-    { id: 'glam', name: 'Glam', description: 'Luxurious with metallic accents', icon: '✨' },
-    { id: 'rustic', name: 'Rustic', description: 'Natural, organic feel', icon: '🌿' },
-    { id: 'luxury', name: 'Luxury', description: 'High-end hotel style', icon: '👑' }
-  ];
+  const stylePreferences = STYLE_OPTIONS;
 
   const hardwareOptions = [
-    { id: 'chrome', name: 'Chrome', description: 'Polished modern chrome', color: '#c0c0c0' },
-    { id: 'brass', name: 'Brass', description: 'Warm antique brass', color: '#b5651d' },
-    { id: 'black', name: 'Matte Black', description: 'Contemporary black finish', color: '#2e2e2e' },
-    { id: 'gold', name: 'Brushed Gold', description: 'Luxurious gold tone', color: '#d4af37' }
+    { id: 'chrome', name: 'Chrome', description: 'Polished modern chrome', color: HARDWARE.chrome },
+    { id: 'brass', name: 'Brass', description: 'Warm antique brass', color: HARDWARE.brass },
+    { id: 'black', name: 'Matte Black', description: 'Contemporary black finish', color: HARDWARE.black },
+    { id: 'gold', name: 'Brushed Gold', description: 'Luxurious gold tone', color: HARDWARE.gold }
   ];
 
   const renderMaterialsTab = () => (
     <div className="space-y-6">
+      {config.userInfo?.stylePreference==='minimal'&&<p className="text-sm">Minimal style uses concealed handles. Your hardware choice is saved and becomes visible with another style.</p>}
       {/* Wood Finish Selection */}
       <div>
         <h4 className="font-medium text-charcoal-600 mb-4">Wood Finish</h4>
@@ -55,7 +47,7 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
               key={finish.id}
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
-              onClick={() => updateStyle('woodFinish', finish.id)}
+              aria-pressed={config.userInfo?.woodFinish === finish.id} onClick={() => updateStyle('woodFinish', finish.id)}
               className={`
                 p-4 rounded-lg border-2 text-left transition-all
                 ${config.userInfo?.woodFinish === finish.id 
@@ -83,7 +75,7 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
             <motion.button
               key={hardware.id}
               whileHover={{ scale: 1.02 }}
-              onClick={() => updateStyle('hardwareFinish', hardware.id)}
+              aria-pressed={config.userInfo?.hardwareFinish === hardware.id} onClick={() => updateStyle('hardwareFinish', hardware.id)}
               className={`
                 p-3 rounded-lg border-2 text-left transition-all
                 ${config.userInfo?.hardwareFinish === hardware.id 
@@ -119,7 +111,7 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
             <motion.button
               key={style.id}
               whileHover={{ scale: 1.01 }}
-              onClick={() => updateStyle('stylePreference', style.id)}
+              aria-pressed={config.userInfo?.stylePreference === style.id} onClick={() => updateStyle('stylePreference', style.id)}
               className={`
                 w-full p-4 rounded-lg border-2 text-left transition-all
                 ${config.userInfo?.stylePreference === style.id 
@@ -167,7 +159,7 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
                 }
               `}
               style={{ backgroundColor: color.color }}
-              title={color.name}
+              title={color.name} aria-label={color.name} aria-pressed={config.userInfo?.accentColor === color.color}
             />
           ))}
         </div>
@@ -189,7 +181,7 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
             <motion.button
               key={option.id}
               whileHover={{ scale: 1.01 }}
-              onClick={() => updateStyle('drawerPreference', option.id)}
+              aria-pressed={config.userInfo?.drawerPreference === option.id} onClick={() => updateStyle('drawerPreference', option.id)}
               className={`
                 w-full p-4 rounded-lg border-2 text-left transition-all
                 ${config.userInfo?.drawerPreference === option.id 
@@ -208,7 +200,7 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
       {/* Priority Items */}
       <div>
         <h4 className="font-medium text-charcoal-600 mb-4">Storage Priorities</h4>
-        <p className="text-sm text-charcoal-400 mb-3">What's most important to you?</p>
+        <p className="text-sm text-charcoal-400 mb-3">What&apos;s most important to you?</p>
         <div className="space-y-2">
           {[
             { id: 'shoes', name: 'Shoe Storage', icon: '👠' },
@@ -228,7 +220,7 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
               >
                 <input
                   type="checkbox"
-                  checked={isSelected}
+                  checked={!!isSelected}
                   onChange={(e) => {
                     const current = config.userInfo?.priorityItems || [];
                     const updated = e.target.checked 
@@ -249,23 +241,25 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
   );
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border border-cream-200 p-6 mt-6">
+    <div className="style-settings settings-card">
       <h3 className="font-serif text-xl text-charcoal-600 mb-6">
         Customize Your Style
       </h3>
 
       {/* Tab Navigation */}
-      <div className="flex space-x-1 mb-6 bg-cream-100 rounded-lg p-1">
+      <div role="tablist" aria-label="Style settings categories" className="settings-navigation flex flex-wrap gap-1 mb-6">
         {[
-          { id: 'materials', name: 'Materials', icon: '🎨' },
-          { id: 'colors', name: 'Style', icon: '✨' },
-          { id: 'layout', name: 'Layout', icon: '📐' }
+          { id: 'materials', name: 'Finishes' },
+          { id: 'colors', name: 'Design style' },
+          { id: 'layout', name: 'Storage layout' }
         ].map((tab) => (
           <motion.button
             key={tab.id}
             whileHover={{ scale: 1.02 }}
             whileTap={{ scale: 0.98 }}
-            onClick={() => setActiveTab(tab.id as 'materials' | 'colors' | 'layout')}
+            role="tab" id={`style-editor-${tab.id}`} aria-controls={`style-panel-${tab.id}`} aria-selected={activeTab===tab.id} tabIndex={activeTab===tab.id?0:-1}
+            onKeyDown={e=>{const keys=['materials','colors','layout'] as const,index=keys.indexOf(activeTab),next=e.key==='ArrowRight'?keys[(index+1)%3]:e.key==='ArrowLeft'?keys[(index+2)%3]:e.key==='Home'?keys[0]:e.key==='End'?keys[2]:null;if(next){e.preventDefault();setActiveTab(next);document.getElementById(`style-editor-${next}`)?.focus();}}}
+            onClick={()=>setActiveTab(tab.id as 'materials'|'colors'|'layout')}
             className={`
               flex-1 px-4 py-2 rounded-md text-sm font-medium transition-all
               ${activeTab === tab.id 
@@ -274,7 +268,6 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
               }
             `}
           >
-            <span className="mr-2">{tab.icon}</span>
             {tab.name}
           </motion.button>
         ))}
@@ -282,7 +275,7 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
 
       {/* Tab Content */}
       <motion.div
-        key={activeTab}
+        key={activeTab} role="tabpanel" id={`style-panel-${activeTab}`} aria-labelledby={`style-editor-${activeTab}`}
         initial={{ opacity: 0, y: 10 }}
         animate={{ opacity: 1, y: 0 }}
         transition={{ duration: 0.3 }}
@@ -293,7 +286,7 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
       </motion.div>
 
       {/* Preview Summary */}
-      <div className="mt-6 pt-6 border-t border-cream-200">
+      <div className="settings-selection mt-6">
         <h5 className="font-medium text-charcoal-600 mb-3">Current Selection</h5>
         <div className="text-sm text-charcoal-500 space-y-1">
           <p>Style: {config.userInfo?.stylePreference || 'Not selected'}</p>

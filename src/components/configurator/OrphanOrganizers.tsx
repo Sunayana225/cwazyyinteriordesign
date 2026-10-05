@@ -1,0 +1,9 @@
+'use client';
+import { useState } from 'react';
+import type { DrawerInterior, DrawerTarget } from '@/lib/drawers';
+import { interiorSVG, interiorWarnings } from '@/lib/drawers';
+export function OrphanOrganizers({ids,plans,targets,onChange}:{ids:string[];plans:Record<string,DrawerInterior>;targets:DrawerTarget[];onChange:(plans:Record<string,DrawerInterior>)=>void}){
+  const [source,setSource]=useState(ids[0]??''),[destination,setDestination]=useState(targets[0]?.id??''),[preview,setPreview]=useState(false);
+  const plan=plans[source],target=targets.find(t=>t.id===destination);
+  return <details className="border p-3 rounded mt-2"><summary>Reassign retained organizers</summary><label>Retained organizer<select className="border block w-full" value={source} onChange={e=>{setSource(e.target.value);setPreview(false);}}>{ids.map(id=><option key={id} value={id}>{plans[id].name} ({id})</option>)}</select></label><label>Destination drawer<select className="border block w-full" value={destination} onChange={e=>{setDestination(e.target.value);setPreview(false);}}>{targets.map(t=><option key={t.id} value={t.id}>{t.label}</option>)}</select></label><button disabled={!plan||!target} onClick={()=>setPreview(true)}>Preview reassignment</button>{preview&&plan&&target&&<div><p>{plans[destination]?'The destination organizer will be replaced.':'The destination has no organizer.'}</p>{interiorWarnings(plan,target.drawer).map(w=><p key={w}>{w}</p>)}<div dangerouslySetInnerHTML={{__html:interiorSVG(plan,target.drawer)}}/><button onClick={()=>{const next={...plans};delete next[source];next[destination]={...plan,identity:target.identity,source:{width:target.drawer.width,depth:target.drawer.depth,height:target.drawer.height}};onChange(next);setPreview(false);}}>Confirm reassignment</button></div>}</details>;
+}

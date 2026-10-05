@@ -7,6 +7,7 @@ const __dirname_resolved = path.dirname(fileURLToPath(import.meta.url));
 export default defineConfig({
   test: {
     globals: false,
+    include: ['src/__tests__/**/*.test.ts'],
     environment: 'node',
     pool: 'forks',
     isolate: false,

@@ -1,0 +1,25 @@
+'use client';
+import { useState } from 'react';
+import type { DrawerInterior, DrawerTarget } from '@/lib/drawers';
+import { dividerPositions, organizerWeight, redistributeDividersEqualUsable } from '@/lib/drawerConstruction';
+import { innerSize } from '@/lib/drawers';
+import { Measure } from './PlanningControls';
+
+export function DrawerConstruction({plan,target,change}:{plan:DrawerInterior;target:DrawerTarget;change:(p:DrawerInterior,group?:string)=>void}){
+  const [axis,setAxis]=useState<'x'|'y'>('x'),[selected,setSelected]=useState<number[]>([]);
+  const positions=dividerPositions(plan,axis),locked=plan.lockedDividers??{x:[],y:[]},size=innerSize(target.drawer,plan),weight=organizerWeight(plan,target.drawer);
+  return <details data-settings-section="construction" className="border rounded p-3"><summary>Divider construction and clearances</summary>
+    <label className="block"><input type="checkbox" checked={!!plan.dividerThickness} onChange={e=>change({...plan,dividerThickness:e.target.checked?{horizontal:plan.thickness,vertical:plan.thickness}:undefined})}/> Separate horizontal and vertical thickness</label>
+    {plan.dividerThickness&&(['horizontal','vertical'] as const).map(axis=><Measure key={axis} label={`${axis} divider thickness`} min={.125} max={1} value={plan.dividerThickness![axis]} onChange={n=>change({...plan,dividerThickness:{...plan.dividerThickness!,[axis]:n}})}/>)}
+    <p className="text-xs">Usable cell dimensions deduct the matching divider thickness. Separate thickness overrides the common thickness selector.</p>
+    <Measure label="Required item clearance per side" max={6} value={plan.itemMargin??0} onChange={itemMargin=>change({...plan,itemMargin})}/>
+    <Measure label="Minimum usable compartment width" min={.1} max={100} value={plan.minimumCellWidth??2} onChange={minimumCellWidth=>change({...plan,minimumCellWidth})}/>
+    <label className="block">Divider material density (kg/m³)<select className="border rounded p-2 w-full" value={plan.materialDensity??''} onChange={e=>change({...plan,materialDensity:e.target.value?+e.target.value:undefined})}><option value="">Choose an estimated density</option><option value="350">350 — light wood</option><option value="650">650 — medium wood</option><option value="750">750 — dense wood / bamboo</option><option value="1180">1180 — acrylic</option></select></label>
+    {weight!==null&&<p role="status">Estimated internal divider weight: {weight.toFixed(2)} kg at {plan.materialDensity} kg/m³. Assumes full interior-height dividers; excludes base, perimeter, liner, hardware and joint overlap.</p>}
+    <label className="block">Divider axis<select value={axis} onChange={e=>{setAxis(e.target.value as 'x'|'y');setSelected([]);}}><option value="x">Vertical dividers</option><option value="y">Horizontal dividers</option></select></label>
+    <p className="text-xs">Select divider lines to distribute. Locked or unselected lines act as fixed boundaries. Movement applies across the arrangement to preserve its partition.</p>
+    {positions.map(n=><div className="flex flex-wrap gap-2" key={n}><label><input type="checkbox" checked={selected.includes(n)} onChange={e=>setSelected(v=>e.target.checked?[...v,n]:v.filter(x=>x!==n))}/> Select divider {(n*(axis==='x'?size.width:size.depth)).toFixed(2)} in</label><label><input type="checkbox" checked={locked[axis].some(v=>Math.abs(v-n)<.00001)} onChange={e=>change({...plan,lockedDividers:{...locked,[axis]:e.target.checked?[...locked[axis],n]:locked[axis].filter(v=>Math.abs(v-n)>.00001)}})}/> Lock divider {(n*(axis==='x'?size.width:size.depth)).toFixed(2)} in</label>{locked[axis].some(v=>Math.abs(v-n)<.00001)&&<label className="block w-full">Name locked divider {(n*(axis==='x'?size.width:size.depth)).toFixed(2)} in<input className="border p-2 w-full" maxLength={80} value={plan.dividerNames?.[`${axis}:${+n.toFixed(5)}`]??''} onChange={e=>change({...plan,dividerNames:{...plan.dividerNames,[`${axis}:${+n.toFixed(5)}`]:e.target.value}},'divider-name')}/></label>}</div>)}
+    <p className="text-xs">Equal usable-size distribution deducts one {axis==='x'?'vertical':'horizontal'} divider thickness per compartment, so the resulting compartments share the same usable {axis==='x'?'width':'depth'}.</p>
+    <button disabled={!selected.length} onClick={()=>{change(redistributeDividersEqualUsable(plan,axis,selected,axis==='x'?size.width:size.depth));setSelected([]);}}>Distribute selected dividers evenly</button>
+  </details>;
+}

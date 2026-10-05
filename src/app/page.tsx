@@ -1,26 +1,17 @@
-"use client";
+'use client';
 
-import { useEffect } from "react";
-import Link from "next/link";
-import { UserTypeSelector } from "@/components/UserTypeSelector";
-import { HowItWorks } from "@/components/HowItWorks";
-import { InspirationGallery, WhyUs } from "@/components/LandingSections";
-import {
-  AnimatedClosetHero,
-  ArchitecturalGrid,
-} from "@/components/AnimatedClosetHero";
-import { Testimonials } from "@/components/Testimonials";
-import { motion } from "framer-motion";
-import { ArrowRight, Sparkles } from "lucide-react";
-import { trackEvent } from "@/lib/analytics";
+import Link from 'next/link';
+import { UserTypeSelector } from '@/components/UserTypeSelector';
+import { HowItWorks } from '@/components/HowItWorks';
+import { InspirationGallery, WhyUs } from '@/components/LandingSections';
+import { AnimatedClosetHero, ArchitecturalGrid } from '@/components/AnimatedClosetHero';
+import { motion } from 'framer-motion';
+import { ArrowRight, Sparkles } from 'lucide-react';
 
 export default function HomePage() {
-  useEffect(() => {
-    trackEvent("landing_viewed");
-  }, []);
-
   return (
-    <div className="min-h-screen bg-white">
+    <main id="main-content" className="min-h-screen bg-white">
+
       {/* ── Hero ─────────────────────────────────────────────── */}
       <section className="relative min-h-screen bg-cream-50 flex flex-col items-center justify-center pt-16 overflow-hidden">
         {/* Subtle radial glow */}
@@ -31,8 +22,8 @@ export default function HomePage() {
         <div className="relative z-10 max-w-4xl mx-auto px-6 text-center">
           {/* Eyebrow */}
           <motion.p
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ y: 12 }}
+            animate={{ y: 0 }}
             transition={{ duration: 0.5 }}
             className="inline-block text-xs font-medium tracking-widest uppercase text-taupe-400 mb-8 px-4 py-1.5 border border-taupe-200 rounded-full"
           >
@@ -41,31 +32,29 @@ export default function HomePage() {
 
           {/* Headline */}
           <motion.h1
-            initial={{ opacity: 0, y: 24 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ y: 24 }}
+            animate={{ y: 0 }}
             transition={{ duration: 0.7, delay: 0.1 }}
             className="font-serif text-5xl sm:text-6xl md:text-7xl lg:text-8xl font-bold text-charcoal-600 leading-[1.05] mb-8"
           >
-            Design the closet
-            <br />
-            <span className="text-taupe-500">you've always imagined</span>
+            Design the closet<br />
+            <span className="text-taupe-500">you&apos;ve always imagined</span>
           </motion.h1>
 
           {/* One-liner subtitle */}
           <motion.p
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ y: 16 }}
+            animate={{ y: 0 }}
             transition={{ duration: 0.6, delay: 0.25 }}
             className="text-lg md:text-xl text-charcoal-400 max-w-xl mx-auto font-light leading-relaxed mb-10"
           >
-            Tell us your space and wardrobe — we generate a precision layout,
-            instantly.
+            Tell us your space and wardrobe — we generate a precision layout, instantly.
           </motion.p>
 
           {/* CTA cluster */}
           <motion.div
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ y: 12 }}
+            animate={{ y: 0 }}
             transition={{ duration: 0.5, delay: 0.4 }}
             className="flex flex-col sm:flex-row items-center justify-center gap-4"
           >
@@ -86,8 +75,8 @@ export default function HomePage() {
 
           {/* Trust line */}
           <motion.p
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
+            initial={{ y: 8 }}
+            animate={{ y: 0 }}
             transition={{ delay: 0.7, duration: 0.5 }}
             className="mt-6 text-xs text-charcoal-300 tracking-wide"
           >
@@ -97,14 +86,12 @@ export default function HomePage() {
 
         {/* Tagline ribbon */}
         <motion.div
-          initial={{ opacity: 0, y: 10 }}
-          animate={{ opacity: 1, y: 0 }}
+          initial={{ y: 10 }}
+          animate={{ y: 0 }}
           transition={{ delay: 0.9, duration: 0.5 }}
           className="relative z-10 mt-20 mb-8"
         >
-          <p className="font-serif text-2xl text-taupe-400 italic">
-            Carved for you.
-          </p>
+          <p className="font-serif text-2xl text-taupe-400 italic">Carved for you.</p>
         </motion.div>
 
         {/* Bottom fade */}
@@ -124,14 +111,13 @@ export default function HomePage() {
           >
             <span className="inline-flex items-center gap-2 text-xs font-medium tracking-widest uppercase text-taupe-400 mb-4">
               <Sparkles size={14} />
-              Precision Architecture
+              Personalized planning
             </span>
             <h2 className="font-serif text-4xl md:text-5xl text-charcoal-600 mb-4">
               See your closet come to life
             </h2>
             <p className="text-lg text-charcoal-400 max-w-xl mx-auto">
-              Watch as we draw your custom elevation — every rod, shelf, and
-              drawer placed with architectural precision.
+              Watch as we draw your custom elevation — every rod, shelf, and drawer placed with clear dimensions.
             </p>
           </motion.div>
 
@@ -173,15 +159,10 @@ export default function HomePage() {
             transition={{ duration: 0.6 }}
             className="text-center mb-16"
           >
-            <span className="text-xs font-medium tracking-widest uppercase text-taupe-400">
-              Personalised for you
-            </span>
-            <h2 className="font-serif text-4xl md:text-5xl text-charcoal-600 mt-4 mb-4">
-              Who are you designing for?
-            </h2>
+            <span className="text-xs font-medium tracking-widest uppercase text-taupe-400">Personalised for you</span>
+            <h2 className="font-serif text-4xl md:text-5xl text-charcoal-600 mt-4 mb-4">Who are you designing for?</h2>
             <p className="text-lg text-charcoal-400 max-w-xl mx-auto">
-              Your path shapes how we ask the questions — and how we build the
-              layout.
+              Your path shapes how we ask the questions — and how we build the layout.
             </p>
           </motion.div>
           <UserTypeSelector />
@@ -203,8 +184,6 @@ export default function HomePage() {
         <WhyUs />
       </section>
 
-      <Testimonials />
-
       {/* ── CTA Footer ───────────────────────────────────────── */}
       <section className="py-32 bg-charcoal-600">
         <div className="max-w-3xl mx-auto px-6 text-center">
@@ -214,12 +193,9 @@ export default function HomePage() {
             viewport={{ once: true }}
             transition={{ duration: 0.6 }}
           >
-            <p className="text-xs font-medium tracking-widest uppercase text-cream-300 mb-6">
-              Ready to start?
-            </p>
+            <p className="text-xs font-medium tracking-widest uppercase text-cream-300 mb-6">Ready to start?</p>
             <h2 className="font-serif text-4xl md:text-5xl text-white mb-6 leading-tight">
-              Your dream closet is
-              <br />5 minutes away
+              Your dream closet is<br />5 minutes away
             </h2>
             <p className="text-gray-400 text-lg mb-10 max-w-md mx-auto">
               No sign-up, no paywall — just a layout built around your life.
@@ -234,6 +210,7 @@ export default function HomePage() {
           </motion.div>
         </div>
       </section>
-    </div>
+
+    </main>
   );
 }

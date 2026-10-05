@@ -1,36 +1,15 @@
-# Dependencies
 node_modules/
-
-# Next.js build output
 .next/
-
-# Environment variables
-.env
-.env.local
-.env.production
-.env.development
-
-# IDE
-.vscode/
-.idea/
-*.swp
-*.swo
-
-# OS
-.DS_Store
-Thumbs.db
-
-# TypeScript
-tsconfig.tsbuildinfo
+test-results/
+test-results-visual/
+test-results-production/
+playwright-report/
 *.tsbuildinfo
-
-# Logs
-npm-debug.log*
-yarn-debug.log*
-yarn-error.log*
-
-# Testing
-coverage/
-
-# CommandCode
+next-env.d.ts
+.env*
+!.env.example
 .commandcode/
+.kilo/
+.agents/
+*.log
+docs/github-publication-comparison.json

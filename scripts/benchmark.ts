@@ -1,0 +1,17 @@
+import { performance } from 'node:perf_hooks';
+import { writeFileSync, mkdirSync } from 'node:fs';
+import { DEFAULT_CONFIG } from '../src/lib/design';
+import { ClosetLayoutEngine } from '../src/engine/ClosetLayoutEngine';
+import { ClosetSVGRenderer } from '../src/renderer/ClosetSVGRenderer';
+import { libraryFilter } from '../src/lib/libraryOrganization';
+import { findDesigns } from '../src/lib/designLibrary';
+import { readBackup, serializeDesigns } from '../src/lib/storage';
+const c=structuredClone(DEFAULT_CONFIG);c.closetType='island';c.dimensions={width:600,height:240,depth:24};c.roomDimensions={roomWidth:600,roomDepth:600};
+for(const key of Object.keys(c.wardrobe))if(key!=='jewelry')(c.wardrobe as unknown as Record<string,number>)[key]=10000;
+c.shoes={boots:10000,heels:10000,sneakers:10000,flats:10000};
+const designs=Array.from({length:200},(_,i)=>({id:String(i),name:`Design ${i}`,config:c,savedAt:new Date(2026,0,1+i).toISOString()})),raw=serializeDesigns(designs);
+const measure=(work:()=>unknown,budget:number)=>{const times:number[]=[];for(let i=0;i<40;i++){const start=performance.now();work();if(i>=5)times.push(performance.now()-start);}times.sort((a,b)=>a-b);return{medianMs:+times[Math.floor(times.length/2)].toFixed(2),p95Ms:+times[Math.floor(times.length*.95)].toFixed(2),budgetMs:budget};};
+const historyDesigns=designs.map(d=>({...d,revisions:Array.from({length:5},(_,i)=>({id:`${d.id}-${i}`,savedAt:d.savedAt,config:c}))}));
+const result={libraryShortfallAndHistory:measure(()=>libraryFilter(historyDesigns,{folder:'',from:'',to:'',shortfalls:true,organizers:'missing'}),250),generatedAt:new Date().toISOString(),node:process.version,scenario:'600 × 600 × 240 in; 10,000 items per category; 200 saved designs',layout:measure(()=>new ClosetLayoutEngine(c).calculateLayout(),50),layoutAndSVG:measure(()=>new ClosetSVGRenderer(new ClosetLayoutEngine(c).calculateLayout(),{style:'modern',woodFinish:'medium',showDimensions:true,showLabels:true}).renderElevation(),100),librarySearch:measure(()=>findDesigns(designs,'design','name'),50),backupValidation:measure(()=>readBackup(raw),250)};
+mkdirSync('test-results',{recursive:true});writeFileSync('test-results/performance-benchmark.json',JSON.stringify(result,null,2));console.log(JSON.stringify(result,null,2));
+if([result.libraryShortfallAndHistory,result.layout,result.layoutAndSVG,result.librarySearch,result.backupValidation].some(r=>r.p95Ms>r.budgetMs))process.exitCode=1;

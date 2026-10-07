@@ -30,13 +30,15 @@ for(const locked of [false,true])test(locked?'locked dividers cannot be merged':
 });
 test('item 004: previews inventory redistribution before replacing a populated arrangement',async({page})=>{
  const d=await seedEditor(page,t=>({...defaultInterior(t.drawer),cells:grid(1,1).map(c=>({...c,quantity:45}))}));
+ // Template well counts are measured from the drawer, so read the count the card advertises.
+ const jewelry=Number(/^(\d+) wells/.exec(await d.getByRole('button',{name:'Jewelry template',exact:true}).locator('small').innerText())?.[1]??1);
  await d.getByRole('button',{name:'Jewelry template',exact:true}).click();
  const preview=d.getByRole('group',{name:'Arrangement replacement preview'});
  await expect(preview).toBeVisible();await expect(preview).toContainText('45 planned items are redistributed');
  await expect(d.getByRole('button',{name:/^Compartment \d+:/})).toHaveCount(1);
  await d.getByRole('button',{name:'Confirm arrangement replacement'}).click();
- await expect(d.getByRole('button',{name:/^Compartment \d+:/})).toHaveCount(9);
- await expect(d.getByText(/9 compartments · 45 planned items/)).toBeVisible();
+ await expect(d.getByRole('button',{name:/^Compartment \d+:/})).toHaveCount(jewelry);
+ await expect(d.getByText(new RegExp(`${jewelry} compartments · 45 planned items`))).toBeVisible();
 });
 test('item 007: split controls respect the configured minimum usable width',async({page})=>{
  const d=await seedEditor(page,t=>({...defaultInterior(t.drawer),cells:grid(1,1),minimumCellWidth:12}));

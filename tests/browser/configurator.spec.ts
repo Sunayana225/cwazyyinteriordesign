@@ -130,7 +130,7 @@ test('mobile layout has no horizontal overflow and menu operates', async ({ page
   await page.locator('#mobile-navigation a').first().focus(); await page.keyboard.press('Escape');
   const overflow = await page.evaluate(()=>Array.from(document.querySelectorAll('body *')).filter(el=>{const r=el.getBoundingClientRect();return r.width>0 && r.right>innerWidth+1;}).slice(0,12).map(el=>({tag:el.tagName,cls:el.className,width:el.getBoundingClientRect().width,text:el.textContent?.slice(0,80)})));
   expect(overflow).toEqual([]);
-  await page.getByRole('link',{name:'Jump to preview'}).click();
+  await page.getByRole('link',{name:'Explore your design'}).click();
   await page.screenshot({path:'test-results/mobile-preview.png',fullPage:true});
 });
 

@@ -1,7 +1,41 @@
 import { test, expect } from '@playwright/test';
-test('core wizard and organizer save and restore across browsers',async({page})=>{
-  await page.goto('/configure');await page.getByRole('button',{name:'Next',exact:true}).click();await page.getByRole('button',{name:'Switch to inches-only'}).click();await page.getByLabel('Wall Width',{exact:true}).fill('120.125');await page.getByLabel('Wall Width',{exact:true}).press('Tab');await page.getByRole('button',{name:'Next',exact:true}).click();await page.getByLabel('Shirts & Blouses',{exact:true}).fill('25');await page.getByLabel('Shirts & Blouses',{exact:true}).press('Tab');await page.locator('[data-drawer-id]').first().click();const d=page.getByRole('dialog',{name:'Design drawer compartments'});await d.getByRole('button',{name:'Jewelry template',exact:true}).click();await d.getByLabel('Organizer name').fill('Cross browser');await d.getByRole('button',{name:'Apply to drawer',exact:true}).click();await page.getByRole('button',{name:'Save',exact:true}).click();await expect(page.getByRole('button',{name:/Manage saved designs \(1\)/})).toBeVisible();await page.reload();await page.locator('[data-drawer-id]').first().click();await expect(d.getByLabel('Organizer name')).toHaveValue('Cross browser');await expect(d.getByRole('button',{name:/^Compartment \d+:/})).toHaveCount(9);
+test('core wizard and organizer save and restore across browsers', async ({ page }) => {
+  await page.goto('/configure');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await page.getByRole('button', { name: 'Switch to inches-only' }).click();
+  await page.getByLabel('Wall Width', { exact: true }).fill('120.125');
+  await page.getByLabel('Wall Width', { exact: true }).press('Tab');
+  await page.getByRole('button', { name: 'Next', exact: true }).click();
+  await page.getByLabel('Shirts & Blouses', { exact: true }).fill('25');
+  await page.getByLabel('Shirts & Blouses', { exact: true }).press('Tab');
+  await page.locator('[data-drawer-id]').first().click();
+  const dialog = page.getByRole('dialog', { name: 'Design drawer compartments' });
+  const template = dialog.getByRole('button', { name: 'Jewelry template', exact: true });
+  // The card states the dimension-driven well count; verify that applying it
+  // produces that arrangement instead of assuming the old fixed 3-by-3 grid.
+  const count = Number(/(\d+) wells/.exec(await template.innerText())?.[1]);
+  expect(count).toBeGreaterThan(1);
+  expect(count).toBeLessThanOrEqual(36);
+  await template.click();
+  const cells = dialog.getByRole('button', { name: /^Compartment \d+:/ });
+  await expect(cells).toHaveCount(count);
+  await dialog.getByLabel('Compartment label', { exact: true }).fill('Everyday rings');
+  await dialog.getByLabel('Organizer name').fill('Cross browser');
+  const arrangement = () => cells.evaluateAll(nodes => nodes.map(node => ({
+    label: node.getAttribute('aria-label'), size: node.getAttribute('title'),
+    style: node.getAttribute('style'),
+  })));
+  const before = await arrangement();
+  await dialog.getByRole('button', { name: 'Apply to drawer', exact: true }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await expect(page.getByRole('button', { name: /Manage saved designs \(1\)/ })).toBeVisible();
+  await page.reload();
+  await page.locator('[data-drawer-id]').first().click();
+  await expect(dialog.getByLabel('Organizer name')).toHaveValue('Cross browser');
+  await expect(cells).toHaveCount(count);
+  await expect.poll(arrangement).toEqual(before);
 });
+
 for(const viewport of [{width:390,height:844},{width:844,height:390}])test(`mobile dialogs and drawer tools at ${viewport.width} × ${viewport.height}`,async({page})=>{
   await page.setViewportSize(viewport);await page.goto('/configure');await page.locator('[data-drawer-id]').first().click();const d=page.getByRole('dialog',{name:'Design drawer compartments'});await d.locator('summary').filter({hasText:'Measurements, item fit, divider tools, and custom templates'}).click();await d.getByLabel('Use measured internal dimensions').check();expect(await d.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await d.getByRole('button',{name:'Apply to drawer',exact:true}).click();await page.getByRole('button',{name:'Save',exact:true}).click();await page.getByRole('button',{name:/Manage saved designs/}).click();const library=page.getByRole('dialog',{name:'Saved designs'});await library.locator('summary').filter({hasText:'Restore, compare, tags, and updates'}).click();expect(await library.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.keyboard.press('Escape');await page.getByRole('button',{name:'Export',exact:true}).click();await page.getByRole('menuitem',{name:'Print options and preview'}).click();const print=page.getByRole('dialog',{name:'Print options and preview'});expect(await print.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
 });

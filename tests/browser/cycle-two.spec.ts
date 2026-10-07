@@ -37,6 +37,22 @@ test('folder metadata previews and favorite order persist',async({page})=>{
  await page.goto('/configure');await page.getByRole('button',{name:'Save',exact:true}).click();await page.getByRole('button',{name:'Save',exact:true}).click();await page.getByRole('button',{name:/Manage saved designs/}).click();const d=page.getByRole('dialog',{name:'Saved designs'});await d.getByRole('button',{name:'Select visible'}).click();await d.locator('summary').filter({hasText:'Project folders, revisions, and cleanup'}).click();await d.getByLabel('Destination project folder').fill('Old folder');await d.getByRole('button',{name:'Move selected to folder'}).click();await d.getByLabel('Source project folder').selectOption('Old folder');await d.getByLabel('Destination project folder').fill('New folder');await d.getByRole('button',{name:'Preview folder rename or merge'}).click();await expect(d.getByRole('heading',{name:'Library metadata change preview'})).toBeVisible();await d.getByRole('button',{name:'Apply previewed metadata changes'}).click();await d.getByLabel('Bulk project tags').fill('Surveyed, Ready');await d.getByRole('button',{name:'Preview bulk tag change'}).click();await d.getByRole('button',{name:'Apply previewed metadata changes'}).click();await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('alveo-saved-designs')!).designs.every((v:any)=>v.folder==='New folder'&&v.tags.includes('Surveyed')))).toBe(true);await d.getByRole('button',{name:'Pin favorite',exact:true}).first().click();await d.getByRole('button',{name:'Pin favorite',exact:true}).click();const beforeOrder=await page.evaluate(()=>JSON.parse(localStorage.getItem('alveo-saved-designs')!).designs.map((v:any)=>v.pinnedOrder));await d.getByRole('button',{name:'Move favorite down'}).first().click();await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('alveo-saved-designs')!).designs.map((v:any)=>v.pinnedOrder))).toEqual(beforeOrder.map((v:number)=>1-v));
 });
 
-test('centimetre ruler and floor-plan view state are independent of elevations',async({page})=>{
- await page.goto('/configure?preset=4');await page.getByLabel('Show measurement ruler').check();await page.getByLabel('Ruler units').selectOption('cm');await expect(page.getByRole('img',{name:'Drawing ruler in centimetres'})).toContainText('cm');await page.getByRole('button',{name:'Show floor plan'}).click();const floor=page.locator('[role="region"]:visible').filter({has:page.locator('svg>title',{hasText:'Closet floor plan'})});await floor.locator('..').getByRole('button',{name:'Zoom in',exact:true}).click();await expect(floor.locator('..').getByText('125%',{exact:true}).first()).toBeVisible();await page.getByRole('button',{name:'Hide floor plan'}).click();await page.getByRole('button',{name:'Show floor plan'}).click();await expect(floor.locator('..').getByText('125%',{exact:true}).first()).toBeVisible();await expect(page.getByText('100%',{exact:true}).first()).toBeVisible();
+test('centimetre ruler and floor-plan view state are independent of elevations', async ({ page }) => {
+  await page.goto('/configure?preset=4');
+  const visibleCanvas = page.getByRole('region', { name: 'Drawing canvas. Use zoom controls and scroll to pan.' });
+  const controls = () => visibleCanvas.locator('..');
+  await page.getByLabel('Show measurement ruler').check();
+  await page.getByLabel('Ruler units').selectOption('cm');
+  await expect(page.getByRole('img', { name: 'Drawing ruler in centimetres' })).toContainText('cm');
+  await controls().getByRole('button', { name: 'Zoom in', exact: true }).click();
+  await expect(controls().locator('.studio-canvas-toolbar').first()).toContainText('125%');
+  await page.getByRole('button', { name: 'Show floor plan' }).click();
+  await expect(controls().locator('.studio-canvas-toolbar').first()).toContainText('100%');
+  await controls().getByRole('button', { name: 'Zoom out', exact: true }).click();
+  await expect(controls().locator('.studio-canvas-toolbar').first()).toContainText('75%');
+  await page.getByRole('button', { name: 'Hide floor plan' }).click();
+  await expect(controls().locator('.studio-canvas-toolbar').first()).toContainText('125%');
+  await expect(page.getByLabel('Ruler units')).toHaveValue('cm');
+  await page.getByRole('button', { name: 'Show floor plan' }).click();
+  await expect(controls().locator('.studio-canvas-toolbar').first()).toContainText('75%');
 });

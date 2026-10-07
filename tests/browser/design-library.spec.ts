@@ -29,7 +29,7 @@ test('search selection survives filtering and backups contain the correct full r
   await dialog.getByLabel('Search saved designs').fill('copy');
   await dialog.getByRole('button', { name: 'Select visible' }).click();
   await dialog.getByLabel('Search saved designs').fill('nothing-matches');
-  await expect(dialog.getByText('No designs match your search.')).toBeVisible();
+  await expect(dialog.getByText('No designs match your search or filters.')).toBeVisible();
   await expect(dialog.getByText(/1 selected \(1 hidden by search\)/)).toBeVisible();
   const selectedDownload = page.waitForEvent('download');
   await dialog.getByRole('button', { name: 'Download selected JSON' }).click();

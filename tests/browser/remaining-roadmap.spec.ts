@@ -47,6 +47,30 @@ test('ruler, keyboard pan, zone navigation and captured print enhancements work'
   await page.locator('summary').filter({hasText:'Capacity assumptions, allocation, and alternatives'}).click();await page.getByRole('button',{name:'Show RIGHT WALL zone 1',exact:true}).click();await expect(page.getByRole('button',{name:/EL-C · RIGHT WALL/})).toHaveAttribute('aria-pressed','true');
   await page.getByRole('button',{name:'Export',exact:true}).click();await page.getByRole('menuitem',{name:'Print options and preview'}).click();const d=page.getByRole('dialog',{name:'Print options and preview'});await d.getByRole('button',{name:'Selected wall only preset'}).click();await d.getByLabel('Include room opening and obstacle schedule').check();await d.getByRole('combobox',{name:'Paper size',exact:true}).selectOption('Letter');await d.getByRole('button',{name:'Preview page breaks'}).click();await expect(d.frameLocator('iframe').locator('.preview-page').first()).toBeVisible();const popup=page.waitForEvent('popup');await d.getByRole('button',{name:'Print captured design'}).click();const print=await popup;await expect(print.getByRole('heading',{name:'Room openings and obstacle schedule'})).toBeVisible();await print.close();await page.reload();await page.getByRole('button',{name:'Export',exact:true}).click();await page.getByRole('menuitem',{name:'Print options and preview'}).click();await expect(page.getByRole('combobox',{name:'Paper size',exact:true})).toHaveValue('Letter');
 });
-test('200 percent zoom and forced-colors keep dialogs usable',async({page})=>{
-  await page.setViewportSize({width:720,height:600});await page.goto('/configure');await page.locator('[data-drawer-id]').first().waitFor();await page.evaluate(()=>document.documentElement.style.zoom='2');const d=await editor(page);expect(await d.evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);await page.emulateMedia({forcedColors:'active',reducedMotion:'reduce'});await expect(d.locator('[aria-pressed=true]').first()).toHaveCSS('outline-style','solid');await d.getByRole('button',{name:'Close editor'}).click();await page.getByRole('button',{name:'Save',exact:true}).click();await page.getByRole('button',{name:/Manage saved designs/}).click();await expect(page.getByRole('dialog',{name:'Saved designs'})).toBeVisible();await page.keyboard.press('Escape');await page.getByRole('button',{name:'Export',exact:true}).click();await page.getByRole('menuitem',{name:'Print options and preview'}).click();expect(await page.getByRole('dialog',{name:'Print options and preview'}).evaluate(el=>el.scrollWidth<=el.clientWidth+1)).toBe(true);
+test('200 percent zoom and forced-colors keep dialogs usable', async ({ page }) => {
+  await page.setViewportSize({ width: 720, height: 600 });
+  await page.goto('/configure');
+  await page.locator('[data-drawer-id]').first().waitFor();
+  await page.evaluate(() => { document.documentElement.style.zoom = '2'; });
+  const drawer = await editor(page);
+  const fitsViewport = () => drawer.evaluate(el => {
+    const box = el.getBoundingClientRect();
+    return box.left >= -1 && box.right <= window.innerWidth + 1 && box.top >= -1 && box.bottom <= window.innerHeight + 1;
+  });
+  await expect.poll(fitsViewport).toBe(true);
+  expect(await drawer.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  await page.emulateMedia({ forcedColors: 'active', reducedMotion: 'reduce' });
+  await expect(drawer.locator('[aria-pressed=true]').first()).toHaveCSS('outline-style', 'solid');
+  await drawer.getByRole('button', { name: 'Close editor' }).click();
+  await page.getByRole('button', { name: 'Save', exact: true }).click();
+  await page.getByRole('button', { name: /Manage saved designs/ }).click();
+  const library = page.getByRole('dialog', { name: 'Saved designs' });
+  await expect(library).toBeVisible();
+  expect(await library.evaluate(el => el.getBoundingClientRect().right <= window.innerWidth + 1)).toBe(true);
+  await page.keyboard.press('Escape');
+  await page.getByRole('button', { name: 'Export', exact: true }).click();
+  await page.getByRole('menuitem', { name: 'Print options and preview' }).click();
+  const print = page.getByRole('dialog', { name: 'Print options and preview' });
+  expect(await print.evaluate(el => el.scrollWidth <= el.clientWidth + 1)).toBe(true);
+  expect(await print.evaluate(el => el.getBoundingClientRect().right <= window.innerWidth + 1)).toBe(true);
 });

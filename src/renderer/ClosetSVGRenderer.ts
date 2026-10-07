@@ -1,3 +1,8 @@
+import { storageSymbol } from './StorageSymbol';
+import { dimensionColumns, rightHeightChain } from '@/lib/elevationDimensions';
+import { footwearSymbol } from './FootwearSymbol';
+import { garmentSymbol } from './GarmentSymbol';
+import { faceDetails, CABINET_STYLES } from '@/lib/cabinetStyle';
 import { formatInches, HARDWARE } from '@/lib/design';
 import { drawerKey } from '@/lib/drawers';
 ﻿import { ClosetLayout, ClosetZone, UserPreferences } from '@/types/closet';
@@ -62,6 +67,7 @@ export class ClosetSVGRenderer {
    *  This gives us the "content height" — the unit top — which is used as the
    *  drawing frame height so the storage system fills the canvas. */
   private calcDrawHeight(): number {
+    if (this.layout.dimensions.cabinetHeight !== undefined) return this.layout.dimensions.cabinetHeight;
     const roomH = this.layout.dimensions.height;
     let maxH = 0;
 
@@ -132,11 +138,11 @@ export class ClosetSVGRenderer {
     };
     const palette = p[this.options.woodFinish] ?? p.medium;
     const accent = this.options.accentColor;
-    return { ...palette, bg: accent && /^#[0-9a-f]{6}$/i.test(accent) ? accent : palette.bg };
+    return { ...palette, edge: '#655e57', dark: '#403c38', bg: accent && /^#[0-9a-f]{6}$/i.test(accent) ? accent : palette.bg };
   }
 
   private get hardware() {
-    const defaults = { minimal: 'chrome', modern: 'chrome', glam: 'gold', rustic: 'black', luxury: 'brass' };
+    const defaults = Object.fromEntries(Object.entries(CABINET_STYLES).map(([key,value])=>[key,value.hardware]));
     return HARDWARE[(this.options.hardwareFinish ?? defaults[this.options.style]) as keyof typeof HARDWARE] ?? this.wood.dark;
   }
 
@@ -150,7 +156,7 @@ export class ClosetSVGRenderer {
     const prefix = this.options.idPrefix ? `${this.options.idPrefix.replace(/[^a-zA-Z0-9_-]/g,'-')}-` : `closet-${++ClosetSVGRenderer.nextDrawingId}-`;
     return [
       `<svg viewBox="0 0 ${this.totalW} ${this.totalH}" xmlns="http://www.w3.org/2000/svg" preserveAspectRatio="xMinYMin meet"`,
-      `     data-ruler-width="${this.layout.dimensions.width}" data-ruler-origin="${this.ML}" data-ruler-scale="${this.scale}" style="width:100%;height:auto;display:block;background:#f8f4ef;font-family:'Inter',Arial,sans-serif;">`,
+      `     data-ruler-width="${this.layout.dimensions.width}" data-ruler-origin="${this.ML}" data-ruler-scale="${this.scale}" style="width:100%;height:auto;display:block;background:#ffffff;font-family:'Inter',Arial,sans-serif;">`,
       // Rule 3.2 — xMinYMin meet: drawing origin always top-left, letterbox at right/bottom
       `<title>Closet elevation</title><desc>Planning drawing with storage zones, shelves, rods and drawers. Dimensions are labeled; not to scale.</desc>`,
       `<defs>`,
@@ -185,17 +191,13 @@ export class ClosetSVGRenderer {
     return `
   <pattern id="wp" patternUnits="userSpaceOnUse" width="36" height="7">
     <rect width="36" height="7" fill="${w.panel}"/>
-    <line x1="0" y1="1.5" x2="36" y2="1.5" stroke="${w.edge}" stroke-width="0.35" opacity="0.5"/>
-    <line x1="0" y1="4.5" x2="36" y2="4.5" stroke="${w.edge}" stroke-width="0.25" opacity="0.3"/>
   </pattern>
   <pattern id="df" patternUnits="userSpaceOnUse" width="36" height="7">
     <rect width="36" height="7" fill="${w.bg}"/>
-    <line x1="0" y1="2"   x2="36" y2="2"   stroke="${w.dark}" stroke-width="0.4" opacity="0.35"/>
-    <line x1="0" y1="5.5" x2="36" y2="5.5" stroke="${w.dark}" stroke-width="0.25" opacity="0.2"/>
   </pattern>
   <!-- Rule 3.5: shadow on outer boundary only — dx=2, dy=2, stdDeviation=3, flood-opacity=0.12 -->
   <filter id="sh" x="-8%" y="-8%" width="120%" height="120%">
-    <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0.12"/>
+    <feDropShadow dx="2" dy="2" stdDeviation="3" flood-opacity="0"/>
   </filter>
   <!-- Tick mark terminators for dimension lines (45° slash) -->
   <marker id="tick" viewBox="-4 -4 8 8" markerWidth="4" markerHeight="4"
@@ -405,20 +407,7 @@ export class ClosetSVGRenderer {
         fill="${this.wood.panel}" stroke="${this.wood.edge}" stroke-width="1.5"/>
   <rect x="${zx}" y="${shelfY + sh}" width="${zw}" height="3" fill="rgba(0,0,0,0.06)"/>`;
 
-      // ── intermediate shelves filling open space above rod shelf (every 14–18") ─
-      // Long-hang zones must remain clear from floor to rod — never add shelves.
-      if (zone.type !== 'long-hang' && openSpaceIn > 18) {
-        const shelfSpacing = clamp(openSpaceIn / Math.floor(openSpaceIn / 15), 12, 20);
-        let sAFF = rodShelfTop + shelfSpacing;
-        while (sAFF + 2 < upperBound - 2) {
-          const sy = this.cy(sAFF);
-          out += `
-  <rect x="${zx}" y="${sy}" width="${zw}" height="${sh}"
-        fill="${this.wood.panel}" stroke="${this.wood.edge}" stroke-width="1" opacity="0.75"/>
-  <rect x="${zx}" y="${sy + sh}" width="${zw}" height="2" fill="rgba(0,0,0,0.04)"/>`;
-          sAFF += shelfSpacing;
-        }
-      }
+      // Render only storage specified by the layout; do not invent shelves here.
 
       // ── rod — Rule 1.2: dashed hidden line (rod is behind garment plane in elevation) ─────
       // Tertiary weight #4A4540, bracket circles at each end at tertiary weight
@@ -430,57 +419,17 @@ export class ClosetSVGRenderer {
   <circle cx="${zx + pad}"      cy="${rodY}" r="${clamp(rodStroke + 0.3, 1.5, 2.8)}" fill="#4A4540" stroke="none"/>
   <circle cx="${zx + zw - pad}" cy="${rodY}" r="${clamp(rodStroke + 0.3, 1.5, 2.8)}" fill="#4A4540" stroke="none"/>`;
 
-      // ── garment silhouettes ────────────────────────────────────────────────
-      const isLong       = zone.type === 'long-hang';
-      const zoneFloor    = ri === 0 ? zone.y : rods[ri - 1].height + 1.5;
-      const gInches      = isLong ? Math.min(rodAFF - zoneFloor - 2, 56) : 26;
-      const maxGarmentPx = this.cy(zoneFloor) - rodY;
-      const gPx          = Math.min(gInches * this.scale, maxGarmentPx * 0.90);
-      const hookH        = clamp(this.scale * 1.2, 4, 9);
-      const count   = clamp(Math.floor((zw - pad * 2) / Math.max(this.scale * 2.8, 8)), 2, 8);
-      const spacing = (zw - pad * 2) / (count + 1);
-      const gw    = isLong ? clamp(this.scale * 2.2, 6, 15) : clamp(this.scale * 2.8, 7, 18);
-      const gwBot = isLong ? gw * 1.18 : gw * 0.88;
+      // Sparse side-on symbols leave the cabinet geometry legible.
+      const isLong = zone.type === 'long-hang';
+      const zoneFloor = ri === 0 ? zone.y : rods[ri - 1].height + 1.5;
+      const available = Math.max(0,(rodAFF-zoneFloor-8)*this.scale);
+      const garmentHeight = Math.min((isLong?46:27)*this.scale,available);
+      const usable = Math.max(0,zw-2*pad);
+      const count = Math.min(isLong?2:3,Math.floor(usable/Math.max(24,this.scale*7)));
+      const spacing = usable/(count+1);
+      const symbolWidth = Math.min(this.scale*18,usable*.72);
+      for(let i=0;i<count;i++)out+=garmentSymbol(zx+pad+symbolWidth/2+(count>1?i*(usable-symbolWidth)/(count-1):0),rodY+2,symbolWidth,garmentHeight,isLong,i);
 
-      for (let i = 0; i < count; i++) {
-        const gx    = zx + pad + (i + 1) * spacing;
-        const ty    = rodY + hookH;
-        const by    = rodY + hookH + gPx;
-        const shape = i % 3;
-        const fCol  = shape === 0 ? (isLong ? '#f0ede8' : '#ece8e2')
-                    : shape === 1 ? (isLong ? '#e8e4de' : '#e5e0da')
-                    :               (isLong ? '#edeae4' : '#eae6e0');
-        const fOp   = shape === 1 ? 0.72 : 0.82;
-        // Hanger
-        out += `
-  <polyline points="${gx},${rodY} ${gx - gw * 0.6},${ty} ${gx + gw * 0.6},${ty}"
-            fill="none" stroke="#666" stroke-width="1.1" stroke-linejoin="round"/>
-  <circle cx="${gx}" cy="${rodY}" r="1.6" fill="none" stroke="#666" stroke-width="0.9"/>`;
-        if (isLong) {
-          if (shape === 1) {
-            const cw = gw * 1.08;
-            out += `
-  <path d="M${gx - cw * 0.5},${ty} L${gx - gw * 0.4},${by} L${gx + gw * 0.4},${by} L${gx + cw * 0.5},${ty} Z"
-        fill="${fCol}" fill-opacity="${fOp}" stroke="#999" stroke-width="0.8"/>`;
-          } else {
-            out += `
-  <path d="M${gx - gw * 0.5},${ty} L${gx - gwBot * 0.5},${by} L${gx + gwBot * 0.5},${by} L${gx + gw * 0.5},${ty} Z"
-        fill="${fCol}" fill-opacity="${fOp}" stroke="#999" stroke-width="0.8"/>`;
-          }
-        } else {
-          const mid = ty + (by - ty) * 0.28;
-          if (shape === 1) {
-            const jw = gw * 1.1;
-            out += `
-  <path d="M${gx - jw * 0.5},${ty} L${gx - jw * 0.52},${mid} L${gx - gwBot * 0.36},${by} L${gx + gwBot * 0.36},${by} L${gx + jw * 0.52},${mid} L${gx + jw * 0.5},${ty} Z"
-        fill="${fCol}" fill-opacity="${fOp}" stroke="#999" stroke-width="0.8"/>`;
-          } else {
-            out += `
-  <path d="M${gx - gw * 0.5},${ty} L${gx - gw * 0.58},${mid} L${gx - gwBot * 0.42},${by} L${gx + gwBot * 0.42},${by} L${gx + gw * 0.58},${mid} L${gx + gw * 0.5},${ty} Z"
-        fill="${fCol}" fill-opacity="${fOp}" stroke="#999" stroke-width="0.8"/>`;
-          }
-        }
-      }
     }
 
     return out;
@@ -505,24 +454,17 @@ export class ClosetSVGRenderer {
       // Drawer face — filled rect with wood pattern, clear gap top & sides
       out += `
   <rect x="${zx + pad}" y="${svgTop + 1.5}" width="${zw - 2 * pad}" height="${drawerH - 3}"
-        fill="url(#df)" stroke="${this.wood.edge}" stroke-width="1.5" rx="1.5"/>
+        fill="url(#df)" stroke="${this.wood.edge}" stroke-width=".85" rx=".5"/>
   <!-- Drawer gap line at top of each face -->
   <line x1="${zx}" y1="${svgTop}" x2="${zx + zw}" y2="${svgTop}"
         stroke="${this.wood.edge}" stroke-width="1"/>`;
 
-      // Handle — centred horizontal bar (D-pull style)
-      if (drawerH > 10 && this.options.style !== 'minimal') {
-        const barW = clamp(zw * 0.36, 12, 38);
-        const barH = clamp(drawerH * 0.11, 2.5, 5);
-        out += `
-  <rect x="${midX - barW / 2}" y="${midY - barH / 2}" width="${barW}" height="${barH}"
-        fill="${this.hardware}" stroke="${this.hardware}" stroke-width="0.5" rx="${barH / 2}"/>
-  <rect x="${midX - barW / 2 + 3}" y="${midY - barH / 2 - 1.5}" width="${barW - 6}" height="${barH * 0.4}"
-        fill="none" stroke="#fff" stroke-width="0.6" rx="1" opacity="0.4"/>`;
+      for(const detail of faceDetails(this.options.style,zone.width,drawer.height)) {
+        out += `<rect data-style-detail="${this.options.style}" x="${zx+pad+detail.x*(zw-2*pad)}" y="${svgTop+1.5+(1-detail.y-detail.h)*(drawerH-3)}" width="${detail.w*(zw-2*pad)}" height="${detail.h*(drawerH-3)}" fill="${detail.metal?this.hardware:this.wood.edge}" opacity="${detail.metal?1:.22}"/>`;
       }
 
       // Purpose label
-      if (this.options.showLabels && drawer.purpose !== 'folded' && drawerH > 14) {
+      if (this.options.showLabels && drawer.purpose !== 'folded' && drawerH > 30) {
         out += `\n  <text x="${midX}" y="${svgTop + clamp(drawerH * 0.25, 8, 14)}" text-anchor="middle" font-size="6" fill="${this.wood.dark}" opacity="0.65" letter-spacing="0.9" font-family="'Helvetica Neue',Arial,sans-serif">${drawer.purpose.toUpperCase()}</text>`;
       }
     }
@@ -579,8 +521,8 @@ export class ClosetSVGRenderer {
         fill="${bayFill[shelf.purpose] ?? 'rgba(160,150,130,0.05)'}" stroke="none"/>`;
       }
 
-      // ── Shelf board — angled 3° (left end lower) to suggest functional shoe shelf ──
-      const tilt = Math.min(zw * 0.025, 3); // ~2–3px drop L→R for a 3-degree visual angle
+      // Front elevation keeps level shelf edges horizontal.
+      const tilt = 0; // No unmodeled lateral slope.
       out += `
   <polygon
     points="${zx},${shelfY + tilt + sh}  ${zx + zw},${shelfY + sh}  ${zx + zw},${shelfY}  ${zx},${shelfY + tilt}"
@@ -589,65 +531,15 @@ export class ClosetSVGRenderer {
     points="${zx},${shelfY + tilt + sh + 2.5}  ${zx + zw},${shelfY + sh + 2.5}  ${zx + zw},${shelfY + sh}  ${zx},${shelfY + tilt + sh}"
     fill="rgba(0,0,0,0.05)" stroke="none"/>`;
 
-      // ── Shoe silhouettes in the bay (if space allows) ─────────────────────
-      const pairCount = Math.min(shelf.count, 24);   // stored in count field from engine
-      const bayHpx     = bayH;
-      const silhH      = clamp(bayHpx * 0.62, 4, 34);
-      const silhY      = bayTopY + bayHpx * 0.18;
-      const slotW      = bayHpx > 6 ? (zw - 8) / Math.max(pairCount, 1) : 0;
+      // A few legible side profiles sit on the actual shelf surface.
+      const count=Math.min(shelf.count,3,Math.floor((zw-12)/(this.scale*9)));
+      const slot=(zw-12)/Math.max(1,count);
+      const shoeWidth=Math.min(this.scale*9,slot*.8);
+      const targetHeight={boots:18,heels:5,sneakers:4,flats:2.5}[shelf.purpose]??3;
+      const shoeHeight=Math.min(targetHeight*this.scale,Math.max(0,bayH-15));
+      for(let p=0;p<count;p++)out+=footwearSymbol(shelf.purpose,zx+6+p*slot+(slot-shoeWidth)/2,shelfY-.8,shoeWidth,shoeHeight);
+      if(this.options.showLabels&&bayH>26)out+=`<text x="${zx+zw/2}" y="${bayTopY+11}" text-anchor="middle" font-size="7" fill="#666159" letter-spacing=".4">${shelf.purpose.toUpperCase()}</text>`;
 
-      if (slotW > 4 && bayHpx > 8) {
-        for (let p = 0; p < pairCount; p++) {
-          const sx = zx + 4 + p * slotW + slotW / 2;
-          const sw = clamp(slotW * 0.6, 3, 14);
-
-          if (shelf.purpose === 'boots') {
-            // Boot: tall narrow rounded rect with a small ankle notch
-            const bw = clamp(sw * 0.55, 2, 7);
-            out += `
-  <rect x="${sx - bw / 2}" y="${silhY}" width="${bw}" height="${silhH}"
-        fill="none" stroke="#9a8878" stroke-width="0.9" rx="1.5" opacity="0.75"/>
-  <line x1="${sx - bw / 2}" y1="${silhY + silhH * 0.72}" x2="${sx + bw / 2}" y2="${silhY + silhH * 0.72}"
-        stroke="#9a8878" stroke-width="0.6" opacity="0.6"/>`;
-          } else if (shelf.purpose === 'heels') {
-            // Heel: small body + heel spike + toe curve
-            const hw = clamp(sw * 0.7, 2, 8);
-            const hh = clamp(silhH * 0.55, 3, 12);
-            out += `
-  <path d="M${sx - hw * 0.5},${silhY + hh} Q${sx},${silhY + hh * 0.6} ${sx + hw * 0.5},${silhY + hh}"
-        fill="none" stroke="#9a8878" stroke-width="0.9" opacity="0.75"/>
-  <line x1="${sx - hw * 0.4}" y1="${silhY + hh}" x2="${sx - hw * 0.5}" y2="${silhY + hh + clamp(silhH * 0.3,2,7)}"
-        stroke="#9a8878" stroke-width="0.8" opacity="0.6"/>`;
-          } else if (shelf.purpose === 'sneakers') {
-            // Sneaker: chunky low oval with thick sole
-            const snw = clamp(sw * 0.85, 3, 11);
-            const snh = clamp(silhH * 0.45, 3, 10);
-            out += `
-  <ellipse cx="${sx}" cy="${silhY + snh / 2}" rx="${snw / 2}" ry="${snh / 2}"
-           fill="none" stroke="#9a8878" stroke-width="0.9" opacity="0.75"/>
-  <rect x="${sx - snw / 2}" y="${silhY + snh * 0.6}" width="${snw}" height="${snh * 0.3}"
-        fill="#9a8878" fill-opacity="0.2" stroke="none" rx="1"/>`;
-          } else {
-            // Flat shoe: low wide oval
-            const flw = clamp(sw * 0.9, 3, 12);
-            const flh = clamp(silhH * 0.32, 2, 7);
-            out += `
-  <ellipse cx="${sx}" cy="${silhY + flh / 2}" rx="${flw / 2}" ry="${flh / 2}"
-           fill="none" stroke="#9a8878" stroke-width="0.9" opacity="0.75"/>`;
-          }
-        }
-      }
-
-      // ── Shoe type label in bay (small, muted, centred) ────────────────────
-      if (this.options.showLabels && shelf.purpose && bayHpx > 14) {
-        const cap = shelf.purpose === 'sneakers' ? 'SNEAKERS'
-                  : shelf.purpose.charAt(0).toUpperCase() + shelf.purpose.slice(1).toUpperCase();
-        const labelY = bayTopY + bayHpx - 5;
-        out += `
-  <text x="${zx + zw / 2}" y="${labelY}" text-anchor="middle"
-        font-size="6" fill="#9a8878" letter-spacing="0.8"
-        font-family="'Helvetica Neue',Arial,sans-serif">${cap}</text>`;
-      }
     }
 
     return out;
@@ -665,19 +557,18 @@ export class ClosetSVGRenderer {
     // Light fill for the entire top-shelf zone
     out += `
   <rect x="${zx}" y="${zoneTopY}" width="${zw}" height="${zoneBotY - zoneTopY}"
-        fill="url(#tsp)" stroke="none" opacity="0.6"/>`;
-
-    // SHELF label centred in zone
-    const zoneMid = (zoneTopY + zoneBotY) / 2;
-    if (this.options.showLabels) out += `
-  <text x="${zx + zw / 2}" y="${zoneMid}" text-anchor="middle" dominant-baseline="central"
-        font-size="7.5" fill="#7a6a5a" letter-spacing="1.8"
-        font-family="'Helvetica Neue',Arial,sans-serif">SHELF</text>`;
+        fill="#f1ede5" stroke="none" opacity="0.35"/>`;
 
     if (!zone.shelves?.length) return out;
 
     for (const shelf of zone.shelves) {
       const sy = this.cy(zone.y + shelf.height);
+      const nextLevel = Math.min(zone.y+zone.height,...zone.shelves.filter(other=>other.height>shelf.height).map(other=>zone.y+other.height));
+      const clearHeight=Math.max(0,sy-this.cy(nextLevel)-12);
+      if(shelf.count>0&&clearHeight>16){
+        const symbolW=Math.min(zw*.7,this.scale*12);
+        out+=storageSymbol(shelf.purpose,zx+(zw-symbolW)/2,sy,symbolW,Math.min(clearHeight,this.scale*12));
+      }
       out += `
   <rect x="${zx}" y="${sy}" width="${zw}" height="${sh}"
         fill="${this.wood.panel}" stroke="${this.wood.edge}" stroke-width="1.5"/>
@@ -721,19 +612,9 @@ export class ClosetSVGRenderer {
         font-family="'Helvetica Neue',Arial,sans-serif"
         transform="rotate(-90 ${noteX} ${noteMid})">INT. HT. ${toFtIn(H - TOE_DIM_H)}</text>`;
 
-    // ── Per-zone heights on RIGHT vertical chain (clamped + staggered) ──────
+    // One rightmost-column height chain, never overlapping chains from all bays.
     const vdRX = x1 + 120;
-    const seenH = new Set<string>();
-    const chainPairs: Array<{ za: number; zb: number; hi: number }> = [];
-    for (const zone of this.layout.zones) {
-      const ctop = Math.min(zone.y + zone.height, H);
-      const cbot = Math.max(zone.y, 0);
-      if (ctop <= cbot) continue;
-      const key = `${Math.round(cbot)}-${Math.round(ctop)}`;
-      if (seenH.has(key)) continue;
-      seenH.add(key);
-      chainPairs.push({ za: this.cy(ctop), zb: this.cy(cbot), hi: ctop - cbot });
-    }
+    const chainPairs=rightHeightChain(this.layout.zones,H).map(({top,bottom})=>({za:this.cy(top),zb:this.cy(bottom),hi:top-bottom}));
     // Stagger alternate labels when there are > 2 zones to prevent text collisions
     chainPairs.forEach(({ za, zb, hi }, i) => {
       const sOff = chainPairs.length > 2 && i % 2 === 1 ? 14 : 0;
@@ -751,7 +632,7 @@ export class ClosetSVGRenderer {
     // ── Per-zone widths (bottom inner) ────────────────────────────────────
     const hdY_inner = yFloor + 24;
     const seenZX = new Set<number>();
-    for (const zone of this.layout.zones) {
+    for (const zone of dimensionColumns(this.layout.zones)) {
       const za = this.cx(zone.x);
       const zb = this.cx(zone.x + zone.width);
       out += this.dimLineH(za, zb, hdY_inner, toFtIn(zone.width));
@@ -906,7 +787,7 @@ export class ClosetSVGRenderer {
 
     for (const zone of this.layout.zones) {
       // Skip top-shelves — they get labelled by renderShelfZone
-      if (zone.type === 'top-shelves') continue;
+      if (zone.type === 'top-shelves' || zone.type === 'shoe-shelves' || zone.type === 'drawers' || zone.type === 'accessories') continue;
 
       const zcx = this.cx(zone.x + zone.width / 2);
       const zw  = zone.width * this.scale;
@@ -927,12 +808,12 @@ export class ClosetSVGRenderer {
         const sortedRods = [...zone.rods].sort((a, b) => a.height - b.height);
         if (zone.type === 'long-hang') {
           // Centre between floor and the single rod
-          labelY = this.cy((clampedBot + sortedRods[0].height) / 2);
+          labelY = this.cy(clampedBot + 4);
         } else {
           // double-hang: centre between lower rod and upper rod
           const lowerRod = sortedRods[0].height;
           const upperRod = sortedRods[sortedRods.length - 1].height;
-          labelY = this.cy(((sortedRods.length === 1 ? clampedBot : lowerRod) + upperRod) / 2);
+          labelY = this.cy((sortedRods.length === 1 ? clampedBot : lowerRod + 1.5) + 4);
         }
       }
 
@@ -943,28 +824,10 @@ export class ClosetSVGRenderer {
       // Rule 1.9: ALL CAPS ✅, letter-spacing ≥ 0.15em, color #3D2B1F inside zones
       out += `
   <text x="${zcx}" y="${labelY}" text-anchor="middle" dominant-baseline="central"
-        textLength="${Math.min(zw - 6, mainLabel.length * (fsMain * .65 + 1.2))}" lengthAdjust="spacingAndGlyphs" font-size="${fsMain}" font-weight="400" fill="#3D2B1F" letter-spacing="0.18em"
+        textLength="${Math.min(zw - 6, mainLabel.length * (fsMain * .65 + 1.2))}" lengthAdjust="spacingAndGlyphs" font-size="${fsMain}" font-weight="400" fill="#3D2B1F" letter-spacing="0.06em"
         font-family="'Helvetica Neue','Arial Narrow',Arial,sans-serif">${mainLabel}</text>`;
 
-      // Inventory content sub-label — 2 lines max, lighter colour, smaller
-      if (zone.contentLabel && zoneH > 50) {
-        // Issue 02 — show up to 4 parts across two sub-lines (prevents pants being cut off)
-        const allParts = zone.contentLabel.split(' · ');
-        const line1    = allParts.slice(0, 3).join('  ·  ');
-        const line2    = allParts.length > 3 ? allParts.slice(3, 6).join('  ·  ') : null;
-        const fsContent = clamp(Math.min(zw / (line1.length * 0.95), 7.5), 5, 7.5);
-        out += `
-  <text x="${zcx}" y="${labelY + fsMain + 5}" text-anchor="middle" dominant-baseline="central"
-        textLength="${Math.min(zw - 6, line1.length * (fsContent * .6 + .5))}" lengthAdjust="spacingAndGlyphs" font-size="${fsContent}" font-weight="400" fill="#9a8a7a" letter-spacing="0.5"
-        font-family="'Helvetica Neue',Arial,sans-serif">${line1}</text>`;
-        if (line2 && zoneH > 80) {
-          const fsLine2 = clamp(Math.min(zw / (line2.length * 0.95), 7), 5, 7);
-          out += `
-  <text x="${zcx}" y="${labelY + fsMain + fsContent + 10}" text-anchor="middle" dominant-baseline="central"
-        textLength="${Math.min(zw - 6, line2.length * (fsLine2 * .6 + .5))}" lengthAdjust="spacingAndGlyphs" font-size="${fsLine2}" font-weight="400" fill="#9a8a7a" letter-spacing="0.5"
-        font-family="'Helvetica Neue',Arial,sans-serif">${line2}</text>`;
-        }
-      }
+
     }
 
     return out;

@@ -1,13 +1,14 @@
+import { faceDetails, CABINET_STYLES } from '@/lib/cabinetStyle';
 import type { ClosetLayout, ClosetWall, UserPreferences } from '@/types/closet';
 import { wallFootprint } from '@/lib/planning';
 import { escapeHTML, HARDWARE } from '@/lib/design';
 
 export type Point = [number, number, number];
-export interface SpatialOptions { angle?: number; labels?: boolean; islandOnly?: boolean; elevation?: number; hiddenWalls?: string[]; woodFinish?: UserPreferences['woodFinish']; hardwareFinish?: string; interactive?: boolean; }
+export interface SpatialOptions { style?: UserPreferences['stylePreference']; angle?: number; labels?: boolean; islandOnly?: boolean; elevation?: number; hiddenWalls?: string[]; woodFinish?: UserPreferences['woodFinish']; hardwareFinish?: string; interactive?: boolean; }
 export interface SpatialPart { wallId: ClosetWall['wallId']; kind: string; drawerId?: string; corners: Point[]; }
 
 /** Cabinet-local coordinates: length along wall, depth into room, height above floor. */
-export function spatialParts(layout: ClosetLayout): SpatialPart[] {
+export function spatialParts(layout: ClosetLayout, style: UserPreferences['stylePreference'] = 'modern'): SpatialPart[] {
   const parts: SpatialPart[] = [];
   for (const wall of layout.walls) {
     const box = wallFootprint(wall, layout);
@@ -28,14 +29,14 @@ export function spatialParts(layout: ClosetLayout): SpatialPart[] {
       add('side',x+width-t,0,y,t,depth,height);
       add('base',x,0,y,width,depth,t);
       if(!island)add('top',x,0,y+height-t,width,depth,t);
-      for(const shelf of zone.shelves??[])for(let i=0;i<shelf.count;i++){
-        const z=y+shelf.height+i*shelf.spacing;
+      for(const shelf of zone.shelves??[]){
+        const z=y+shelf.height;
         if(z>=y&&z+t<=y+height)add('shelf',x+t,0,z,width-2*t,Math.min(depth,shelf.depth),t);
       }
       for(const [di,drawer] of (zone.drawers??[]).entries()){
         const w=Math.min(width-2*t,drawer.width),u=x+(width-w)/2;
         add('drawer',u,depth-t,drawer.position,w,t,drawer.height,`${wall.wallId}:${zi}:${di}`);
-        add('handle',u+w*.35,depth,drawer.position+drawer.height*.5,w*.3,.7,.5);
+        for(const detail of faceDetails(style,w,drawer.height)) add(detail.metal?'handle':'front-detail',u+w*detail.x,depth,drawer.position+drawer.height*detail.y,w*detail.w,detail.metal?.7:.08,drawer.height*detail.h);
       }
       for(const rod of zone.rods??[])add('rod',x+t,Math.min(depth-1,rod.depth),rod.height,Math.min(width-2*t,rod.length),.7,.7);
     }
@@ -54,7 +55,7 @@ export function renderSpatial(layout:ClosetLayout,options:SpatialOptions={}):str
   const width=single?layout.dimensions.width:layout.roomDimensions?.roomWidth??layout.dimensions.width;
   const depth=single?layout.dimensions.depth:layout.roomDimensions?.roomDepth??layout.dimensions.depth;
   const floor:Point[]=[[0,0,0],[width,0,0],[width,depth,0],[0,depth,0]];
-  const parts=spatialParts(layout).filter(p=>(!options.islandOnly||p.wallId==='island-unit')&&!options.hiddenWalls?.includes(p.wallId));
+  const parts=spatialParts(layout,options.style).filter(p=>(!options.islandOnly||p.wallId==='island-unit')&&!options.hiddenWalls?.includes(p.wallId));
   const openings=spatialOpenings(layout);
   const all=[...floor,...parts.flatMap(p=>p.corners),...openings.flatMap(o=>o.points)].map(project);
   const minX=Math.min(...all.map(p=>p.x)),maxX=Math.max(...all.map(p=>p.x)),minY=Math.min(...all.map(p=>p.y)),maxY=Math.max(...all.map(p=>p.y));
@@ -66,7 +67,7 @@ export function renderSpatial(layout:ClosetLayout,options:SpatialOptions={}):str
     const vertices=ids.map(n=>part.corners[n]);
     const metal=part.kind==='rod'||part.kind==='handle',counter=part.kind==='countertop';
     const finish={light:['#a88967','#bea17f','#dac3a4','#b39979','#ead9c0'],medium:['#826344','#a27d56','#c2a17a','#92714e','#d5ba96'],dark:['#38271e','#4d3526','#705039','#483020','#89654a'],white:['#bbbdbb','#d8d9d4','#eaece5','#caced0','#fafbf6']}[options.woodFinish??'light'];
-    const hardware=HARDWARE[options.hardwareFinish as keyof typeof HARDWARE]??HARDWARE.chrome;
+    const hardware=HARDWARE[options.hardwareFinish as keyof typeof HARDWARE]??HARDWARE[CABINET_STYLES[options.style??'modern'].hardware];
     const colors=metal?Array(5).fill(hardware):counter?finish.map((color,i)=>i===4?finish[4]:color):finish;
     const control=options.interactive&&part.drawerId&&i===2?` role="button" tabindex="0" data-spatial-drawer="${part.drawerId}" aria-label="Design compartments for ${part.drawerId}" style="cursor:pointer"`:part.kind==='handle'?' style="pointer-events:none"':'';
     faces.push({depth:vertices.reduce((n,p)=>n+project(p).depth,0)/4,svg:`<polygon${control} data-spatial-wall="${part.wallId}" data-part="${part.kind}" points="${points(vertices)}" fill="${colors[i]}" stroke="#6d5945" stroke-width=".2" stroke-linejoin="round"/>`});

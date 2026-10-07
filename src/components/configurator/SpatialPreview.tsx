@@ -11,8 +11,8 @@ export function SpatialPreview({layout,preferences,onDrawerClick}:{layout:Closet
   const drag=useRef<{x:number;angle:number;id:number}|null>(null),moved=useRef(false);
   const visibleDrawers=drawerTargets(layout).filter(d=>!hiddenWalls.includes(d.id.split(':')[0])&&(!islandOnly||d.id.startsWith('island-unit:')));
   const island=layout.walls.find(w=>w.wallId==='island-unit'&&w.zones.length);
-  const options={angle,elevation,labels,islandOnly:!!island&&islandOnly,hiddenWalls,woodFinish:preferences?.woodFinish,hardwareFinish:preferences?.hardwareFinish};
-  const svg=useMemo(()=>renderSpatial(layout,{angle,elevation,labels,islandOnly:!!island&&islandOnly,hiddenWalls,woodFinish:preferences?.woodFinish,hardwareFinish:preferences?.hardwareFinish,interactive:!!onDrawerClick}),[layout,angle,elevation,labels,islandOnly,island,hiddenWalls,preferences?.woodFinish,preferences?.hardwareFinish,onDrawerClick]);
+  const options={angle,elevation,labels,islandOnly:!!island&&islandOnly,hiddenWalls,style:preferences?.stylePreference,woodFinish:preferences?.woodFinish,hardwareFinish:preferences?.hardwareFinish};
+  const svg=useMemo(()=>renderSpatial(layout,{angle,elevation,labels,islandOnly:!!island&&islandOnly,hiddenWalls,style:preferences?.stylePreference,woodFinish:preferences?.woodFinish,hardwareFinish:preferences?.hardwareFinish,interactive:!!onDrawerClick}),[layout,angle,elevation,labels,islandOnly,island,hiddenWalls,preferences?.stylePreference,preferences?.woodFinish,preferences?.hardwareFinish,onDrawerClick]);
   const reset=()=>{setAngle(-25);setElevation(33);setZoom(100);setIslandOnly(false);setHiddenWalls([]);setDragMode(false);};
   const openDrawer=(target:EventTarget|null)=>{const id=target instanceof Element?target.closest('[data-spatial-drawer]')?.getAttribute('data-spatial-drawer'):null;if(id&&visibleDrawers.some(d=>d.id===id))onDrawerClick?.(id);};
   const download=()=>{const url=URL.createObjectURL(new Blob([renderSpatial(layout,options)],{type:'image/svg+xml'}));const link=document.createElement('a');link.href=url;link.download='closet-spatial-view.svg';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};

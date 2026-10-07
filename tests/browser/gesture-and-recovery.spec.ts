@@ -8,10 +8,15 @@ test('wheel zoom holds the pointer anchor and native two-finger gestures zoom th
   await expect.poll(()=>region.locator('div[role=presentation]').evaluate(el=>parseFloat((el as HTMLElement).style.width))).toBeGreaterThan(100);
   await expect.poll(async()=>{const after=await region.evaluate(el=>({left:el.scrollLeft,zoom:parseFloat((el.firstElementChild as HTMLElement).style.width)/100}));return Math.abs(after.left-((before.left+box!.width/2)*after.zoom-box!.width/2));}).toBeLessThan(5);
   await page.getByRole('button',{name:'Reset view',exact:true}).click();
+  // Clicking the toolbar can scroll the page. Resolve the canvas again before
+  // sending native touch coordinates, otherwise the gesture can hit the header.
+  await region.scrollIntoViewIfNeeded();
+  const touchBox=await region.boundingBox();expect(touchBox).not.toBeNull();
+  const touchX=touchBox!.x+touchBox!.width/2,touchY=touchBox!.y+Math.min(touchBox!.height/2,100);
   const client=await context.newCDPSession(page);await client.send('Emulation.setTouchEmulationEnabled',{enabled:true,maxTouchPoints:2});
-  await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:x-20,y,id:0},{x:x+20,y,id:1}]});
-  await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-30,y,id:0},{x:x+30,y,id:1}]});
-  await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:x-60,y,id:0},{x:x+60,y,id:1}]});
+  await client.send('Input.dispatchTouchEvent',{type:'touchStart',touchPoints:[{x:touchX-20,y:touchY,id:0},{x:touchX+20,y:touchY,id:1}]});
+  await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:touchX-30,y:touchY,id:0},{x:touchX+30,y:touchY,id:1}]});
+  await client.send('Input.dispatchTouchEvent',{type:'touchMove',touchPoints:[{x:touchX-60,y:touchY,id:0},{x:touchX+60,y:touchY,id:1}]});
   await client.send('Input.dispatchTouchEvent',{type:'touchEnd',touchPoints:[]});
   await expect.poll(()=>region.locator('div[role=presentation]').evaluate(el=>parseFloat((el as HTMLElement).style.width))).toBeGreaterThan(100);
   await page.getByRole('button',{name:'Fit to viewport'}).click();await expect.poll(()=>region.locator('div[role=presentation]').evaluate(el=>parseFloat((el as HTMLElement).style.width))).toBeLessThanOrEqual(100);

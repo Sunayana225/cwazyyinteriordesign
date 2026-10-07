@@ -85,7 +85,7 @@ describe('Layout and floor-plan refinements',()=>{
     const c=config();c.closetType='corridor';c.roomDimensions={roomWidth:36,roomDepth:120};const layout=new ClosetLayoutEngine(c).calculateLayout(),svg=renderFloorPlan(layout,{...c.roomDimensions,unitDepth:24});expect(svg).toContain('STORAGE OVERLAP');expect(svg).not.toContain('-12&quot; clear');
   });
   it('enforces supported maxima and reports corrected dimensions and counts',()=>{
-    const c=config();c.dimensions={width:10000,height:1000,depth:24};c.wardrobe.shirts=1000000;const l=new ClosetLayoutEngine(c).calculateLayout();expect(l.dimensions).toEqual({width:600,height:240,depth:24});expect(l.inputWarnings?.join(' ')).toContain('10000');expect(dimensionErrors(c)).toHaveLength(2);
+    const c=config();c.dimensions={width:10000,height:1000,depth:24};c.wardrobe.shirts=1000000;const l=new ClosetLayoutEngine(c).calculateLayout();expect(l.dimensions).toEqual({width:1200,height:600,depth:24});expect(l.inputWarnings?.join(' ')).toContain('10000');expect(dimensionErrors(c)).toHaveLength(2);
   });
   it('reserves window/obstacle spans and uses per-wall depths and priorities',()=>{
     const c=config();c.closetType='walkin-u';c.roomDimensions={roomWidth:180,roomDepth:144};c.planning={walls:{left:{depth:18,priority:'shoes'}},windows:[{id:'w',wall:'back',offset:30,width:24,sill:30,height:40}],obstacles:[{id:'o',label:'Column',x:100,y:0,width:12,depth:24}],supportSpan:24};const l=new ClosetLayoutEngine(c).calculateLayout(),back=l.walls[0];
@@ -104,4 +104,42 @@ describe('Preview and print refinements',()=>{
     const c=config();c.closetType='island';c.roomDimensions={roomWidth:192,roomDepth:144};const l=new ClosetLayoutEngine(c).calculateLayout(),t=drawerTargets(l)[0];c.drawerInteriors={[t.id]:defaultInterior(t.drawer)};const settings={...DEFAULT_PRINT,walls:['back'],materials:true,paper:'Letter' as const,orientation:'landscape' as const,project:'<Study>',contact:'Designer'};
     const html=buildPrintDocument([{layout:l,config:c,settings}]);expect(html).toContain('Letter landscape');expect(html).toContain('&lt;Study&gt;');expect(html).not.toContain('LEFT WALL (EL-B)');expect(html).toContain('Estimated organizer materials');expect(html).toContain('print-revision');expect(printSections(l,c,settings)).toHaveLength(6);
   });
+});
+
+
+it('preserves estate-size rooms and planning objects through validation and layout',()=>{
+  const c=config();c.closetType='walkin-u';c.dimensions={width:1200,height:144,depth:24};
+  c.roomDimensions={roomWidth:1200,roomDepth:1200};
+  c.planning={door:{wall:'front',hinge:'left',swing:'out',offset:900,width:36},windows:[{id:'high-window',wall:'back',offset:900,width:48,sill:48,height:48}],obstacles:[{id:'seat',label:'Seat',x:800,y:800,width:60,depth:24}]};
+  expect(dimensionErrors(c)).toEqual([]);expect(validConfig(c)).toBe(true);expect(validPlanning(c.planning)).toBe(true);
+  const layout=new ClosetLayoutEngine(c).calculateLayout();
+  expect(layout.roomDimensions).toEqual(c.roomDimensions);
+  for(const wall of layout.walls)for(const zone of wall.zones){expect(Number.isFinite(zone.width)).toBe(true);expect(zone.x+zone.width).toBeLessThanOrEqual(wall.width+.01);}
+  expect(renderFloorPlan(layout,{...c.roomDimensions,unitDepth:24})).not.toMatch(/NaN|Infinity/);
+  c.roomDimensions.roomWidth=1201;expect(dimensionErrors(c)).not.toEqual([]);expect(new ClosetLayoutEngine(c).calculateLayout().roomDimensions?.roomWidth).toBe(1200);
+});
+
+
+it('retains custom deep cabinet and tall ceiling dimensions from the dimension form',()=>{
+  const c=config();c.dimensions={width:145.625,depth:82,height:306};
+  c.planning={walls:{back:{depth:82,ceilingHeight:306}},windows:[{id:'clerestory',wall:'back',offset:24,width:24,sill:260,height:30}]};
+  expect(dimensionErrors(c)).toEqual([]);expect(validPlanning(c.planning)).toBe(true);
+  const layout=new ClosetLayoutEngine(c).calculateLayout();
+  expect(layout.dimensions).toEqual(c.dimensions);expect(layout.walls[0].unitDepth).toBe(82);
+  expect(layout.inputCorrections).toEqual([]);
+  expect(renderFloorPlan(layout,{roomWidth:145.625,roomDepth:82,unitDepth:82})).not.toMatch(/NaN|Infinity/);
+  expect(validConfig(c)).toBe(true);
+});
+
+
+it('separates cabinet envelope from room ceiling and preserves it in saved data',()=>{
+ const c=config();c.dimensions={width:145.625,depth:24,height:306,cabinetHeight:96};
+ expect(dimensionErrors(c)).toEqual([]);expect(validConfig(c)).toBe(true);
+ expect(canonicalConfig(c).dimensions.cabinetHeight).toBe(96);
+ const layout=new ClosetLayoutEngine(c).calculateLayout();
+ expect(layout.dimensions.height).toBe(306);expect(layout.dimensions.cabinetHeight).toBe(96);
+ expect(layout.walls[0].height).toBe(96);expect(layout.inputCorrections).toEqual([]);
+ for(const z of layout.walls[0].zones)expect(z.y+z.height).toBeLessThanOrEqual(96);
+ c.dimensions.cabinetHeight=400;expect(dimensionErrors(c)).not.toEqual([]);
+ expect(new ClosetLayoutEngine(c).calculateLayout().inputCorrections?.some(v=>v.field==='Cabinet height')).toBe(true);
 });

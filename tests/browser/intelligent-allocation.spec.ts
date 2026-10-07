@@ -1,0 +1,30 @@
+import {test,expect} from '@playwright/test';
+import AxeBuilder from '@axe-core/playwright';
+
+test('upper storage can be toggled, saved, and reviewed with accessible capacity details',async({page})=>{
+ await page.goto('/configure',{waitUntil:'domcontentloaded'});
+ await expect(page.locator('#closet-preview svg').first()).toBeVisible();
+ const insights=page.locator('details').filter({has:page.locator('summary').filter({hasText:'Capacity assumptions, allocation, and alternatives'})}).last();
+ await insights.locator('summary').first().click();
+ await expect(page.getByRole('region',{name:'Storage fit summary'})).toContainText('upper storage shelves added');
+ const elevation=await page.locator('svg[data-ruler-width]').first().evaluate(el=>el.outerHTML);
+ const proof=await page.context().newPage();
+ await proof.setContent(elevation);await proof.locator('svg').screenshot({path:'test-results/intelligent-elevation.png'});await proof.close();
+ const upper=page.getByRole('checkbox',{name:/Use spare upper space for shelves/});
+ await page.locator('summary').filter({hasText:'Room openings, wall preferences, and sizing assumptions'}).click();
+ await upper.uncheck();
+ await expect(page.getByRole('region',{name:'Storage fit summary'})).toContainText('Upper storage is off');
+ await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('alveo-draft')??'null')?.config?.planning?.upperStorage)).toBe(false);
+ await page.reload({waitUntil:'domcontentloaded'});
+ await page.locator('summary').filter({hasText:'Room openings, wall preferences, and sizing assumptions'}).click();
+ await expect(upper).not.toBeChecked();
+ await page.getByRole('tab',{name:'Summary',exact:true}).click();
+ await expect(page.getByRole('progressbar',{name:'Storage needs covered'})).toBeVisible();
+ await expect(page.getByText('Excellent — your closet space is well utilized.')).toHaveCount(0);
+ await insights.locator('summary').first().click();
+ const result=await new AxeBuilder({page}).include('#main-content').withTags(['wcag2a','wcag2aa','wcag21aa']).analyze();
+ expect(result.violations).toEqual([]);
+ await page.setViewportSize({width:320,height:850});
+ await expect(page.getByRole('region',{name:'Storage fit summary'}).locator('ul')).toBeVisible();
+ expect(await page.evaluate(()=>document.documentElement.scrollWidth)).toBeLessThanOrEqual(320);
+});

@@ -3,6 +3,7 @@ import { DEFAULT_CONFIG, FINISHES, STYLES, TYPES } from './design';
 import type { ClosetConfiguration, SavedDesign } from '@/types/closet';
 import { validInteriors, interiorIssue } from './drawers';
 import { validPlanning, canonicalPlanning, planningIssues } from './planning';
+import { validColumns, columnsIssue } from './layoutColumns';
 
 export const SAVED_KEY = 'alveo-saved-designs';
 export const DRAFT_KEY = 'alveo-draft';
@@ -20,12 +21,12 @@ export function pickFields<T extends object>(value: T, keys: readonly string[]):
 }
 export function canonicalConfig(c: ClosetConfiguration): ClosetConfiguration {
   const next = pickFields(c, ['closetType','dimensions','roomDimensions','userInfo','wardrobe','shoes','amenities','zoneOverrides','drawerInteriors','planning','inventoryPlanning']);
-  next.dimensions = pickFields(c.dimensions, ['width','height','depth']);
+  next.dimensions = pickFields(c.dimensions, ['width','height','depth','cabinetHeight']);
   next.userInfo = pickFields(c.userInfo, ['userType','stylePreference','woodFinish','drawerPreference','priorityItems','hardwareFinish','accentColor']);
   next.wardrobe = pickFields(c.wardrobe, Object.keys(DEFAULT_CONFIG.wardrobe));
   next.shoes = pickFields(c.shoes, Object.keys(DEFAULT_CONFIG.shoes));
   if(c.roomDimensions) next.roomDimensions = pickFields(c.roomDimensions,['roomWidth','roomDepth']);
-  if(c.zoneOverrides) next.zoneOverrides = pickFields(c.zoneOverrides,['drawerPosition']);
+  if(c.zoneOverrides) next.zoneOverrides = pickFields(c.zoneOverrides,['drawerPosition','columns']);
   if(c.amenities) next.amenities = pickFields(c.amenities,['island','seating','vanity','mirrorWall','displayShelves','safe','shoeWall','lighting']);
   if(c.planning)next.planning=canonicalPlanning(c.planning);
   if(c.inventoryPlanning)next.inventoryPlanning=canonicalInventoryPlanning(c.inventoryPlanning);
@@ -48,7 +49,7 @@ export function validConfig(value: unknown): value is ClosetConfiguration {
     const v = (actual as Record<string, unknown>)[k];
     return k === 'jewelry' ? typeof v === 'boolean' : finite(v) && Number.isInteger(v);
   });
-  return validInventoryPlanning(c.inventoryPlanning) && validPlanning(c.planning) && (c.closetType === undefined || TYPES.includes(c.closetType)) && record(c.dimensions) &&
+  return (c.dimensions?.cabinetHeight === undefined || (finite(c.dimensions.cabinetHeight) && c.dimensions.cabinetHeight > 0)) && validInventoryPlanning(c.inventoryPlanning) && validPlanning(c.planning) && (c.closetType === undefined || TYPES.includes(c.closetType)) && record(c.dimensions) &&
     Object.keys(DEFAULT_CONFIG.dimensions).every(k => finite(c.dimensions[k as keyof typeof c.dimensions])) &&
     (c.roomDimensions === undefined || (record(c.roomDimensions) && finite(c.roomDimensions.roomWidth) && finite(c.roomDimensions.roomDepth))) &&
     counts(c.wardrobe, DEFAULT_CONFIG.wardrobe) && counts(c.shoes, DEFAULT_CONFIG.shoes) &&
@@ -56,7 +57,7 @@ export function validConfig(value: unknown): value is ClosetConfiguration {
     STYLES.includes(c.userInfo.stylePreference) && FINISHES.includes(c.userInfo.woodFinish) &&
     ['many-small', 'few-large', 'mixed'].includes(c.userInfo.drawerPreference) &&
     Array.isArray(c.userInfo.priorityItems) && c.userInfo.priorityItems.every(p => ['hanging', 'shoes', 'folded', 'accessories'].includes(p)) &&
-    (c.zoneOverrides === undefined || (record(c.zoneOverrides) && (c.zoneOverrides.drawerPosition === undefined || ['bottom', 'middle', 'top'].includes(c.zoneOverrides.drawerPosition)))) &&
+    (c.zoneOverrides === undefined || (record(c.zoneOverrides) && (c.zoneOverrides.drawerPosition === undefined || ['bottom', 'middle', 'top'].includes(c.zoneOverrides.drawerPosition)) && validColumns(c.zoneOverrides.columns))) &&
     (c.userInfo.accentColor === undefined || (typeof c.userInfo.accentColor === 'string' && (c.userInfo.accentColor === 'transparent' || /^#[0-9a-f]{6}$/i.test(c.userInfo.accentColor)))) &&
     (c.userInfo.hardwareFinish === undefined || ['chrome', 'brass', 'black', 'gold'].includes(c.userInfo.hardwareFinish)) &&
     (c.amenities === undefined || (record(c.amenities) && Object.values(c.amenities).every(v => typeof v === 'boolean'))) && validInteriors(c.drawerInteriors);
@@ -108,6 +109,7 @@ export function invalidConfigurationField(value:unknown):string{
     if(!record(c[block]))return block;
     for(const field of fields)if(!finite(c[block][field]))return `${block}.${field}`;
   }
+  if(c.dimensions.cabinetHeight!==undefined&&(!finite(c.dimensions.cabinetHeight)||c.dimensions.cabinetHeight<=0))return 'dimensions.cabinetHeight';
   for(const [block,defaults]of [['wardrobe',DEFAULT_CONFIG.wardrobe],['shoes',DEFAULT_CONFIG.shoes]] as const){
     if(!record(c[block]))return block;
     for(const field of Object.keys(defaults)){const v=c[block][field];if(field==='jewelry'?typeof v!=='boolean':!finite(v)||!Number.isInteger(v))return `${block}.${field}`;}
@@ -118,6 +120,7 @@ export function invalidConfigurationField(value:unknown):string{
   const priority=c.userInfo.priorityItems.findIndex((v:unknown)=>!['hanging','shoes','folded','accessories'].includes(v as string));if(priority>=0)return `userInfo.priorityItems[${priority}]`;
   if(c.zoneOverrides!==undefined&&!record(c.zoneOverrides))return 'zoneOverrides';
   if(c.zoneOverrides?.drawerPosition!==undefined&&!['bottom','middle','top'].includes(c.zoneOverrides.drawerPosition))return 'zoneOverrides.drawerPosition';
+  {const issue=columnsIssue(c.zoneOverrides?.columns);if(issue)return issue;}
   if(c.userInfo.accentColor!==undefined&&(typeof c.userInfo.accentColor!=='string'||(c.userInfo.accentColor!=='transparent'&&!/^#[0-9a-f]{6}$/i.test(c.userInfo.accentColor))))return 'userInfo.accentColor';
   if(c.userInfo.hardwareFinish!==undefined&&!['chrome','brass','black','gold'].includes(c.userInfo.hardwareFinish))return 'userInfo.hardwareFinish';
   if(c.amenities!==undefined&&!record(c.amenities))return 'amenities';

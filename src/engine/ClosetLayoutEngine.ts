@@ -1,4 +1,12 @@
+import { shoeShelves, shoeColumnWidth } from '@/lib/shoePlanning';
+import { remainingInventory, type InventoryBudget } from '@/lib/inventoryBudget';
+import { hangingWidths } from '@/lib/hangingAllocation';
+import { withUpperStorage } from '@/lib/upperStorage';
+import { selectColumns } from '@/lib/columnSelection';
+import { accessoryShelves } from '@/lib/accessoryShelves';
 import { reserveInventory, validInventoryPlanning } from '@/lib/inventoryPlanning';
+import { validColumns, resolveColumns, COLUMN_MIN_WIDTH } from '@/lib/layoutColumns';
+import type { ZoneOverrides, LayoutColumn } from '@/types/closet';
 import { EMPTY_WARDROBE, LIMITS, SHOE_SPACING, SHOE_PAIR_WIDTH as SHOE_PAIR_W, foldedDemand, hangingDemand, capacityReport } from '@/lib/design';
 import { MAX_DIMENSION, MAX_HEIGHT, MAX_INVENTORY, validPlanning, freeSpans, wallFootprint, overlaps } from '@/lib/planning';
 import type { PlanningOptions } from '@/types/closet';
@@ -38,8 +46,8 @@ const DRAWER_GAP  = 1;   // gap between drawer faces
 const DRAWER_MARG = 2;   // top + bottom clearance inside drawer zone
 
 // Column minimum widths
-const COL_HANG_MIN = 24;
-const COL_SHOE_W   = 24;  // dedicated shoe column fixed width
+const COL_HANG_MIN = COLUMN_MIN_WIDTH['long-hang'];
+const COL_SHOE_W   = 24;  // preferred minimum for a dedicated shoe column
 
 
 
@@ -48,6 +56,9 @@ const COL_SHOE_W   = 24;  // dedicated shoe column fixed width
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class ClosetLayoutEngine {
+  private remaining: InventoryBudget | undefined;
+  private ceilingHeight: number;
+  private customCabinetHeight: boolean;
   private H: number;       // ceiling height
   private W: number;       // primary width (single-wall) or room width (walk-in)
   private D: number;       // unit depth
@@ -60,11 +71,15 @@ export class ClosetLayoutEngine {
   private prefs: UserPreferences;
   private amenities: VillaAmenities;
   private inputWarnings: string[] = [];
+  private normalizedWarnings: string[] = [];
   private planning:PlanningOptions;
+  /** Canvas-edited column recipes per wall. Validated on the way in, so a corrupt
+   * override degrades to the engine's own layout instead of breaking the design. */
+  private columns:NonNullable<ZoneOverrides['columns']>;
   private inputCorrections: NonNullable<ClosetLayout['inputCorrections']> = [];
 
   // ── Layer 1: Input normaliser ─────────────────────────────────────────────
-  // Enforces only hard structural minimums — no upper ceiling.
+  // Enforces supported planning bounds.
   // The drawing engine scales dynamically to any size.
   private static normDim(val: number, min: number, max: number, def: number): number {
     const n = Number(val);
@@ -74,18 +89,26 @@ export class ClosetLayoutEngine {
 
   constructor(input: ClosetCalculationInput) {
     this.planning=validPlanning(input.planning)?input.planning??{}:{};
+    this.columns=validColumns(input.zoneOverrides?.columns)?input.zoneOverrides?.columns??{}:{};
     const rawH     = input.dimensions.height;
     const rawW     = input.dimensions.width;
     const rawD     = input.dimensions.depth ?? UNIT_DEPTH;
     const rawRoomW = input.roomDimensions?.roomWidth ?? input.dimensions.width;
     const rawRoomD = input.roomDimensions?.roomDepth ?? Math.max(input.dimensions.width * 0.75, 60);
 
-    // Only enforce structural MINIMUMS — no upper limits.
+    // Use the same supported bounds as the dimension form.
     // The renderer scales dynamically to any width/height via calcScale() + drawH.
-    // Unit depth (D) has a physical max of 48" (deepest usable closet unit).
+    // Custom cabinet depth is independent of room depth.
     this.H = ClosetLayoutEngine.normDim(rawH, LIMITS.height, MAX_HEIGHT, 108);
+    this.ceilingHeight = this.H;
+    this.customCabinetHeight = input.dimensions.cabinetHeight !== undefined;
+    if(this.customCabinetHeight){
+      const requested=input.dimensions.cabinetHeight!;
+      this.H=Math.min(this.ceilingHeight,ClosetLayoutEngine.normDim(requested,LIMITS.height,MAX_HEIGHT,this.ceilingHeight));
+      if(this.H!==requested){this.inputWarnings.push('Cabinet height adjusted to fit the ceiling and supported range.');this.inputCorrections.push({field:'Cabinet height',requested,effective:this.H});}
+    }
     this.W = ClosetLayoutEngine.normDim(rawW, LIMITS.width, MAX_DIMENSION, 120);
-    this.D = ClosetLayoutEngine.normDim(rawD, 18,  48,                      UNIT_DEPTH);
+    this.D = ClosetLayoutEngine.normDim(rawD, LIMITS.depthMin, LIMITS.depthMax,                      UNIT_DEPTH);
     this.closetType     = input.closetType ?? 'reach-in';
     this.drawerPosition = input.zoneOverrides?.drawerPosition ?? 'bottom';
     this.roomW = ClosetLayoutEngine.normDim(rawRoomW, LIMITS.width, MAX_DIMENSION, this.W);
@@ -103,17 +126,22 @@ export class ClosetLayoutEngine {
     this.amenities = input.amenities ?? {};
 
     for (const [field, raw, effective] of [
-      ['Height', rawH, this.H], ['Width', rawW, this.W], ['Cabinet depth', rawD, this.D],
+      ['Height', rawH, this.ceilingHeight], ['Width', rawW, this.W], ['Cabinet depth', rawD, this.D],
       ['Room width', rawRoomW, this.roomW], ['Room depth', rawRoomD, this.roomD],
     ] as const) {
       if (raw !== effective) { this.inputWarnings.push(field + ' adjusted from ' + raw + ' to ' + effective + ' inches.'); this.inputCorrections.push({ field, requested: raw, effective }); }
     }
+    this.normalizedWarnings=[...this.inputWarnings];
   }
 
   // â”€â”€ Public API â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   public calculateLayout(): ClosetLayout {
-    const walls          = this.buildAllWalls();
+    this.inputWarnings=[...this.normalizedWarnings];
+    this.remaining = { wardrobe: { ...this.wardrobe }, shoes: { ...this.shoes } };
+    let walls: ClosetWall[];
+    try { walls = this.buildAllWalls(); }
+    finally { this.remaining = undefined; }
     const aisleWarnings  = this.checkAisles();
     const layoutWarnings = this.checkZoneConstraints(walls);
     const capacity = capacityReport({ wardrobe: this.wardrobe, shoes: this.shoes }, walls);
@@ -126,14 +154,14 @@ export class ClosetLayoutEngine {
     return {
       planning:this.planning,
       closetType: this.closetType,
-      dimensions: { width: this.W, height: this.H, depth: this.D },
+      dimensions: { width: this.W, height: this.ceilingHeight, depth: this.D, ...(this.customCabinetHeight?{cabinetHeight:this.H}:{}) },
       walls,
       roomDimensions: { roomWidth: this.roomW, roomDepth: this.roomD },
       capacity,
       zones,
       aisleWarnings,
       layoutWarnings,
-      inputWarnings: this.inputWarnings,
+      inputWarnings: [...new Set(this.inputWarnings)],
       inputCorrections: this.inputCorrections,
       totalStorage:     this.calcStorage(walls),
       utilizationScore: this.calcUtilization(walls),
@@ -144,59 +172,40 @@ export class ClosetLayoutEngine {
   // â”€â”€ Wall factory  -  one entry per closet type â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   private buildAllWalls(): ClosetWall[] {
+    type WallRequest = [ClosetWall['wallId'], string, string, number, number, WallRole];
+    const sideW = Math.max(this.roomD - this.depthFor('back'), 0);
+    let requests: WallRequest[];
     switch (this.closetType) {
-      // â”€â”€ Single-wall types â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      case 'reach-in':
-      case 'wardrobe-wall':
-        return [this.wall('back', 'BACK WALL', 'EL-A', this.W, this.D, 'all')];
-
-      case 'walkin-single':
-        return [this.wall('back', 'BACK WALL', 'EL-A', this.roomW, this.D, 'all')];
-
-      // â”€â”€ L-shape: back wall (hanging) + one side wall (drawers + shoes) â”€â”€â”€â”€
-      case 'walkin-l': {
-        const sideW = Math.max(this.roomD - this.depthFor('back'), 0);
-        return [
-          this.wall('back', 'BACK WALL',  'EL-A', this.roomW, this.D, 'hanging-only'),
-          this.wall('left', 'LEFT WALL',  'EL-B', sideW,      this.D, 'drawers-and-shoes'),
-        ];
-      }
-
-      // ── U-shape: back (hanging) + left (drawers) + right (shoes) ──────────
-      case 'walkin-u': {
-        const sideW = Math.max(this.roomD - this.depthFor('back'), 0);
-        return [
-          this.wall('back',  'BACK WALL',  'EL-A', this.roomW, this.D, 'hanging-only'),
-          this.wall('left',  'LEFT WALL',  'EL-B', sideW,      this.D, 'drawers-only'),
-          this.wall('right', 'RIGHT WALL', 'EL-C', sideW,      this.D, 'shoes-only'),
-        ];
-      }
-
-      // ── Island: U-shape walls + central island unit ─────────────────────────
-      case 'island': {
-        const sideW = Math.max(this.roomD - this.depthFor('back'), 0);
-        const islandW = this.islandWidth();
-        const islandH = 36; // counter height 36" A.F.F.
-        return [
-          this.wall('back',  'BACK WALL',  'EL-A', this.roomW, this.D, 'hanging-only'),
-          this.wall('left',  'LEFT WALL',  'EL-B', sideW,      this.D, 'drawers-only'),
-          this.wall('right', 'RIGHT WALL', 'EL-C', sideW,      this.D, 'shoes-only'),
-          ...(islandW >= 36 ? [this.buildIslandWall(islandW, islandH)] : []),
-        ];
-      }
-
-      // â”€â”€ Corridor: Wall A (hanging) + Wall B (drawers + shoes) â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-      case 'corridor': {
-        const wallW = Math.max(this.roomD, 48);  // length of the passageway
-        return [
-          this.wall('corridor-a', 'WALL A', 'EL-A', wallW, this.D, 'hanging-only'),
-          this.wall('corridor-b', 'WALL B', 'EL-B', wallW, this.D, 'drawers-and-shoes'),
-        ];
-      }
-
+      case 'walkin-l':
+        requests = [
+          ['back', 'BACK WALL', 'EL-A', this.roomW, this.D, 'hanging-only'],
+          ['left', 'LEFT WALL', 'EL-B', sideW, this.D, 'drawers-and-shoes'],
+        ]; break;
+      case 'walkin-u':
+      case 'island':
+        requests = [
+          ['back', 'BACK WALL', 'EL-A', this.roomW, this.D, 'hanging-only'],
+          ['left', 'LEFT WALL', 'EL-B', sideW, this.D, 'drawers-only'],
+          ['right', 'RIGHT WALL', 'EL-C', sideW, this.D, 'shoes-only'],
+        ]; break;
+      case 'corridor':
+        requests = [
+          ['corridor-a', 'WALL A', 'EL-A', Math.max(this.roomD, 48), this.D, 'hanging-only'],
+          ['corridor-b', 'WALL B', 'EL-B', Math.max(this.roomD, 48), this.D, 'drawers-and-shoes'],
+        ]; break;
       default:
-        return [this.wall('back', 'BACK WALL', 'EL-A', this.W, this.D, 'all')];
+        requests = [['back', 'BACK WALL', 'EL-A', this.closetType === 'walkin-single' ? this.roomW : this.W, this.D, 'all']];
     }
+    // Allocate explicit wall choices first; keep the public/drawing wall order.
+    // This prevents a spare span on an earlier wall consuming a later priority.
+    const rank = (request: WallRequest) => this.columns[request[0]]?.length ? 2
+      : this.planning.walls?.[request[0]]?.priority && this.planning.walls[request[0]]!.priority !== 'default' ? 1 : 0;
+    const walls: ClosetWall[] = new Array(requests.length);
+    requests.map((request, index) => ({ request, index }))
+      .sort((a, b) => rank(b.request) - rank(a.request) || a.index - b.index)
+      .forEach(({ request, index }) => { walls[index] = this.wall(...request); });
+    if (this.closetType === 'island' && this.islandWidth() >= 36) walls.push(this.buildIslandWall(this.islandWidth(), 36));
+    return walls;
   }
 
   private wall(
@@ -216,7 +225,14 @@ export class ClosetLayoutEngine {
       this.inputWarnings.push(`${label}: storage excluded around obstacle ${obstacle.label}.`);
     }
     const spans=freeSpans(width,excluded);
-    const zones=spans.flatMap(([start,end])=>this.buildWall(wallId,label,elevationRef,end-start,unitDepth,role).zones.map(z=>({...z,x:z.x+start})));
+    let zones=spans.flatMap(([start,end])=>this.buildWall(wallId,label,elevationRef,end-start,unitDepth,role).zones.map(z=>({...z,x:z.x+start})));
+    // Append after all spans, so a new shelf above the first span cannot shift
+    // organizer IDs belonging to drawers in the second span.
+    if(this.planning.upperStorage!==false)zones=withUpperStorage(zones,this.D,this.planning.accessoryShelfOpening);
+    const supportSpan=this.planning.supportSpan??32;
+    for(const zone of zones)if(zone.shelves&&zone.width>supportSpan){
+      zone.supports=Array.from({length:Math.ceil(zone.width/supportSpan)-1},(_,i)=>(i+1)*zone.width/Math.ceil(zone.width/supportSpan));
+    }
     this.D=originalDepth;this.H=originalHeight;this.prefs=originalPrefs;
     if(floorOffset)for(const zone of zones){zone.y+=floorOffset;zone.rods?.forEach(r=>r.height+=floorOffset);zone.drawers?.forEach(d=>d.position+=floorOffset);}
     if(excluded.length)this.inputWarnings.push(`${label}: openings and obstacles reserve ${Math.max(0,width-spans.reduce((n,[a,b])=>n+b-a,0)).toFixed(2)} inches of wall width.`);
@@ -226,7 +242,58 @@ export class ClosetLayoutEngine {
   private get clearance(){return this.planning.clearanceTarget??36;}
   private depthFor(id:ClosetWall['wallId']) { return this.planning.walls?.[id]?.depth??this.D; }
 
+  /** Build a wall from a user-placed column recipe instead of the engine's own column
+   * decision. Each column is still built by the normal zone builders, so an edited wall
+   * carries the same rods, shelves and drawer banks a generated one would. */
+  private buildZonesFromColumns(columns: LayoutColumn[], width: number): ClosetZone[] {
+    const zones: ClosetZone[] = [];
+    const drawerH = this.hasAnyDrawers() ? this.calcDrawerStackHeight() : 0;
+    let curX = 0;
+    for (const column of columns) {
+      const w = column.width, top = this.H - TOE_KICK;
+      switch (column.type) {
+        case 'long-hang':    this.addLongHangZone(zones, curX, w, TOE_KICK, top); break;
+        case 'shoe-shelves': this.addShoeColumn(zones, curX, w, TOE_KICK, top); break;
+        case 'drawers':      this.addDrawerZone(zones, curX, w, TOE_KICK, Math.max(drawerH, Math.min(top, DRAWER_STD + DRAWER_MARG * 2))); break;
+        case 'top-shelves':
+          zones.push({ type: 'top-shelves', x: curX, y: TOE_KICK, width: w, height: top,
+            shelves: accessoryShelves(w,top,this.D,this.wardrobe.bags,false,this.planning.accessoryShelfOpening),
+            contentLabel: 'Shelves and accessories' });
+          break;
+        default:
+          if (drawerH > 0) this.buildDrawerAndHang(zones, curX, w, drawerH);
+          else this.addShortHangZone(zones, curX, w, TOE_KICK, top);
+      }
+      curX += w;
+    }
+    return zones;
+  }
+
+  /** Each span sees only unallocated demand. Restore source inventory before
+   * reporting, so shortfalls remain relative to the user's full collection. */
   private buildWall(
+    wallId: ClosetWall['wallId'], label: string, elevationRef: string,
+    width: number, unitDepth: number, role: WallRole,
+  ): ClosetWall {
+    const wardrobe = this.wardrobe, shoes = this.shoes;
+    // Explicit recipes describe requested storage, including intentional spare
+    // capacity. Their actual capacity still reduces later automatic demand.
+    const manual = resolveColumns(this.columns[wallId], { width });
+    if (this.remaining && !manual) {
+      this.wardrobe = this.remaining.wardrobe;
+      this.shoes = this.remaining.shoes;
+    }
+    try {
+      const wall = this.buildWallForDemand(wallId, label, elevationRef, width, unitDepth, role);
+      if (this.remaining) this.remaining = remainingInventory(this.remaining, wall.zones);
+      return wall;
+    } finally {
+      this.wardrobe = wardrobe;
+      this.shoes = shoes;
+    }
+  }
+
+  private buildWallForDemand(
     wallId:       ClosetWall['wallId'],
     label:        string,
     elevationRef: string,
@@ -235,23 +302,17 @@ export class ClosetLayoutEngine {
     role:         WallRole,
   ): ClosetWall {
     if (width < 12) return { wallId, label, elevationRef, width, height: this.H, unitDepth, zones: [] };
+    // A canvas-edited wall replaces the engine's column decision but keeps every other
+    // step below (supports, annotation), so overrides are additive per wall.
+    const edited = resolveColumns(this.columns[wallId], { width });
+    if(edited && edited.length<(this.columns[wallId]?.length??0))this.inputWarnings.push(`${label}: some edited columns cannot meet their minimum widths in this span. Widen the span or revise the column types.`);
     const wantsAccessories = this.wardrobe.bags > 0 || this.wardrobe.belts > 0;
-    const reserve = wantsAccessories && ['all', 'drawers-only', 'drawers-and-shoes'].includes(role) && width >= 48
+    const reserve = !edited && wantsAccessories && ['all', 'drawers-only', 'drawers-and-shoes'].includes(role) && width >= 48
       ? Math.min(width / 2, this.prefs.priorityItems.includes('accessories') ? 36 : 24) : 0;
-    const zones = this.buildZonesForRole(role, width - reserve);
+    const zones = edited ? this.buildZonesFromColumns(edited, width) : this.buildZonesForRole(role, width - reserve);
     if (reserve) {
-      const shelves: ShelfConfig[] = [];
-      let y = 2;
-      if (this.wardrobe.belts) { shelves.push({ height: y, spacing: 6, depth: 12, count: Math.floor((reserve - 4) / 2), purpose: 'belts' }); y += 7; }
-      const perShelf = Math.max(1, Math.floor((reserve - 4) / 10));
-      for (let i = 0; i < Math.ceil(this.wardrobe.bags / perShelf) && y + 15 < this.H - TOE_KICK; i++) {
-        shelves.push({ height: y, spacing: 14, depth: Math.min(this.D, 16), count: perShelf, purpose: 'bags' }); y += 15;
-      }
-      zones.push({ type: 'top-shelves', x: width - reserve, y: TOE_KICK, width: reserve, height: this.H - TOE_KICK, shelves, contentLabel: 'Bags and belt trays' });
-    }
-    const span=this.planning.supportSpan??32;
-    for (const zone of zones) if (zone.shelves && zone.width > span) {
-      zone.supports = Array.from({ length: Math.ceil(zone.width / span) - 1 }, (_, i) => (i + 1) * zone.width / Math.ceil(zone.width / span));
+      const shelves=accessoryShelves(reserve,this.H-TOE_KICK,this.D,this.wardrobe.bags,this.wardrobe.belts>0,this.planning.accessoryShelfOpening);
+      zones.push({ type: 'top-shelves', x: width - reserve, y: TOE_KICK, width: reserve, height: this.H - TOE_KICK, shelves, contentLabel: 'Bags, accessories and adjustable shelves' });
     }
     this.annotateZones(zones);
     return { wallId, label, elevationRef, width, height: this.H, unitDepth, zones };
@@ -266,7 +327,7 @@ export class ClosetLayoutEngine {
     // Drawer stack inside the island counter
     const drawers: DrawerConfig[] = [];
     let curY = DRAWER_MARG;
-    if (this.wardrobe.jewelry) {
+    if ((this.remaining?.wardrobe ?? this.wardrobe).jewelry) {
       drawers.push({ height: DRAWER_JEW, width: drawerW - 4, depth: this.depthFor('island-unit') - 6, position: curY, purpose: 'jewelry' });
       curY += DRAWER_JEW + DRAWER_GAP;
     }
@@ -303,6 +364,12 @@ export class ClosetLayoutEngine {
   // â”€â”€ Role dispatcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   private buildZonesForRole(role: WallRole, W: number): ClosetZone[] {
+    const hanging = hangingDemand(this.wardrobe);
+    const roleHasDemand = role === 'hanging-only' ? hanging.long + hanging.short > 0
+      : role === 'shoes-only' ? this.countShoes() > 0
+      : role === 'drawers-only' ? this.hasAnyDrawers()
+      : role === 'drawers-and-shoes' ? this.hasAnyDrawers() || this.countShoes() > 0 : true;
+    if (!roleHasDemand) role = 'all';
     switch (role) {
       case 'all':              return this.buildAll(W);
       case 'hanging-only':     return this.buildHanging(W);
@@ -331,14 +398,25 @@ export class ClosetLayoutEngine {
     const hasDrawers = this.hasAnyDrawers();
     const totalShoes = this.countShoes();
 
-    const colTypes: ('long-hang' | 'short-hang' | 'shoe-shelves')[] = [];
+    let colTypes: ('long-hang' | 'short-hang' | 'shoe-shelves')[] = [];
     if (longItems  > 0)               colTypes.push('long-hang');
     if (shortItems > 0 || hasDrawers) colTypes.push('short-hang');
     if (totalShoes > 0)               colTypes.push('shoe-shelves');
-    if (colTypes.length === 0)        colTypes.push('short-hang');
+    if (colTypes.length === 0) return W >= COLUMN_MIN_WIDTH['top-shelves'] ? [{
+      type: 'top-shelves', x: 0, y: TOE_KICK, width: W, height: this.H - TOE_KICK,
+      shelves: accessoryShelves(W, this.H - TOE_KICK, this.D, 0, false, this.planning.accessoryShelfOpening),
+      contentLabel: 'Spare adjustable storage',
+    }] : [];
+    colTypes=this.fitColumnTypes(colTypes,W,hasDrawers);
 
-    const widths     = this.distributeWidths(colTypes, W);
     const drawerH    = hasDrawers ? this.calcDrawerStackHeight() : 0;
+    // Count the rods that really fit around this drawer position, rather than
+    // assuming every short-hang column provides two rods.
+    const shortPrototype:ClosetZone[]=[];
+    if(hasDrawers)this.buildDrawerAndHang(shortPrototype,0,COL_HANG_MIN,drawerH);
+    else this.addShortHangZone(shortPrototype,0,COL_HANG_MIN,TOE_KICK,this.H-TOE_KICK);
+    const rodCount=shortPrototype.reduce((n,z)=>n+(z.rods?.length??0),0);
+    const widths     = this.distributeWidths(colTypes, W,rodCount);
     const zones: ClosetZone[] = [];
     let curX = 0;
 
@@ -377,18 +455,17 @@ export class ClosetLayoutEngine {
     const hasShort = shortItems > 0;
 
     const zones: ClosetZone[] = [];
-
-    if (hasLong && hasShort) {
-      // Split: long gets 38%, short gets 62%
-      const [longW, shortW] = this.distributeWidths(['long-hang', 'short-hang'], W);
-      this.addLongHangZone(zones, 0,     longW,  TOE_KICK, this.H - TOE_KICK);
-      this.addShortHangZone(zones, longW, shortW, TOE_KICK, this.H - TOE_KICK);
-    } else if (hasLong) {
-      this.addLongHangZone(zones, 0, W, TOE_KICK, this.H - TOE_KICK);
-    } else {
-      // No inventory or short only  -  full wall double-hang
-      this.addShortHangZone(zones, 0, W, TOE_KICK, this.H - TOE_KICK);
-    }
+    const wanted:('long-hang'|'short-hang')[]=hasLong?(hasShort?['long-hang','short-hang']:['long-hang']):['short-hang'];
+    const types=this.fitColumnTypes(wanted,W,false);
+    const prototype:ClosetZone[]=[];
+    this.addShortHangZone(prototype,0,COL_HANG_MIN,TOE_KICK,this.H-TOE_KICK);
+    const widths=this.distributeWidths(types,W,prototype.reduce((n,z)=>n+(z.rods?.length??0),0));
+    let x=0;
+    types.forEach((type,i)=>{
+      if(type==='long-hang')this.addLongHangZone(zones,x,widths[i],TOE_KICK,this.H-TOE_KICK);
+      else this.addShortHangZone(zones,x,widths[i],TOE_KICK,this.H-TOE_KICK);
+      x+=widths[i];
+    });
 
     return zones;
   }
@@ -426,9 +503,8 @@ export class ClosetLayoutEngine {
     const totalShoes = this.countShoes();
     const zones: ClosetZone[] = [];
 
-    if (totalShoes > 0 && W >= COL_HANG_MIN) {
-      const shoeW = this.calcShoeColumnWidth();
-      if (shoeW + COL_HANG_MIN > W) return this.buildDrawersOnly(W);
+    if (totalShoes > 0 && W >= COL_HANG_MIN + COL_SHOE_W) {
+      const shoeW = this.calcShoeColumnWidth(W - COL_HANG_MIN);
       const hangW = W - shoeW;
       // Hanging/drawer column (left)
       if (this.hasAnyDrawers()) {
@@ -452,6 +528,7 @@ export class ClosetLayoutEngine {
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   private addLongHangZone(out: ClosetZone[], x: number, w: number, yBottom: number, height: number) {
+    if(w<COL_HANG_MIN){this.inputWarnings.push(`Hanging omitted: this span is narrower than the ${COL_HANG_MIN}-inch minimum.`);return;}
     const requested=this.planning.garmentLengths?.long;
     const rodAFF = Math.min(yBottom + height - SHELF_THICK - ROD_INSET, requested?yBottom+requested+2:ROD_LONG+4);
     if(requested&&rodAFF-yBottom<requested)this.inputWarnings.push('Long garments exceed the available hanging clearance.');
@@ -462,6 +539,7 @@ export class ClosetLayoutEngine {
   }
 
   private addShortHangZone(out: ClosetZone[], x: number, w: number, yBottom: number, height: number) {
+    if(w<COL_HANG_MIN){this.inputWarnings.push(`Hanging omitted: this span is narrower than the ${COL_HANG_MIN}-inch minimum.`);return;}
     if (height < 30) return;  // not enough space for any hang zone
     const zoneTopAFF = yBottom + height;
     const short=this.planning.garmentLengths?.short;
@@ -480,6 +558,7 @@ export class ClosetLayoutEngine {
   }
 
   private addDrawerZone(out: ClosetZone[], x: number, w: number, yBottom: number, totalH: number) {
+    if(w<COLUMN_MIN_WIDTH.drawers){this.inputWarnings.push(`Drawers omitted: this span is narrower than the ${COLUMN_MIN_WIDTH.drawers}-inch minimum.`);return;}
     const drawers = this.buildDrawerList(w, yBottom, totalH);
     if (!drawers.length) return;
     out.push({ type: 'drawers', x, y: yBottom, width: w, height: totalH, drawers });
@@ -665,68 +744,45 @@ export class ClosetLayoutEngine {
 
   /** Shoe shelf heights are stored RELATIVE to zone.y (renderer adds zone.y). */
   private buildShoeShelves(totalH: number, colW: number): ShelfConfig[] {
-    const shelves: ShelfConfig[] = [];
-    let relH = DRAWER_MARG;
-    const maxRelH = totalH - SHELF_THICK;
-
-    // Stack order: tallest (boots) at top â†’ compact (flats) at bottom  â†’  per Ch.15
-    const order: (keyof ShoeCollection)[] = ['boots', 'heels', 'sneakers', 'flats'];
-    for (const key of order) {
-      const count = this.shoes[key];
-      if (count <= 0) continue;
-      // How many pairs fit side-by-side given the actual column width
-      const pairsPerShelf = Math.max(1, Math.floor((colW - 4) / SHOE_PAIR_W[key]));
-      const rows  = Math.ceil(count / pairsPerShelf);
-      const space = this.planning.shoeHeights?.[key]??SHOE_SPACING[key];
-      for (let r = 0; r < rows; r++) {
-        if (relH + space + SHELF_THICK > maxRelH) break;
-        shelves.push({ height: relH, depth: 12, spacing: space, count: pairsPerShelf, purpose: key });
-        relH += space + SHELF_THICK;
-      }
-    }
-    return shelves;
+    return shoeShelves(this.shoes,totalH,colW,this.planning.shoeHeights);
   }
 
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
   // Width distribution
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
-  /** Returns the minimum required shoe-column width based on inventory.
-   *  Rule: 1.5" per pair, never less than the default COL_SHOE_W (24"). */
-  private calcShoeColumnWidth(): number {
-    const total = this.countShoes();
-    if (total === 0) return COL_SHOE_W;
-    return Math.max(COL_SHOE_W, Math.round(total * 1.5));
+  /** Choose shoe width by testing actual row capacity and vertical clearances. */
+  private calcShoeColumnWidth(availableWidth=this.W): number {
+    return shoeColumnWidth(this.shoes,this.H-TOE_KICK,availableWidth,this.planning.shoeHeights,COL_SHOE_W);
   }
 
-  private distributeWidths(types: ('long-hang' | 'short-hang' | 'shoe-shelves')[], W: number): number[] {
+  private fitColumnTypes(types:('long-hang'|'short-hang'|'shoe-shelves')[],width:number,drawers:boolean){
+    const demand=hangingDemand(this.wardrobe),priority=this.prefs.priorityItems??[];
+    const selected=selectColumns(types.map(type=>({
+      type,minimum:COLUMN_MIN_WIDTH[type],
+      score:type==='shoe-shelves'?Object.values(this.shoes).filter(n=>n>0).length+(priority.includes('shoes')?2:0)
+        :1+(priority.includes('hanging')?2:0)+(type==='short-hang'&&drawers?1+(priority.includes('folded')?2:0):0),
+      demand:type==='shoe-shelves'?this.countShoes():type==='long-hang'?demand.long:demand.short,
+    })),width);
+    const omitted=types.filter(type=>!selected.includes(type));
+    if(omitted.length)this.inputWarnings.push(`${width.toFixed(2)}-inch span: omitted ${omitted.map(t=>t.replace(/-/g,' ')).join(', ')} to preserve minimum column widths. Change priorities, widen the span, or use fewer column types.`);
+    return selected;
+  }
+
+  private distributeWidths(types: ('long-hang' | 'short-hang' | 'shoe-shelves')[], W: number, shortRods=2): number[] {
     const shoeColW   = this.calcShoeColumnWidth();
     const shoeCount  = types.filter(t => t === 'shoe-shelves').length;
     const shortCount = types.filter(t => t === 'short-hang').length;
     const longCount  = types.filter(t => t === 'long-hang').length;
 
     if (types.length === 1) return [W];
-    const minColumn = Math.min(COL_HANG_MIN, W / types.length);
+    const minColumn = COL_HANG_MIN;
     const shoeTotal = shoeCount * Math.min(shoeColW, W - (longCount + shortCount) * minColumn);
     const hangAvail = W - shoeTotal;
 
-    // T1-02: Priority-aware ratio — adjust based on user priority items
-    let longRatio = 0.38;  // default ratio for long-hang
-    const prio = this.prefs.priorityItems ?? [];
-    if (prio.includes('hanging') && !prio.includes('shoes') && !prio.includes('folded')) {
-      longRatio = 0.45;   // more space when hanging is top priority
-    } else if (prio.includes('shoes') || prio.includes('folded')) {
-      longRatio = 0.32;   // less long-hang when shoes/folded take priority
-    }
-
-    // T3-05: Integer ratio rounding — snap to nearest common ratio
-    // For 2-column layouts: 1:2, 1:1.5, 1:1 ratios
-    const rawLong = longCount > 0 ? (shortCount > 0 ? Math.min(Math.max(Math.round(hangAvail * longRatio), minColumn), hangAvail - minColumn) : hangAvail) : 0;
-    const rawShort = shortCount > 0 ? Math.max(hangAvail - rawLong, COL_HANG_MIN) : 0;
-
-    // Snap widths to integer inches for clean SVG lines
-    const snapLong = rawLong;
-    const snapShort = shortCount > 0 ? hangAvail - snapLong : 0;
+    const demand=hangingDemand(this.wardrobe);
+    const snapLong=longCount>0?(shortCount>0?hangingWidths(hangAvail,demand.long,demand.short,shortRods,minColumn)[0]:hangAvail):0;
+    const snapShort=shortCount>0?hangAvail-snapLong:0;
 
     return types.map(t => {
       if (t === 'shoe-shelves') return shoeTotal / shoeCount;

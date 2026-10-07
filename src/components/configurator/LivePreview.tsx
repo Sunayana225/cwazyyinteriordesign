@@ -12,6 +12,7 @@ import { Download, Layers, Lightbulb, BarChart2, Bookmark, ChevronDown, X, Trash
 import { SavedDesignDialog } from './SavedDesignDialog';
 import type { LibraryActions } from './LibraryTools';
 import { DrawingCanvas } from './DrawingCanvas';
+import { LayoutCanvas } from './LayoutCanvas';
 import type { CanvasView } from './DrawingCanvas';
 import { PlanningControls } from './PlanningControls';
 import { InventoryPlanning } from './InventoryPlanning';
@@ -19,12 +20,17 @@ import { LayoutInsights } from './LayoutInsights';
 import { OrphanOrganizers } from './OrphanOrganizers';
 import { layoutInputKey, LatestJob } from '@/lib/preview';
 import { StyleCustomizer } from './StyleCustomizer';
+import { StudioGuide, type StudioTool } from './StudioGuide';
 import { SpatialPreview } from './SpatialPreview';
-import { DrawerDesigner } from './DrawerDesigner';
+import dynamic from 'next/dynamic';
 import { drawerTargets, resolveOrganizers } from '@/lib/drawers';
+import { storageFit } from '@/lib/storageFit';
 import type { DrawerInterior } from '@/lib/drawers';
 
 const EMPTY_OVERRIDES: ZoneOverrides = {};
+const DrawerDesigner = dynamic(()=>import('./DrawerDesigner').then(module=>module.DrawerDesigner),{
+  loading:()=> <p role="status">Opening drawer editor…</p>,
+});
 
 interface LivePreviewProps {
   config: Partial<ClosetConfiguration>;
@@ -63,6 +69,7 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
   useEffect(()=>{try{const p=JSON.parse(localStorage.getItem('alveo-drawing-preferences')??'{}');if(typeof p.dimensions==='boolean')setShowDimensions(p.dimensions);if(typeof p.labels==='boolean')setShowLabels(p.labels);if(typeof p.highContrast==='boolean')setHighContrast(p.highContrast);}catch{}setPreferencesReady(true);},[]);
   useEffect(()=>{if(preferencesReady)try{localStorage.setItem('alveo-drawing-preferences',JSON.stringify({dimensions:showDimensions,labels:showLabels,highContrast}));}catch{}},[showDimensions,showLabels,highContrast,preferencesReady]);
   const [showSpatial,setShowSpatial]=useState(false);
+  const [rearranging,setRearranging]=useState<string|null>(null);
   const [showFloorPlan, setShowFloorPlan] = useState(false);
 
   const handlePositionChange = (position: DrawerPosition) => {
@@ -91,6 +98,7 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
   }, [calculationKey,isReady]);
 
   const layout = calculation.value;
+  const fit=storageFit(layout?.capacity);
   const drawers = layout ? drawerTargets(layout) : [];
   const targetDrawer = drawers.find(d=>d.id===editingDrawer);
   const organizers=resolveOrganizers(config.drawerInteriors??{},drawers);
@@ -100,6 +108,9 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
   const numWalls   = layout?.walls?.length ?? 1;
   useEffect(() => { setActiveWallIdx(0); }, [numWalls]);
   const safeWallIdx = Math.min(activeWallIdx, numWalls - 1);
+  // The wall being rearranged, resolved fresh each render so the canvas always opens
+  // against the current regenerated geometry rather than a stale snapshot.
+  const rearrangingWall = rearranging ? layout?.walls?.find(w => w.wallId === rearranging) ?? null : null;
 
   // Build a single-wall layout for the selected wall (renderer works on one wall at a time)
   const wallLayout = useMemo((): ClosetLayout | null => {
@@ -137,6 +148,35 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
     setTimeout(() => setSaveToast(false), 2500);
   };
 
+  const openStudioTool = (tool: StudioTool) => {
+    if (tool === 'library') { setShowCustomModal(true); return; }
+    if (!layout) return;
+    if (tool === 'print') { setShowExportSettings(true); return; }
+    const detailTargets: Partial<Record<StudioTool, string>> = { fit: 'studio-fit-tools', room: 'studio-room-tools', inventory: 'studio-inventory-tools' };
+    const detailsId = detailTargets[tool];
+    if (detailsId) {
+      const details = document.getElementById(detailsId);
+      if (details instanceof HTMLDetailsElement) {
+        details.open = true;
+        details.querySelector('summary')?.focus();
+        details.scrollIntoView({ block: 'start' });
+      }
+      return;
+    }
+    const tab = tool === 'style' ? 'style' : 'drawing';
+    setActiveTab(tab);
+    setShowSpatial(tool === 'spatial');
+    setShowFloorPlan(tool === 'floor');
+    if (tool === 'drawers' && drawers.length) {
+      const drawer = drawers.find(d => d.id.startsWith(`${layout.walls[safeWallIdx]?.wallId}:`)) ?? drawers[0];
+      setActiveWallIdx(Math.max(0, layout.walls.findIndex(w => w.wallId === drawer.id.split(':')[0])));
+      setEditingDrawer(drawer.id);
+    }
+    if (tool === 'arrange' && layout.walls[safeWallIdx]) setRearranging(layout.walls[safeWallIdx].wallId);
+    document.getElementById(`tab-${tab}`)?.focus();
+    document.getElementById(`tab-${tab}`)?.scrollIntoView({ block: 'center' });
+  };
+
 
 
   const tabs = [
@@ -164,7 +204,7 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
       </AnimatePresence>
 
       {/* Header */}
-      <div className="flex flex-wrap gap-3 items-center justify-between">
+      <div className="studio-preview-heading flex flex-wrap gap-3 items-center justify-between">
         <div><p className="studio-eyebrow">02 / YOUR DESIGN</p><h2 className="font-serif text-2xl text-charcoal-600">Your Closet Preview</h2></div>
         {layout && (
           <div className="flex items-center gap-2">
@@ -240,6 +280,7 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
 
       {showExportSettings&&layout&&<ExportSettingsDialog layout={layout} config={config} initial={settings} activeWall={layout.walls[activeWallIdx]?.wallId} savedDesigns={savedDesigns} onExport={handleExport} onClose={()=>setShowExportSettings(false)} busy={isExporting}/>}
       <button className="studio-library-button text-sm self-start" onClick={() => setShowCustomModal(true)}>Manage saved designs ({savedDesigns.length})</button>
+      <StudioGuide onAction={openStudioTool} hasLayout={!!layout} hasDrawers={drawers.length > 0} canEdit={!!onConfigChange} hasFloorPlan={!!layout&&!['reach-in','wardrobe-wall'].includes(layout.closetType)}/>
       <div hidden={activeTab!=='drawing'||showSpatial||showFloorPlan} className="studio-display-options flex flex-wrap gap-3 text-sm"><label><input type="checkbox" checked={showDimensions} onChange={e => setShowDimensions(e.target.checked)} /> Dimensions</label><label><input type="checkbox" checked={showLabels} onChange={e => setShowLabels(e.target.checked)} /> Labels</label><label><input type="checkbox" checked={highContrast} onChange={e=>setHighContrast(e.target.checked)}/> High contrast drawing</label></div>
       {/* Tabs */}
       <div role="tablist" aria-label="Preview views" className="flex flex-wrap bg-cream-100 rounded-lg p-1">
@@ -276,6 +317,7 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
                 <button aria-label={showSpatial?'Hide 3D room view':'Show 3D room view'} aria-pressed={showSpatial} onClick={()=>{setShowSpatial(v=>!v);setShowFloorPlan(false);}}>3D room</button>
                 {layout&&!['reach-in','wardrobe-wall'].includes(layout.closetType)&&<button aria-label={showFloorPlan?'Hide floor plan':'Show floor plan'} aria-pressed={showFloorPlan} onClick={()=>{setShowFloorPlan(v=>!v);setShowSpatial(false);}}>Floor plan</button>}
               </div>
+              <p className="studio-drawing-help">{showSpatial ? 'Explore the room in 3D. Select a drawer to design its interior.' : showFloorPlan ? 'Select a wall to open its elevation. Select a room object to edit its settings.' : 'Select a drawer face to design its compartments. Use “Rearrange elements” below to change this wall’s columns.'}</p>
               {layout&&showSpatial&&<SpatialPreview layout={layout} preferences={config.userInfo} onDrawerClick={onConfigChange?setEditingDrawer:undefined}/>}
               {layout&&showFloorPlan&&<DrawingCanvas viewKey="floor-plan" views={views.current} onObjectClick={(kind,id)=>{if(kind==='wall'){setActiveWallIdx(layout.walls.findIndex(w=>w.wallId===id));setShowFloorPlan(false);}else window.dispatchEvent(new CustomEvent('alveo-focus-obstacle',{detail:id}));}} svg={renderFloorPlan(layout,{roomWidth:layout.roomDimensions?.roomWidth??120,roomDepth:layout.roomDimensions?.roomDepth??120,unitDepth:config.dimensions?.depth??24,interactive:true})}/>}
               {/* Wall selector tabs — shown for multi-wall closet types */}
@@ -318,6 +360,10 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
               {svgContent ? (
                 <>
                 <div hidden={showSpatial||showFloorPlan}><DrawingCanvas key={layout?.walls[safeWallIdx]?.wallId} viewKey={layout?.walls[safeWallIdx]?.wallId} views={views.current} svg={svgContent} onDrawerClick={setEditingDrawer} selectedDrawer={editingDrawer} selectedZone={selectedZone?.wall===layout?.walls[safeWallIdx]?.wallId?selectedZone?.index:null} highContrast={highContrast}/></div>
+                {onConfigChange&&layout?.walls[safeWallIdx]&&!showSpatial&&!showFloorPlan&&<p className="my-3"><button className="border rounded px-3 py-2 text-sm" data-rearrange-wall={layout.walls[safeWallIdx].wallId} onClick={()=>setRearranging(layout.walls[safeWallIdx].wallId)}>Rearrange elements on this wall{zoneOverrides.columns?.[layout.walls[safeWallIdx].wallId]?.length?' · Customized':''}</button></p>}
+                {rearrangingWall&&<LayoutCanvas wall={rearrangingWall} stored={zoneOverrides.columns?.[rearrangingWall.wallId]} onClose={()=>setRearranging(null)}
+                  onCommit={cols=>{const next={...(zoneOverrides.columns??{})};if(cols)next[rearrangingWall.wallId]=cols;else delete next[rearrangingWall.wallId];
+                    setZoneOverrides({...zoneOverrides,columns:Object.keys(next).length?next:undefined});setWarningsDismissed(new Set());}}/>}
                 {onConfigChange&&drawers.length>0&&<details className="border rounded-lg p-3 mt-3"><summary className="font-semibold">Drawer organizers</summary><p className="text-sm my-2">Click a drawer face above, or choose one below, to design its compartments.</p><div className="flex flex-wrap gap-2">{drawers.map(d=><button key={d.id} data-drawer-open={d.id} className="border rounded px-3 py-2 text-sm" onClick={()=>{setActiveWallIdx(layout?.walls.findIndex(w=>w.wallId===d.id.split(':')[0])??0);setEditingDrawer(d.id);}}>{d.label}{organizers[d.id]?' · Customized':''}</button>)}</div><label className="block my-2 text-sm"><input type="checkbox" checked={openIllustration} onChange={e=>setOpenIllustration(e.target.checked)}/> Show open-drawer illustration</label>{openIllustration&&<button onClick={()=>setEditingDrawer(drawers[0].id)} aria-label="Design compartments from open drawer illustration"><svg viewBox="0 0 240 140" role="img" aria-label="Open drawer illustration"><path d="M30 25 H190 V80 H30 Z" fill="#d5b995" stroke="#66523a"/><path d="M30 45 L10 105 H170 L190 45 Z" fill="#eee1ca" stroke="#66523a"/><path d="M10 105 H170 V130 H10 Z" fill="#b7966e" stroke="#66523a"/><path d="M70 117 H110" stroke="#242424" strokeWidth="4"/><text x="95" y="80" fontSize="12" textAnchor="middle">Design compartments</text></svg></button>}</details>}
                 {unmatchedOrganizers.length>0&&<p role="status" className="text-sm text-amber-900 mt-2">{unmatchedOrganizers.length} organizer(s) belong to drawers no longer in this layout. They remain saved and will return if you restore that layout.</p>}
                 {unmatchedOrganizers.length>0&&onConfigChange&&<OrphanOrganizers ids={unmatchedOrganizers} plans={organizers} targets={drawers} onChange={drawerInteriors=>onConfigChange({drawerInteriors})}/>}
@@ -421,26 +467,21 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
                 <>
                   <div className="bg-cream-50 rounded-xl border border-cream-200 p-5">
                     <div className="flex items-center justify-between mb-2">
-                      <p className="font-medium text-charcoal-600">Space Utilization</p>
-                      <span className="text-2xl font-serif font-bold text-taupe-500">{layout.utilizationScore}%</span>
+                      <p className="font-medium text-charcoal-600">Storage needs covered</p>
+                      <span className="text-2xl font-serif font-bold text-taupe-500">{fit.covered} / {fit.total}</span>
                     </div>
-                    <div className="w-full h-3 bg-cream-200 rounded-full overflow-hidden">
+                    <div role="progressbar" aria-label="Storage needs covered" aria-valuemin={0} aria-valuemax={fit.total||1} aria-valuenow={fit.covered} aria-valuetext={fit.total?`${fit.covered} of ${fit.total} categories covered`:'Add inventory to assess fit'} className="w-full h-3 bg-cream-200 rounded-full overflow-hidden">
                       <motion.div
-                        initial={{ width: 0 }} animate={{ width: `${layout.utilizationScore}%` }}
+                        initial={{ width: 0 }} animate={{ width: `${fit.percent}%` }}
                         transition={{ duration: 0.8, ease: 'easeOut' }}
                         className={`h-full rounded-full ${
-                          layout.utilizationScore >= 80 ? 'bg-green-500' :
-                          layout.utilizationScore >= 50 ? 'bg-taupe-400' :
+                          fit.total>0&&fit.covered===fit.total ? 'bg-green-500' :
                           'bg-amber-400'
                         }`}
                       />
                     </div>
                     <p className="text-xs text-charcoal-400 mt-2">
-                      {layout.utilizationScore >= 80
-                        ? 'Excellent — your closet space is well utilized.'
-                        : layout.utilizationScore >= 50
-                        ? 'Good utilization. Add more inventory or reduce wall width to improve.'
-                        : 'Low utilization — add wardrobe items or consider a smaller closet type.'}
+                      {!fit.total?'Add wardrobe items to assess storage fit.':fit.shortfalls.length?`Additional storage needed for: ${fit.shortfalls.map(row=>row.label).join(', ')}. Review the quantities below.`:'Your entered inventory fits the modeled capacity. Review access, clearances, and item sizes before finalizing.'}
                     </p>
                   </div>
 
@@ -478,7 +519,7 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
 
                   <div className="bg-cream-50 rounded-xl border border-cream-200 p-4 text-sm text-charcoal-500">
                     Effective: {layout.dimensions.width}&quot; wide × {layout.dimensions.height}&quot; tall × {layout.dimensions.depth}&quot; cabinet depth
-                    <span className="ml-2 text-taupe-500 font-medium">
+                    <span className="ml-2 text-charcoal-600 font-medium">
                       · {(config.closetType ?? 'reach-in').replace(/-/g, ' ')}
                     </span>
                   </div>

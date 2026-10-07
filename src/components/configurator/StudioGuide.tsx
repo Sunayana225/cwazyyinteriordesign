@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, BookOpen, Search } from 'lucide-react';
 
 export type StudioTool = 'drawers' | 'arrange' | 'style' | 'spatial' | 'floor' | 'fit' | 'room' | 'inventory' | 'library' | 'print';
@@ -22,6 +22,7 @@ export function StudioGuide({ onAction, hasLayout, hasDrawers, canEdit, hasFloor
   onAction: (tool: StudioTool) => void; hasLayout: boolean; hasDrawers: boolean; canEdit: boolean; hasFloorPlan: boolean;
 }) {
   const [query, setQuery] = useState('');
+  const searchRef = useRef<HTMLInputElement>(null);
   const [showStarter, setShowStarter] = useState(true);
   useEffect(() => {
     try { setShowStarter(localStorage.getItem('alveo-studio-guide-collapsed') !== 'true'); } catch { /* Guidance remains usable when storage is unavailable. */ }
@@ -45,10 +46,10 @@ export function StudioGuide({ onAction, hasLayout, hasDrawers, canEdit, hasFloor
     </div>
     <details className="studio-tool-directory">
       <summary>Explore all design tools <span>{available.length} tools</span></summary>
-      <label className="studio-tool-search"><Search size={16} aria-hidden="true"/><span className="sr-only">Find a design tool</span><input type="search" placeholder="Try “jewelry”, “windows”, or “PDF”" value={query} onChange={event => setQuery(event.target.value)}/></label>
+      <label className="studio-tool-search"><Search size={16} aria-hidden="true"/><span className="sr-only">Find a design tool</span><input ref={searchRef} type="search" placeholder="Try “jewelry”, “windows”, or “PDF”" value={query} onChange={event => setQuery(event.target.value)}/></label>
       <p role="status" className="studio-tool-count">{matches.length} {matches.length === 1 ? 'tool' : 'tools'} found</p>
       <div className="studio-tool-results">{matches.map(tool => <button type="button" key={tool.id} disabled={!!unavailable(tool.id)} onClick={() => onAction(tool.id)}><span><strong>{tool.title}</strong><small>{unavailable(tool.id) || tool.description}</small></span><ArrowUpRight size={16} aria-hidden="true"/></button>)}</div>
-      {!matches.length && <p className="studio-tool-empty">No matching tools. Try a material, object, or task. <button type="button" onClick={() => setQuery('')}>Show all tools</button></p>}
+      {!matches.length && <p className="studio-tool-empty">No matching tools. Try a material, object, or task. <button type="button" onClick={() => { setQuery(''); searchRef.current?.focus(); }}>Show all tools</button></p>}
     </details>
   </section>;
 }

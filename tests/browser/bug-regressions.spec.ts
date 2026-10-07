@@ -31,7 +31,15 @@ test('failed in-memory saves survive external writes and persist after storage r
   await page.reload();await expect(page.getByRole('button',{name:/Manage saved designs \(3\)/})).toBeVisible();
 });
 test('clearing storage from another tab does not silently recreate its draft',async({page,context})=>{
-  await page.goto('/configure');const other=await context.newPage();await other.goto('/configure');await other.evaluate(()=>localStorage.clear());
+  await page.goto('/configure');
+  await expect.poll(()=>page.evaluate(()=>localStorage.getItem('alveo-draft'))).not.toBeNull();
+  const other=await context.newPage();await other.goto('/configure');
+  // A production page can finish navigation before hydration restores storage.
+  // Clear only after this editor has actually loaded the existing draft.
+  await expect(other.locator('.studio-shape').first()).toBeEnabled();
+  await other.evaluate(()=>localStorage.clear());
   await expect(page.getByText(/changed or cleared the draft/)).toBeVisible();await page.getByLabel('User mode').selectOption('renter');
+  await page.evaluate(()=>window.dispatchEvent(new Event('pagehide')));
+  await other.evaluate(()=>window.dispatchEvent(new Event('pagehide')));
   expect(await page.evaluate(()=>localStorage.getItem('alveo-draft'))).toBeNull();
 });

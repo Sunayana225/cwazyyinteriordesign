@@ -9,10 +9,8 @@ import { usePreviewExport } from './usePreviewExport';
 import { ExportSettingsDialog } from './ExportSettingsDialog';
 import { renderFloorPlan } from '@/renderer/FloorPlanRenderer';
 import { Download, Layers, Lightbulb, BarChart2, Bookmark, ChevronDown, X, Trash2, Palette, TriangleAlert } from 'lucide-react';
-import { SavedDesignDialog } from './SavedDesignDialog';
 import type { LibraryActions } from './LibraryTools';
 import { DrawingCanvas } from './DrawingCanvas';
-import { LayoutCanvas } from './LayoutCanvas';
 import type { CanvasView } from './DrawingCanvas';
 import { PlanningControls } from './PlanningControls';
 import { InventoryPlanning } from './InventoryPlanning';
@@ -30,6 +28,12 @@ import type { DrawerInterior } from '@/lib/drawers';
 const EMPTY_OVERRIDES: ZoneOverrides = {};
 const DrawerDesigner = dynamic(()=>import('./DrawerDesigner').then(module=>module.DrawerDesigner),{
   loading:()=> <p role="status">Opening drawer editor…</p>,
+});
+const SavedDesignDialog = dynamic(() => import('./SavedDesignDialog').then(module => module.SavedDesignDialog), {
+  loading: () => <p role="status">Opening saved designs…</p>,
+});
+const LayoutCanvas = dynamic(() => import('./LayoutCanvas').then(module => module.LayoutCanvas), {
+  loading: () => <p role="status">Opening wall editor…</p>,
 });
 
 interface LivePreviewProps {

@@ -395,7 +395,7 @@
 .studio-guide strong { font-size:12px; font-weight:600; color:#3d3021; }
 .studio-guide small { font-size:11px; line-height:1.5; color:#6b5a45; }
 .studio-guide button:disabled { opacity:.65; cursor:not-allowed; }
-.studio-tool-directory { border-top:1px solid #d8c8b0; margin-top:16px; padding-top:8px; }
+.studio-guide .studio-tool-directory { border:0; border-top:1px solid #d8c8b0; margin-top:16px; padding:8px 0 0; border-radius:0; background:transparent; }
 .studio-tool-directory>summary { cursor:pointer; font-size:12px; padding:10px 0; color:#4d3c28; }
 .studio-tool-directory>summary span { float:right; color:#756149; }
 .studio-tool-search { display:flex; align-items:center; gap:8px; background:#fffdf9; border:1px solid #bfae93; padding:0 12px; border-radius:3px; margin-block:8px; }
@@ -409,7 +409,12 @@
 .studio-drawing-help { font-size:12px; line-height:1.6; color:#62513c; margin:12px 0; }
 #studio-fit-tools,#studio-room-tools,#studio-inventory-tools { scroll-margin-top:100px; }
 @media(max-width:1100px) and (min-width:801px) { .studio-guide-start { grid-template-columns:1fr; } }
-@media(max-width:540px) { .studio-guide-start,.studio-tool-results { grid-template-columns:1fr; } .studio-guide { padding:14px; } }
+@media(max-width:540px) {
+ .studio-guide-start,.studio-tool-results { grid-template-columns:1fr; }
+ .studio-guide { padding:14px; }
+ .studio-guide-intro { display:grid; grid-template-columns:18px minmax(0,1fr); }
+ .studio-guide-toggle { grid-column:2; justify-self:start; margin-left:0; max-width:none; }
+}
 
 /* Design collection */
 .gallery-studio{background:#faf9f6;color:#283e37;padding:120px max(24px,calc((100vw - 1320px)/2)) 32px}

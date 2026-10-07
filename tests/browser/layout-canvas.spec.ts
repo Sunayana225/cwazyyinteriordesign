@@ -18,6 +18,24 @@ const types=async(d:any)=>{
   return labels.map((t:string)=>/^\d+\.\s*(.+?)\s*·/.exec(t)?.[1]??'');
 };
 
+for(const viewport of [{width:1440,height:1000},{width:390,height:844}])test(`wall editor is modal and Escape cancels safely at ${viewport.width}px`,async({page})=>{
+  await page.setViewportSize(viewport);
+  const d=await open(page);
+  expect(await d.evaluate((element:HTMLDialogElement)=>element.matches(':modal'))).toBe(true);
+  const selected=d.getByRole('group',{name:'Select an element'}).getByRole('button').first();
+  await selected.click();
+  await d.getByRole('button',{name:'Move right',exact:true}).click();
+  await page.keyboard.press('Tab');
+  expect(await d.evaluate((element:HTMLDialogElement)=>element.contains(document.activeElement))).toBe(true);
+  const bounds=await d.boundingBox();
+  expect(bounds!.y).toBeGreaterThanOrEqual(0);
+  expect(bounds!.y+bounds!.height).toBeLessThanOrEqual(viewport.height+1);
+  await page.keyboard.press('Escape');
+  await expect(d).not.toBeVisible();
+  await expect(page.locator('[data-rearrange-wall]').first()).toBeFocused();
+  await expect(page.locator('[data-rearrange-wall]').first()).not.toContainText('Customized');
+});
+
 test('imports the generated wall as elements that fill it exactly',async({page})=>{
   const d=await open(page);
   const w=await widths(d);

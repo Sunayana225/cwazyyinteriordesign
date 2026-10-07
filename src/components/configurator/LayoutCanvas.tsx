@@ -1,5 +1,5 @@
 'use client';
-import { useRef, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { ClosetWall, LayoutColumn, LayoutColumnType } from '@/types/closet';
 import {
@@ -24,6 +24,12 @@ export function LayoutCanvas({wall,stored,onCommit,onClose}:{
   const [selected,setSelected]=useState<string|null>(null);
   const [history,setHistory]=useState<LayoutColumn[][]>([]);
   const [message,setMessage]=useState('');
+  const dialog=useRef<HTMLDialogElement>(null);
+  useEffect(()=>{
+    const element=dialog.current,opener=document.activeElement;
+    element?.showModal();
+    return()=>{element?.close();if(opener instanceof HTMLElement&&opener.isConnected)opener.focus({preventScroll:true});};
+  },[]);
   const strip=useRef<SVGSVGElement>(null);
   const drag=useRef<{kind:'move'|'resize';id:string}|null>(null);
 
@@ -65,7 +71,7 @@ export function LayoutCanvas({wall,stored,onCommit,onClose}:{
   const placed=columns.map(c=>{const x=cursor;cursor+=c.width;return {...c,x};});
   const fmt=(n:number)=>`${n.toFixed(1)} in`;
 
-  return <dialog open aria-labelledby="layout-canvas-title" className="settings-dialog w-[95vw] max-w-5xl p-5 rounded-xl backdrop:bg-black/40">
+  return <dialog ref={dialog} onCancel={event=>{event.preventDefault();onClose();}} aria-labelledby="layout-canvas-title" className="settings-dialog w-[95vw] max-w-5xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 rounded-xl backdrop:bg-black/40">
     <h2 id="layout-canvas-title" className="text-lg font-semibold">Rearrange {wall.label.toLowerCase()}</h2>
     <p className="settings-description">Every part of the generated design is an element here. Drag to reorder, drag a divider to resize, or use the controls below. Nothing changes your design until you choose Done.</p>
 

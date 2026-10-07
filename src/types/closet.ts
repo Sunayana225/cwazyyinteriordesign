@@ -17,6 +17,7 @@ export interface RoomDimensions {
 }
 
 export interface ClosetDimensions {
+  cabinetHeight?: number; // Optional cabinet envelope; height remains the room ceiling.
   width: number; // inches
   height: number; // inches  
   depth: number; // inches
@@ -65,6 +66,24 @@ export type DrawerPosition = 'bottom' | 'middle' | 'top';
 
 export interface ZoneOverrides {
   drawerPosition?: DrawerPosition;   // reposition drawer stack within its column
+  /** Canvas-edited column recipe, per wall. A wall absent from this record keeps the
+   * engine's own column decision, so overrides are additive and never all-or-nothing.
+   * The layout is always regenerated from the configuration, so user edits have to
+   * live here to survive — see `resolveColumns` in `src/lib/layoutColumns.ts`. */
+  columns?: Partial<Record<ClosetWall['wallId'], LayoutColumn[]>>;
+}
+
+/** The element vocabulary a user can place on a wall. Mirrors the engine's own column
+ * types so an edited wall stays buildable: `short-hang` carries a stacked drawer bank
+ * when the wardrobe needs one, exactly as the generated layout does. */
+export type LayoutColumnType = 'long-hang' | 'short-hang' | 'drawers' | 'shoe-shelves' | 'top-shelves';
+
+/** One user-placed column, ordered left to right across the elevation. `width` is in
+ * inches; the set is normalized to the wall width when applied. */
+export interface LayoutColumn {
+  id: string;
+  type: LayoutColumnType;
+  width: number;
 }
 
 export interface LayoutWarning {
@@ -102,7 +121,7 @@ export interface ShelfConfig {
   height: number; // inches from bottom of zone
   depth: number;
   spacing: number; // height between shelves
-  count: number;
+  count: number; // Item capacity on this board, not number of boards.
   purpose: string; // "shoes", "folded items", "bags", etc.
 }
 
@@ -185,6 +204,8 @@ export interface ClosetCalculationInput {
 export type CalculationResult = ClosetLayout;
 
 export interface PlanningOptions {
+  upperStorage?:boolean; // Use spare height above hanging and shoes; enabled by default.
+  accessoryShelfOpening?:number; // Minimum clear opening for adaptive accessory shelves (inches).
   garmentLengths?:{long:number;short:number};
   shoeHeights?:ShoeCollection;
   supportSpan?:number;

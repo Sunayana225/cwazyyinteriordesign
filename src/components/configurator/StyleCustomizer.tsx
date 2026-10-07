@@ -5,6 +5,9 @@ import { STYLE_OPTIONS, WOOD_OPTIONS, HARDWARE } from '@/lib/design';
 import React, { useState } from 'react';
 import { ClosetConfiguration, UserPreferences } from '@/types/closet';
 import { motion } from 'framer-motion';
+import { Package, Sparkles, Shirt, Layers } from 'lucide-react';
+
+const priorityIcons: Record<string, typeof Shirt> = { shoes: Package, hanging: Shirt, folded: Layers, accessories: Sparkles };
 
 interface StyleCustomizerProps {
   config: Partial<ClosetConfiguration>;
@@ -121,7 +124,7 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
               `}
             >
               <div className="flex items-center space-x-4">
-                <span className="text-2xl">{style.icon}</span>
+                <span className="settings-style-swatch" data-style={style.id} aria-hidden="true"><span/><span/></span>
                 <div>
                   <div className="font-medium text-charcoal-600">{style.name}</div>
                   <div className="text-sm text-charcoal-400">{style.description}</div>
@@ -230,7 +233,7 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
                   }}
                   className="mr-3"
                 />
-                <span className="text-xl mr-3">{priority.icon}</span>
+                <span className="settings-choice-icon mr-3">{React.createElement(priorityIcons[priority.id], { size: 20, 'aria-hidden': true })}</span>
                 <span className="font-medium text-charcoal-600">{priority.name}</span>
               </motion.label>
             );
@@ -245,6 +248,7 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
       <h3 className="font-serif text-xl text-charcoal-600 mb-6">
         Customize Your Style
       </h3>
+      <p className="settings-description">Changes update the preview immediately. Choose Save to keep them in a named design.</p>
 
       {/* Tab Navigation */}
       <div role="tablist" aria-label="Style settings categories" className="settings-navigation flex flex-wrap gap-1 mb-6">
@@ -289,9 +293,10 @@ export function StyleCustomizer({ config, onConfigChange }: StyleCustomizerProps
       <div className="settings-selection mt-6">
         <h5 className="font-medium text-charcoal-600 mb-3">Current Selection</h5>
         <div className="text-sm text-charcoal-500 space-y-1">
-          <p>Style: {config.userInfo?.stylePreference || 'Not selected'}</p>
-          <p>Wood Finish: {config.userInfo?.woodFinish || 'Not selected'}</p>
-          <p>Drawers: {config.userInfo?.drawerPreference || 'Not selected'}</p>
+          <p>Style: {stylePreferences.find(style=>style.id===config.userInfo?.stylePreference)?.name || 'Not selected'}</p>
+          <p>Wood Finish: {woodFinishes.find(finish=>finish.id===config.userInfo?.woodFinish)?.name || 'Not selected'}</p>
+          <p>Hardware: {hardwareOptions.find(hardware=>hardware.id===config.userInfo?.hardwareFinish)?.name || 'Automatic for selected style'}</p>
+          <p>Drawers: {({'many-small':'Many small drawers','few-large':'Few large drawers',mixed:'Mixed sizes'} as Record<string,string>)[config.userInfo?.drawerPreference??''] || 'Not selected'}</p>
           <p>Priorities: {config.userInfo?.priorityItems?.join(', ') || 'None selected'}</p>
         </div>
       </div>

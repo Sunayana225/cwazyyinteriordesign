@@ -1,13 +1,13 @@
-'use client';
-
-import { useState, useEffect } from 'react';
+ 'use client';
+import {useMemo,useState} from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
-import { ClosetLayoutEngine } from '@/engine/ClosetLayoutEngine';
-import { ClosetSVGRenderer } from '@/renderer/ClosetSVGRenderer';
-import { getPreset } from '@/lib/presets';
-import { ArrowRight, Maximize2 } from 'lucide-react';
-
+import {ClosetLayoutEngine} from '@/engine/ClosetLayoutEngine';
+import {ClosetSVGRenderer} from '@/renderer/ClosetSVGRenderer';
+import {renderSpatial} from '@/renderer/SpatialRenderer';
+import {getPreset} from '@/lib/presets';
+import {formatInches,isWalkIn,WOOD_OPTIONS} from '@/lib/design';
+import {CABINET_STYLES} from '@/lib/cabinetStyle';
+import {ArrowRight} from 'lucide-react';
 type StyleTag = 'All' | 'Minimal' | 'Glam' | 'Small Space' | 'Luxury' | 'Modern' | 'Rustic';
 
 interface GalleryItem {
@@ -46,7 +46,7 @@ const items: GalleryItem[] = [
     id: 3,
     title: 'Urban Edit',
     style: 'Small Space',
-    sqft: '5 × 4 ft',
+    sqft: '5 × 2 ft',
     description: 'Compact reach-in with hanging, drawers and shoe shelving fitted to a five-foot wall.',
     accent: 'text-charcoal-400',
     bg: 'bg-cream-100',
@@ -84,148 +84,44 @@ const items: GalleryItem[] = [
   },
 ];
 
-function ClosetSketch({ pattern }: { pattern: GalleryItem['svgPattern'] }) {
-  const index = ['minimal','glam','compact','luxury','modern','rustic'].indexOf(pattern) + 1;
-  const config = getPreset(String(index))!;
-  const layout = new ClosetLayoutEngine(config).calculateLayout();
-  const svg = new ClosetSVGRenderer(layout, { idPrefix: `gallery-${pattern}`, showDimensions: false, showLabels: false, style: config.userInfo.stylePreference, woodFinish: config.userInfo.woodFinish }).renderElevation();
-  return <div className="w-full h-full overflow-hidden" dangerouslySetInnerHTML={{ __html: svg }} />;
-}
 
-const tags: StyleTag[] = ['All', 'Minimal', 'Glam', 'Small Space', 'Luxury', 'Modern', 'Rustic'];
-
-export default function GalleryPage() {
-  const [activeTag, setActiveTag] = useState<StyleTag>('All');
-  const [hoveredId, setHoveredId] = useState<number | null>(null);
-
-
-
-  const filtered = activeTag === 'All' ? items : items.filter((i) => i.style === activeTag);
-
-  return (
-    <main id="main-content" className="min-h-screen bg-white pt-16">
-      {/* Hero */}
-      <section className="py-16 bg-cream-50 border-b border-cream-200">
-        <div className="max-w-7xl mx-auto px-6 text-center">
-          <motion.p
-            initial={{ opacity: 0, y: 8 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="text-sm uppercase tracking-widest text-taupe-400 font-medium mb-4"
-          >
-            Inspiration Gallery
-          </motion.p>
-          <motion.h1
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.1 }}
-            className="font-serif text-5xl md:text-6xl text-charcoal-600 mb-5"
-          >
-            Find your style
-          </motion.h1>
-          <motion.p
-            initial={{ opacity: 0, y: 12 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2 }}
-            className="text-lg text-charcoal-400 max-w-xl mx-auto"
-          >
-            Browse layouts designed by the Alvéo engine. Pick one to start from — or begin fresh.
-          </motion.p>
-        </div>
-      </section>
-
-      {/* Filter tabs */}
-      <section className="sticky top-16 z-30 bg-white border-b border-cream-200">
-        <div className="max-w-7xl mx-auto px-6">
-          <div className="flex items-center gap-1 overflow-x-auto py-3 scrollbar-none">
-            {tags.map((tag) => (
-              <button
-                key={tag}
-                aria-pressed={activeTag === tag} onClick={() => setActiveTag(tag)}
-                className={`shrink-0 px-4 py-1.5 rounded-full text-sm font-medium transition-colors ${
-                  activeTag === tag
-                    ? 'bg-charcoal-600 text-white'
-                    : 'text-charcoal-400 hover:bg-cream-100 hover:text-charcoal-600'
-                }`}
-              >
-                {tag}
-              </button>
-            ))}
-          </div>
-        </div>
-      </section>
-
-      {/* Grid */}
-      <section className="py-12">
-        <div className="max-w-7xl mx-auto px-6">
-          <motion.div
-            layout
-            className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6"
-          >
-            <AnimatePresence mode="popLayout">
-              {filtered.map((item) => (
-                <motion.article
-                  key={item.id}
-                  layout
-                  initial={{ opacity: 0, scale: 0.96 }}
-                  animate={{ opacity: 1, scale: 1 }}
-                  exit={{ opacity: 0, scale: 0.96 }}
-                  transition={{ duration: 0.22 }}
-                  onMouseEnter={() => setHoveredId(item.id)}
-                  onMouseLeave={() => setHoveredId(null)}
-                  className={`group rounded-2xl overflow-hidden border border-cream-200 ${item.bg} `}
-                >
-                  {/* Sketch */}
-                  <div className="relative h-52 p-4">
-                    <ClosetSketch pattern={item.svgPattern} />
-
-                  </div>
-
-                  {/* Info */}
-                  <div className="px-5 pb-5">
-                    <div className="flex items-start justify-between mb-1">
-                      <h2 className="font-serif text-xl text-charcoal-600">{item.title}</h2>
-                      <span className={`text-xs font-medium uppercase tracking-wide mt-1 ${item.accent}`}>
-                        {item.style}
-                      </span>
-                    </div>
-                    <p className="text-xs text-taupe-400 mb-2">{item.sqft}</p>
-                    <p className="text-sm text-charcoal-400 leading-relaxed">{item.description}</p>
-
-                    <p className="text-xs mt-2">Engine-generated elevation preview. Open the preset to inspect all walls and fit warnings.</p>
-                    {/* CTA */}
-                    <Link
-                      href={"/configure?preset=" + item.id}
-                      className="inline-flex items-center gap-1.5 mt-4 text-sm font-medium text-charcoal-500 hover:text-charcoal-700 group/link transition-colors"
-                    >
-                      View and customize layout
-                      <ArrowRight size={14} className="transition-transform group-hover/link:translate-x-0.5" />
-                    </Link>
-                  </div>
-                </motion.article>
-              ))}
-            </AnimatePresence>
-          </motion.div>
-
-          {filtered.length === 0 && (
-            <p className="text-center text-charcoal-400 py-24">No layouts in this style yet.</p>
-          )}
-        </div>
-      </section>
-
-      {/* Bottom CTA */}
-      <section className="py-20 bg-cream-50 border-t border-cream-200">
-        <div className="max-w-2xl mx-auto px-6 text-center">
-          <h2 className="font-serif text-4xl text-charcoal-600 mb-4">Ready for yours?</h2>
-          <p className="text-charcoal-400 mb-8">Complete the guided steps and get a custom layout in seconds.</p>
-          <Link
-            href="/configure"
-            className="inline-flex items-center gap-2 bg-charcoal-600 text-white px-8 py-4 rounded-xl text-base font-medium hover:bg-charcoal-500 transition-colors"
-          >
-            Start configuring
-            <ArrowRight size={16} />
-          </Link>
-        </div>
-      </section>
-    </main>
-  );
+const tags:StyleTag[]=['All','Minimal','Glam','Small Space','Luxury','Modern','Rustic'];
+const layoutNames:Record<string,string>={'reach-in':'Reach-in','walkin-single':'Single-wall walk-in','walkin-u':'U-shaped walk-in',island:'Island dressing room','walkin-l':'L-shaped walk-in'};
+export default function GalleryPage(){
+ const [activeTag,setActiveTag]=useState<StyleTag>('All');
+ const [view,setView]=useState<'spatial'|'elevation'>('spatial');
+ const designs=useMemo(()=>items.map(item=>{
+  const config=getPreset(String(item.id))!;
+  const layout=new ClosetLayoutEngine(config).calculateLayout();
+  const width=isWalkIn(config.closetType)?config.roomDimensions!.roomWidth:config.dimensions.width;
+  const depth=isWalkIn(config.closetType)?config.roomDimensions!.roomDepth:config.dimensions.depth;
+  return {...item,config,layout,width,depth,
+   spatial:renderSpatial(layout,{style:config.userInfo.stylePreference,woodFinish:config.userInfo.woodFinish,labels:false,angle:-30,elevation:30}),
+   elevation:new ClosetSVGRenderer(layout,{idPrefix:`gallery-${item.id}`,showDimensions:true,showLabels:false,style:config.userInfo.stylePreference,woodFinish:config.userInfo.woodFinish}).renderElevation()};
+ }),[]);
+ const filtered=designs.filter(item=>activeTag==='All'||item.style===activeTag);
+ return <main id="main-content" className="gallery-studio">
+  <section className="gallery-intro">
+   <div><p className="gallery-eyebrow">ALVÉO / THE DESIGN COLLECTION</p><h1>A place for<br/><em>everything you are.</em></h1></div>
+   <div className="gallery-intro-note"><p>From a considered wardrobe wall to a dedicated dressing room. Explore six editable designs, then make one your own.</p><Link href="/configure">Start with your own space <ArrowRight size={16}/></Link></div>
+  </section>
+  <section className="gallery-toolbar" aria-label="Collection controls">
+   <div className="gallery-filters" role="group" aria-label="Filter by style">{tags.map(tag=><button key={tag} aria-pressed={activeTag===tag} onClick={()=>setActiveTag(tag)}>{tag}</button>)}</div>
+   <div className="gallery-view" role="group" aria-label="Drawing view"><button aria-pressed={view==='spatial'} onClick={()=>setView('spatial')}>3D space</button><button aria-pressed={view==='elevation'} onClick={()=>setView('elevation')}>Elevation</button></div>
+  </section>
+  <div className="gallery-collection-meta"><p role="status">{filtered.length} {filtered.length===1?'design':'designs'}{activeTag!=='All'?` / ${activeTag}`:''}</p><p>Real layouts. Editable dimensions. Your finish.</p></div>
+  <section className="gallery-grid" aria-label="Design collection">
+   {filtered.map(item=><article key={item.id} className="gallery-design">
+    <div className="gallery-drawing"><div className="gallery-drawing-caption"><span>0{item.id} / {item.style}</span><span>{view==='spatial'?'SPATIAL STUDY':'FRONT ELEVATION'}</span></div><div className="gallery-art" role="img" aria-label={`${item.title} ${view==='spatial'?'3D layout':'front elevation'}`} dangerouslySetInnerHTML={{__html:view==='spatial'?item.spatial:item.elevation}}/><span className="gallery-drawing-foot">{layoutNames[item.config.closetType??'reach-in']}</span></div>
+    <div className="gallery-card-body"><div className="gallery-card-title"><h2>{item.title}</h2><span>{WOOD_OPTIONS.find(w=>w.id===item.config.userInfo.woodFinish)?.name}</span></div>
+     <p className="gallery-description">{item.description}</p>
+     <dl className="gallery-specs"><div><dt>{isWalkIn(item.config.closetType)?'Room footprint':'Cabinet footprint'}</dt><dd>{formatInches(item.width)} × {formatInches(item.depth)}</dd></div><div><dt>Cabinet depth</dt><dd>{formatInches(item.config.dimensions.depth)}</dd></div><div><dt>Layout</dt><dd>{item.layout.walls.length} {item.layout.walls.length===1?'unit':'units'}</dd></div></dl>
+     <p className="gallery-style-note">{CABINET_STYLES[item.config.userInfo.stylePreference].description}</p>
+     <Link href={`/configure?preset=${item.id}`} className="gallery-open">View and customize layout <ArrowRight size={17}/></Link>
+    </div>
+   </article>)}
+  </section>
+  <section className="gallery-closing"><p className="gallery-eyebrow">DESIGNED AROUND YOUR LIFE</p><h2>Your room. Your collection.<br/>Your starting point.</h2><p>Each design opens in the studio with editable dimensions, storage and finishes. Review fit and clearance before finalizing your layout.</p><Link href="/configure">Create your own design <ArrowRight size={18}/></Link></section>
+  <p className="gallery-disclaimer">Parametric design studies, not photographs of completed installations. Spatial previews show the generated layout; elevations show its primary wall.</p>
+ </main>;
 }

@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect, useCallback, useId } from 'react';
 import { DimInput } from './DimensionInput';
-import { STYLE_OPTIONS, WOOD_OPTIONS, dimensionErrors, dimensionRange, EMPTY_WARDROBE, FOLDED_PER_DRAWER, formatInches, SHOE_SPACING } from '@/lib/design';
+import { STYLE_OPTIONS, WOOD_OPTIONS, dimensionErrors, dimensionRange, EMPTY_WARDROBE, FOLDED_PER_DRAWER, formatInches, SHOE_SPACING, LIMITS } from '@/lib/design';
 import { motion, AnimatePresence } from 'framer-motion';
 import {
   ClosetConfiguration, VillaAmenities, WardrobeItems, ShoeCollection,
@@ -186,6 +186,7 @@ export function DimensionsStep({ config, onUpdate, userType, onValidityChange }:
         </button>
       </div>
 
+      <p className="text-sm text-charcoal-400">{isWalkIn ? `Current generator supports rooms up to ${LIMITS.widthMax / 12} by ${LIMITS.roomDepthMax / 12} feet. Cabinet depth is measured separately below.` : `Current generator supports cabinet runs up to ${LIMITS.widthMax / 12} feet. For a whole dressing room, choose a walk-in layout.`}</p>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div onBlur={() => handleBlur('width', W)}>
           <DimInput
@@ -201,8 +202,8 @@ export function DimensionsStep({ config, onUpdate, userType, onValidityChange }:
 
         <div onBlur={() => handleBlur('depth', D)}>
           <DimInput
-            label={isWalkIn ? 'Room Depth' : 'Unit Depth'}
-            hint={isWalkIn ? 'Door-to-back-wall depth' : 'Front to back of unit'}
+            label={isWalkIn ? 'Room Depth' : 'Cabinet Depth'}
+            hint={isWalkIn ? 'Door-to-back-wall depth' : 'Cabinet only, not room depth'}
             valueInches={D}
             onChange={v => handleChange('depth', v)}
             mode={mode}
@@ -224,7 +225,14 @@ export function DimensionsStep({ config, onUpdate, userType, onValidityChange }:
         </div>
       </div>
 
-      {isWalkIn && <DimInput label="Cabinet Depth" hint="18 to 48 inches" valueInches={dimensions.depth} mode={mode} fieldType="depth" onValidityChange={fieldValidity('cabinet')} onChange={depth => { const next = { ...dimensions, depth }; onUpdate({ dimensions: next }); }} />}
+      {isWalkIn && <DimInput label="Cabinet Depth" hint="Cabinet only, not room depth" valueInches={dimensions.depth} mode={mode} fieldType="depth" onValidityChange={fieldValidity('cabinet')} onChange={depth => { const next = { ...dimensions, depth }; onUpdate({ dimensions: next }); }} />}
+      <div className="rounded-xl border border-cream-300 p-4 space-y-3">
+        <label className="flex items-center gap-2"><input type="checkbox" checked={dimensions.cabinetHeight !== undefined} onChange={e=>{const next={...dimensions};if(e.target.checked)next.cabinetHeight=Math.min(96,dimensions.height);else delete next.cabinetHeight;setInvalidFields(previous=>({...previous,cabinetHeight:false}));onUpdate({dimensions:next});}} />Set cabinet height separately from ceiling</label>
+        {dimensions.cabinetHeight !== undefined ? <>
+          <DimInput label="Cabinet Height" hint="Floor to top of cabinetry" valueInches={dimensions.cabinetHeight} mode={mode} fieldType="cabinetHeight" onValidityChange={fieldValidity('cabinetHeight')} onChange={cabinetHeight=>onUpdate({dimensions:{...dimensions,cabinetHeight}})} />
+          {dimensions.cabinetHeight > dimensions.height ? <p role="alert">Cabinet height exceeds the ceiling. Lower the cabinet height or correct the ceiling measurement.</p> : <p className="text-sm">Space above cabinets: {formatInches(dimensions.height-dimensions.cabinetHeight)}.</p>}
+        </> : <p className="text-sm">Cabinet height follows the ceiling. Set it separately to leave space above your cabinetry.</p>}
+      </div>
       {/* Suspect "Did you mean?" banner */}
       {suspect.visible && (
         <motion.div

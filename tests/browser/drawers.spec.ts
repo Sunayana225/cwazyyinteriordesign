@@ -2,10 +2,17 @@ import { test,expect } from '@playwright/test';
 import AxeBuilder from '@axe-core/playwright';
 test.beforeEach(async({page})=>{await page.goto('/configure');await expect(page.locator('[data-drawer-id]').first()).toBeVisible();});
 const editor=(page:any)=>page.getByRole('dialog',{name:'Design drawer compartments'});
+/** Template well counts are measured from the drawer, so read the count the card
+ * itself advertises rather than hardcoding one. Also asserts card and plan agree. */
+const advertised=async(d:any,name:string)=>{
+  const text=await d.getByRole('button',{name:`${name} template`,exact:true}).locator('small').innerText();
+  return Number(/^(\d+) wells/.exec(text)?.[1]??1);
+};
 test('click drawer, design compartments, apply, save and restore',async({page})=>{
   await page.locator('[data-drawer-id]').first().click();const d=editor(page);await expect(d).toBeVisible();
+  const jewelry=await advertised(d,'Jewelry');
   await d.getByRole('button',{name:'Jewelry template',exact:true}).click();
-  await expect(d.getByRole('button',{name:/^Compartment \d+:/})).toHaveCount(9);
+  await expect(d.getByRole('button',{name:/^Compartment \d+:/})).toHaveCount(jewelry);
   await d.getByLabel('Compartment label',{exact:true}).fill('Daily rings');
   await d.getByLabel('Planned quantity').fill('6');
   await d.getByLabel('Organizer name').fill('My jewelry');
@@ -35,11 +42,13 @@ test('split merge undo redo and discard work with the keyboard',async({page})=>{
 });
 test('copy paste batch apply and SVG download',async({page})=>{
   await page.locator('[data-drawer-id]').first().click();const d=editor(page);
+  const socks=await advertised(d,'Socks');
   await d.getByRole('button',{name:'Socks template',exact:true}).click();await d.getByRole('button',{name:'Copy organizer'}).click();
   const download=page.waitForEvent('download');await d.getByRole('button',{name:'Download SVG'}).click();expect((await download).suggestedFilename()).toBe('drawer-compartments.svg');
   await d.getByRole('button',{name:'Apply to drawer',exact:true}).click();
   await page.locator('[data-drawer-id]').nth(1).click();await d.getByRole('button',{name:'Paste organizer'}).click();
-  await expect(d.getByRole('button',{name:/^Compartment \d+:/})).toHaveCount(12);
+  // Paste carries the copied compartments across, so the count follows the source drawer.
+  await expect(d.getByRole('button',{name:/^Compartment \d+:/})).toHaveCount(socks);
   await d.getByRole('button',{name:'Apply to matching drawers'}).click();
   await d.getByRole('button',{name:'Confirm batch application'}).click();
   await expect.poll(()=>page.evaluate(()=>Object.keys(JSON.parse(localStorage.getItem('alveo-draft')!).config.drawerInteriors).length)).toBeGreaterThan(1);

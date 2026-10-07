@@ -4,7 +4,7 @@ import { dividerPositions, fitDetails, organizerChanges, organizerWeight, rectan
 import { readTemplates, serializeTemplates } from '@/lib/organizerTemplates';
 const drawer={width:24,depth:18,height:6,position:3,purpose:'folded'};
 it('uses independent physical divider dimensions and item margins when checking fit',()=>{
-  const p=defaultInterior(drawer);p.measured={width:10,depth:8,height:5};p.dividerThickness={horizontal:.5,vertical:1};p.itemMargin=0;
+  const p=defaultInterior(drawer);p.cells=grid(2,2);p.measured={width:20,depth:16,height:5};p.dividerThickness={horizontal:.5,vertical:1};p.itemMargin=0;
   expect(cellSize(p.cells[0],drawer,p)).toEqual({width:9,depth:7.5});
   p.cells[0].item={width:7,depth:8,height:4,rotate:false};expect(itemFit(p.cells[0],drawer,p)).toBe('does not fit');expect(fitDetails(p.cells[0],drawer,p).rotationHelps).toBe(true);
   p.cells[0].item.rotate=true;expect(itemFit(p.cells[0],drawer,p)).toBe('fits rotated');p.itemMargin=1;expect(fitDetails(p.cells[0],drawer,p).rotationHelps).toBe(false);expect(itemFit(p.cells[0],drawer,p)).toBe('does not fit');

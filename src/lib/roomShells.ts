@@ -6,7 +6,27 @@ export type Shell=Pick<ClosetConfiguration,'closetType'|'dimensions'|'roomDimens
 export interface SavedShell {id:string;name:string;shell:Shell;}
 export function roomShell(config:Partial<ClosetConfiguration>):Shell{
   const c=canonicalConfig({...DEFAULT_CONFIG,...config});
-  return {closetType:c.closetType,dimensions:c.dimensions,roomDimensions:c.roomDimensions,planning:c.planning};
+  const p=c.planning;
+  const walls=p?.walls?Object.fromEntries(Object.entries(p.walls).filter(([,w])=>w&&[w.depth,w.ceilingHeight,w.baseboard,w.floorOffset].some(v=>v!==undefined)).map(([id,w])=>[id,{depth:w?.depth,ceilingHeight:w?.ceilingHeight,baseboard:w?.baseboard,floorOffset:w?.floorOffset}])):undefined;
+  const planning=p&&(Object.keys(walls??{}).length||p.door||p.windows?.length||p.obstacles?.length)?{
+    ...(Object.keys(walls??{}).length?{walls}:{}),...(p.door?{door:{wall:p.door.wall,offset:p.door.offset,width:p.door.width,hinge:p.door.hinge,swing:p.door.swing}}:{}),
+    ...(p.windows?.length?{windows:p.windows}:{}),...(p.obstacles?.length?{obstacles:p.obstacles}:{}),
+  }:undefined;
+  return {closetType:c.closetType,dimensions:c.dimensions,roomDimensions:c.roomDimensions,planning};
+}
+/** Replace surveyed geometry while retaining the active project's fit assumptions
+ * and storage priorities, including when applying a legacy shell. */
+export function applyRoomShell(config:Partial<ClosetConfiguration>,input:Shell):Shell {
+  const shell=roomShell(input),p=config.planning;
+  const {walls:oldWalls,door:oldDoor,windows:_windows,obstacles:_obstacles,...assumptions}=p??{};
+  const ids=new Set([...Object.keys(oldWalls??{}),...Object.keys(shell.planning?.walls??{})]);
+  const walls=Object.fromEntries([...ids].flatMap(id=>{
+    const key=id as keyof NonNullable<typeof oldWalls>,priority=oldWalls?.[key]?.priority;
+    const wall={...shell.planning?.walls?.[key],...(priority?{priority}:{})};
+    return Object.keys(wall).length?[[id,wall]]:[];
+  }));
+  const planning={...assumptions,...shell.planning,...(Object.keys(walls).length?{walls}:{}),...(shell.planning?.door?{door:{...shell.planning.door,...(oldDoor?.check?{check:oldDoor.check}:{})}}:{})};
+  return {...shell,planning:Object.keys(planning).length?planning:undefined};
 }
 export function readShells(raw:string|null):SavedShell[]{
   if(raw===null)return [];

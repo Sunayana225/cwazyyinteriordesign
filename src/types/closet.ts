@@ -108,6 +108,11 @@ export interface ClosetZone {
 }
 
 // ── Fitted wall — one elevation in a multi-wall walk-in ──────────────────────
+export interface WallReservation {
+  start:number;
+  end:number;
+  sources:Array<{kind:'window'|'obstacle';id:string;label:string}>;
+}
 export interface ClosetWall {
   wallId: 'back' | 'left' | 'right' | 'corridor-a' | 'corridor-b' | 'island-unit';
   label: string;         // 'BACK WALL' / 'LEFT WALL' etc.
@@ -116,6 +121,7 @@ export interface ClosetWall {
   height: number;        // ceiling height (inches)
   unitDepth: number;     // storage unit depth, typically 24"
   zones: ClosetZone[];
+  reservations?:WallReservation[];
 }
 
 export interface ShelfConfig {

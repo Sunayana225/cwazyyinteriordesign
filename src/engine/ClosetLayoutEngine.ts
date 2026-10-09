@@ -1,3 +1,4 @@
+import { wallReservations } from '@/lib/wallReservations';
 import { shoeShelves, shoeColumnWidth } from '@/lib/shoePlanning';
 import { remainingInventory, type InventoryBudget } from '@/lib/inventoryBudget';
 import { hangingWidths } from '@/lib/hangingAllocation';
@@ -225,14 +226,15 @@ export class ClosetLayoutEngine {
     if(priority==='accessories')this.prefs={...this.prefs,priorityItems:['accessories']};
     // Opening measurements are above finished floor, while builders work relative
     // to the raised cabinet base. Compare both bounds in the same coordinates.
-    const excluded:Array<[number,number]>=(this.planning.windows??[]).filter(w=>w.wall===wallId&&w.sill<wallTop&&w.sill+w.height>floorOffset+TOE_KICK).map(w=>[w.offset,w.offset+w.width]);
+    const reserved=(this.planning.windows??[]).map((w,i)=>({window:w,index:i})).filter(({window:w})=>w.wall===wallId&&w.sill<wallTop&&w.sill+w.height>floorOffset+TOE_KICK).map(({window:w,index})=>({start:w.offset,end:w.offset+w.width,source:{kind:'window' as 'window'|'obstacle',id:w.id,label:`Window ${index+1}${w.label?`: ${w.label}`:''}`}}));
     const prototype:ClosetWall={wallId,label,elevationRef,width,height:wallTop,unitDepth,zones:[]};
     const footprint=wallFootprint(prototype,{dimensions:{width:this.W,height:this.H,depth:originalDepth},roomDimensions:{roomWidth:this.roomW,roomDepth:this.roomD},walls:[{...prototype,wallId:'back',unitDepth:backDepth}]});
     for(const obstacle of this.planning.obstacles??[])if(overlaps(footprint,obstacle)){
       const vertical=['left','right','corridor-a','corridor-b'].includes(wallId);
-      excluded.push(vertical?[obstacle.y-footprint.y,obstacle.y+obstacle.depth-footprint.y]:[obstacle.x-footprint.x,obstacle.x+obstacle.width-footprint.x]);
+      reserved.push({start:vertical?obstacle.y-footprint.y:obstacle.x-footprint.x,end:vertical?obstacle.y+obstacle.depth-footprint.y:obstacle.x+obstacle.width-footprint.x,source:{kind:'obstacle',id:obstacle.id,label:`Obstacle: ${obstacle.label}`}});
       this.inputWarnings.push(`${label}: storage excluded around obstacle ${obstacle.label}.`);
     }
+    const reservations=wallReservations(width,reserved),excluded=reservations.map(r=>[r.start,r.end] as [number,number]);
     const spans=freeSpans(width,excluded);
     let zones=spans.flatMap(([start,end])=>this.buildWall(wallId,label,elevationRef,end-start,unitDepth,role,spans.length===1&&end-start>=width-.001).zones.map(z=>({...z,x:z.x+start})));
     // Append after all spans, so a new shelf above the first span cannot shift
@@ -245,7 +247,7 @@ export class ClosetLayoutEngine {
     this.D=originalDepth;this.H=originalHeight;this.prefs=originalPrefs;
     if(floorOffset)for(const zone of zones){zone.y+=floorOffset;zone.rods?.forEach(r=>r.height+=floorOffset);zone.drawers?.forEach(d=>d.position+=floorOffset);}
     if(excluded.length)this.inputWarnings.push(`${label}: openings and obstacles reserve ${Math.max(0,width-spans.reduce((n,[a,b])=>n+b-a,0)).toFixed(2)} inches of wall width.`);
-    return {...prototype,zones};
+    return {...prototype,zones,...(reservations.length?{reservations}:{})};
   }
 
   private get clearance(){return this.planning.clearanceTarget??36;}

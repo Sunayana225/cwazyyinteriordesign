@@ -5,6 +5,7 @@ import type { StudioTool } from '@/lib/userRoles';
 import { workspaceReview } from '@/lib/workspaceReview';
 import { WOOD_OPTIONS, STYLE_OPTIONS } from '@/lib/design';
 import { confirmSurvey, surveyState } from '@/lib/surveyReview';
+import { unassessedStorage } from '@/lib/storageFit';
 const SurveyChanges=dynamic(()=>import('./SurveyChanges'));
 
 /** These are measured model checks, not a certification of the survey or installation. */
@@ -24,6 +25,7 @@ export function WorkspaceReview({role,layout,preferences,config,onChange,onActio
       <button type="button" onClick={()=>onAction('room')}><strong>{issues.length}</strong><span>Modeled room conflicts</span></button>
       <button type="button" onClick={()=>onAction('fit')}><strong>{fit.shortfalls.length}</strong><span>Storage categories short</span></button>
     </div>
+    {unassessedStorage(config)&&<p className="text-sm my-2 text-amber-900">{unassessedStorage(config)}</p>}
     {fit.shortfalls.length>0&&<details><summary>See what needs more space</summary><ul>{fit.shortfalls.map(row=><li key={row.label}><strong>{row.label}</strong>: needs {Number(row.required.toFixed(2))}, provides {Number(row.available.toFixed(2))} {row.unit} — short by {Number((row.required-row.available).toFixed(2))}.</li>)}</ul><button className="studio-role-link" type="button" onClick={()=>onAction('fit')}>Review allocation and alternatives</button></details>}
     {notices.length>0&&<details><summary>Review {notices.length} layout {notices.length===1?'notice':'notices'}</summary><ul>{notices.map(notice=><li key={notice}>{notice}</li>)}</ul></details>}
     {issues.length>0&&<details><summary>Review {issues.length} room {issues.length===1?'conflict':'conflicts'}</summary><ul>{issues.map(issue=><li key={issue}>{issue}</li>)}</ul></details>}

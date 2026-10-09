@@ -21,7 +21,7 @@ import { StudioGuide, type StudioTool } from './StudioGuide';
 import { SpatialPreview } from './SpatialPreview';
 import dynamic from 'next/dynamic';
 import { drawerTargets, resolveOrganizers } from '@/lib/drawers';
-import { storageFit } from '@/lib/storageFit';
+import { storageFit, unassessedStorage } from '@/lib/storageFit';
 import { wallElevation } from '@/lib/wallElevation';
 import type { DrawerInterior } from '@/lib/drawers';
 
@@ -492,7 +492,8 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
                       />
                     </div>
                     <p className="text-xs text-charcoal-400 mt-2">
-                      {!fit.total?'Add wardrobe items to assess storage fit.':fit.shortfalls.length?`Additional storage needed for: ${fit.shortfalls.map(row=>row.label).join(', ')}. Review the quantities below.`:'Your entered inventory fits the modeled capacity. Review access, clearances, and item sizes before finalizing.'}
+                      {!fit.total?'No modeled storage demand. Add supported categories to assess fit.':fit.shortfalls.length?`Additional storage needed for: ${fit.shortfalls.map(row=>row.label).join(', ')}. Review the quantities below.`:'The assessed storage categories fit the modeled capacity. Review access, clearances, and item sizes before finalizing.'}
+                      {unassessedStorage(config)&&<span className="block mt-2 text-amber-900">{unassessedStorage(config)}</span>}
                     </p>
                   </div>
 

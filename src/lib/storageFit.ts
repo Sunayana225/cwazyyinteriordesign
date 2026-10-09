@@ -1,4 +1,11 @@
 import type {CapacityRow} from './design';
+import type {ClosetConfiguration} from '@/types/closet';
+
+/** Requested accessories without a quantity/size model must never be reported as covered. */
+export function unassessedStorage(config:Partial<ClosetConfiguration>):string {
+  const categories=[...(config.wardrobe?.ties?['Ties']:[]),...(config.wardrobe?.jewelry?['Jewelry']:[])];
+  return categories.length?`Not assessed in the fit score: ${categories.join(', ')}. Check organizer dimensions and item quantities separately; a drawn tray does not confirm capacity.`:'';
+}
 /** Count satisfied categories rather than combining incompatible capacity units
  * or mistaking a highly overloaded closet for an efficient one. */
 export function storageFit(rows:CapacityRow[]=[]){

@@ -175,6 +175,7 @@ export interface VillaAmenities {
 }
 
 export interface ClosetConfiguration {
+  surveyConfirmation?: import('@/lib/surveyReview').SurveyConfirmation;
   inventoryPlanning?: import('@/lib/inventoryPlanning').InventoryPlanning;
   planning?: PlanningOptions;
   closetType?: ClosetType;           // set in step 0 — the shape question

@@ -54,7 +54,10 @@ it('prints household totals, escaped notes, organizer differences, and CSV units
 });
 
 it('uses both corridor depths and groups alternative-layout conflicts',()=>{
- const config={...DEFAULT_CONFIG,closetType:'corridor' as const,roomDimensions:{roomWidth:72,roomDepth:144},planning:{walls:{'corridor-a':{depth:18},'corridor-b':{depth:30,ceilingHeight:60}}}},layout=new ClosetLayoutEngine(config).calculateLayout();expect(layout.aisleWarnings.join(' ')).toContain('84');expect(layout.aisleWarnings.join(' ')).toContain('personal target');expect(ceilingWarnings(layout).length).toBeGreaterThan(0);expect(alternativeIssues(layout).map(([key])=>key)).toContain('ceiling');
+ const config={...DEFAULT_CONFIG,closetType:'corridor' as const,roomDimensions:{roomWidth:72,roomDepth:144},planning:{walls:{'corridor-a':{depth:18},'corridor-b':{depth:30,ceilingHeight:60}}}},layout=new ClosetLayoutEngine(config).calculateLayout();expect(layout.aisleWarnings.join(' ')).toContain('84');expect(layout.aisleWarnings.join(' ')).toContain('personal target');expect(ceilingWarnings(layout)).toEqual([]);expect(layout.walls[1].height).toBe(60);
+ // Imported or external geometry still receives the same defensive checks.
+ layout.walls[1].zones[0].height=100;
+ expect(alternativeIssues(layout).map(([key])=>key)).toContain('ceiling');
 });
 it('reports separate obstacle clearance and screens suggested positions against the inward sweep',()=>{
  const layout=new ClosetLayoutEngine({...DEFAULT_CONFIG,closetType:'walkin-u',roomDimensions:{roomWidth:120,roomDepth:120}}).calculateLayout();layout.walls=[];layout.planning={door:{wall:'front',offset:0,width:30,hinge:'left',swing:'in',check:'sector'},obstacles:[{id:'a',label:'Column',x:118,y:118,width:12,depth:12}]};const assessment=doorAssessment(layout);expect(assessment.clearance).toBeNull();expect(assessment.obstacleClearance).not.toBeNull();expect(assessment.closestPair).toContain('Column');const positions=obstacleSuggestions(layout,'a');expect(positions.length).toBeGreaterThan(0);for(const pos of positions)expect(sectorDistance(doorLocalRect({...pos,width:12,depth:12},layout.planning.door!,{width:120,depth:120}),30)).toBeGreaterThan(0);

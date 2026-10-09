@@ -9,6 +9,9 @@ import { drawerTargets, cellSize, interiorSVG, interiorWarnings, resolveOrganize
 import { combinedInventory, EMPTY_INVENTORY, INVENTORY_KEYS, inventoryValue, inventoryLabel } from '@/lib/inventoryPlanning';
 import { DEFAULT_PRINT, dividerEstimate, configurationChanges } from '@/lib/printSettings';
 import type { PrintSettings } from '@/lib/printSettings';
+import { wallElevation } from '@/lib/wallElevation';
+import { FOLDED_REFERENCE } from '@/lib/design';
+import { surveyState } from '@/lib/surveyReview';
 
 export interface PDFExportOptions {
   layout: ClosetLayout;
@@ -21,7 +24,7 @@ export interface PDFExportOptions {
 function renderDesign({ layout, config, fileName = 'Current design', showDimensions = true, showLabels = true, settings=DEFAULT_PRINT }: PDFExportOptions) {
   const p = config.userInfo;
   const options = { showDimensions, showLabels, style: p?.stylePreference ?? 'modern' as const, woodFinish: p?.woodFinish ?? 'medium' as const, hardwareFinish: p?.hardwareFinish, accentColor: p?.accentColor };
-  const drawings = layout.walls.filter(w=>!settings.walls||settings.walls.includes(w.wallId)).map(w => `<section class="drawing"><h2>${esc(w.label)} (${esc(w.elevationRef)})</h2>${new ClosetSVGRenderer({ ...layout, dimensions: { width: w.width, height: w.height, depth: w.unitDepth }, zones: w.zones, walls: [w] }, options).renderElevation()}</section>`).join('');
+  const drawings = layout.walls.filter(w=>!settings.walls||settings.walls.includes(w.wallId)).map(w => `<section class="drawing"><h2>${esc(w.label)} (${esc(w.elevationRef)})</h2>${new ClosetSVGRenderer(wallElevation(layout,w), options).renderElevation()}</section>`).join('');
   const room = layout.roomDimensions;
   const floor = settings.floorPlan&&isWalkIn(layout.closetType) && room ? `<section class="drawing"><h2>Floor plan</h2>${renderFloorPlan(layout, { ...room, unitDepth: layout.dimensions.depth })}<p>${layout.planning?.door?'Configured door; verify swing clearance on site.':'Door location and 30-inch width are illustrative; confirm on site.'}</p></section>` : '';
   const capacity = layout.capacity ?? (validConfig(config) ? capacityReport(config, layout.walls) : []);
@@ -43,17 +46,21 @@ function renderDesign({ layout, config, fileName = 'Current design', showDimensi
   const materials=settings.materials?`<section class="schedule"><h2>Estimated organizer materials</h2><p>Planning worksheet only, not a fabrication cut list. Centerline lengths exclude joinery, kerf, waste and intersections. Verify measured interiors and divider height separately.</p>${table([['Organizer','Divider material','Thickness (in)','Continuous segments','Total centerline length (in)','Liner area (sq ft)'],...targets.filter(d=>plans[d.id]).map(d=>{const p=plans[d.id],estimate=dividerEstimate(p,d.drawer);return[p.name,p.material,p.dividerThickness?`H ${p.dividerThickness.horizontal} / V ${p.dividerThickness.vertical}`:String(p.thickness),String(estimate.segments.length),estimate.totalLength.toFixed(2),estimate.linerArea.toFixed(2)];})])}</section>`:'';
   const roomSchedule=settings.roomSchedule?`<section class="schedule"><h2>Room openings and obstacle schedule</h2>${table([['Object','Location','Measurements (in)'],...(layout.planning?.windows??[]).map((w,i)=>[`Window ${i+1}: ${w.label??''}`,w.wall,`Offset ${w.offset}; width ${w.width}; sill ${w.sill}; height ${w.height}`]),...(layout.planning?.obstacles??[]).map((o,i)=>[`Obstacle ${i+1}: ${o.label}`,`X ${o.x}; Y ${o.y}`,`${o.width} × ${o.depth}`]),...(layout.planning?.door?[[`Door (${layout.planning.door.swing})`,layout.planning.door.wall,`Offset ${layout.planning.door.offset}; width ${layout.planning.door.width}; ${layout.planning.door.hinge} hinge`]]:[])])}</section>`:'';
   const members=config.inventoryPlanning?.members??[];
+  const wallSchedule=settings.roomSchedule?`<section class="schedule"><h2>Wall height coordination</h2>${table([['Wall','Survey ceiling (in)','Requested cabinet top (in)','Effective cabinet top (in)','Floor offset (in)'],...layout.walls.map(w=>[w.label,String(layout.planning?.walls?.[w.wallId]?.ceilingHeight??layout.dimensions.height),String(w.wallId==='island-unit'?36:config.dimensions?.cabinetHeight??config.dimensions?.height??layout.dimensions.height),String(w.height),String(layout.planning?.walls?.[w.wallId]?.floorOffset??0)])])}<p>Cabinet tops are above finished floor. Floor offsets consume usable height. Effective tops are constrained by the surveyed ceiling.</p></section>`:'';
+  const survey=surveyState(config);
+  const surveyNote=settings.notes?`<p>Room survey review: ${survey==='current'?`confirmed for the current geometry on ${esc(config.surveyConfirmation!.confirmedAt.slice(0,10))}`:survey==='stale'?'room geometry changed since confirmation; recheck required':'not confirmed'}. Survey confirmation records a user review, not installation approval.</p>`:'';
   const household=settings.household?`<section class="schedule"><h2>Household and season totals</h2><p>Stored profile totals; these may differ from the active inventory.</p>${table([['Profile','Season','Category','Count'],...members.flatMap(m=>INVENTORY_KEYS.map(k=>[m.name,m.season,inventoryLabel(k),String(inventoryValue(m.inventory,k))])),...(['everyday','seasonal'] as const).flatMap(season=>{const total=combinedInventory(members.filter(m=>m.season===season));return INVENTORY_KEYS.map(k=>['Season total',season,inventoryLabel(k),String(inventoryValue(total,k))]);})])}</section>`:'';
   const reserveNotes=settings.reserveNotes?`<section class="schedule"><h2>Reserve percentages and inventory notes</h2>${table([['Category','Reserve (%)'],...INVENTORY_KEYS.filter(k=>(config.inventoryPlanning?.reserve?.[k]??0)>0).map(k=>[inventoryLabel(k),String(config.inventoryPlanning?.reserve?.[k])])])}${Object.entries(config.inventoryPlanning?.notes??{}).map(([k,v])=>`<p>${esc(k)}: ${esc(v??'')}</p>`).join('')}</section>`:'';
   const changes=settings.comparison?`<section class="schedule"><h2>Changes from ${esc(settings.comparisonName??'reference design')}</h2>${table([['Dimension or quantity','Before','Current'],...configurationChanges(settings.comparison,config)])}</section>`:'';
   return `<article><h1>${esc(settings.project||fileName)}</h1><p>${esc(fileName)} · ${esc(settings.contact)}</p><p>Alvéo · ${esc(new Date().toLocaleDateString())} · Planning layout</p>
-    <h2>Space specifications — effective dimensions</h2>${table(specs,false)}
+    <h2>Space specifications — effective dimensions</h2>${table(specs,false)}${surveyNote}
     <h2>Capacity and fit</h2><p>Utilization: ${layout.utilizationScore}%. A high utilization score does not mean every item fits.</p>
+    <p>Folded storage uses estimated usable volume relative to a ${FOLDED_REFERENCE.width} × ${FOLDED_REFERENCE.depth} × ${FOLDED_REFERENCE.height} in reference drawer, with ${FOLDED_REFERENCE.edgeClearance} in edge clearance and ${FOLDED_REFERENCE.bottomAllowance} in bottom allowance. Verify actual folded-item dimensions and packing.</p>
     ${table([['Storage', 'Required', 'Provided', 'Shortfall'], ...capacity.map(r => [r.label, r.required.toFixed(1) + ' ' + r.unit, r.available.toFixed(1), Math.max(0,r.required-r.available).toFixed(1)])])}
     <h2>Warnings</h2>${warnings.length ? `<ul>${warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : '<p>No calculated warnings.</p>'}
     <h2>Recommendations</h2><ul>${layout.recommendations.map(r => `<li>${esc(r)}</li>`).join('')}</ul>
     <h2>Inventory</h2>${table(Object.entries({ ...config.wardrobe, ...config.shoes }).map(([k,v]) => [k.replace(/([A-Z])/g, ' $1'), typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)]),false)}
-    ${floor}${drawings}${organizers}${materials}${roomSchedule}${household}${reserveNotes}${changes}<footer>Planning purposes only. Not to scale. Verify dimensions, support, door clearance, and installation requirements before construction.</footer></article>`;
+    ${floor}${drawings}${organizers}${materials}${roomSchedule}${wallSchedule}${household}${reserveNotes}${changes}<footer>Planning purposes only. Not to scale. Verify dimensions, support, door clearance, and installation requirements before construction.</footer></article>`;
 }
 export function buildPrintDocument(designs: PDFExportOptions[]): string {
   const settings=designs[0]?.settings??DEFAULT_PRINT,paper=settings.paper==='Letter'?'Letter':'A4',orientation=settings.orientation==='landscape'?'landscape':'portrait';

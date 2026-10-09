@@ -189,8 +189,8 @@ export class ClosetLayoutEngine {
         ]; break;
       case 'corridor':
         requests = [
-          ['corridor-a', 'WALL A', 'EL-A', Math.max(this.roomD, 48), this.D, 'hanging-only'],
-          ['corridor-b', 'WALL B', 'EL-B', Math.max(this.roomD, 48), this.D, 'drawers-and-shoes'],
+          ['corridor-a', 'WALL A', 'EL-A', this.roomD, this.D, 'hanging-only'],
+          ['corridor-b', 'WALL B', 'EL-B', this.roomD, this.D, 'drawers-and-shoes'],
         ]; break;
       default:
         requests = [['back', 'BACK WALL', 'EL-A', this.closetType === 'walkin-single' ? this.roomW : this.W, this.D, 'all']];
@@ -210,13 +210,19 @@ export class ClosetLayoutEngine {
   private wall(
     wallId:ClosetWall['wallId'],label:string,elevationRef:string,width:number,unitDepth:number,role:WallRole,
   ):ClosetWall {
-    const originalDepth=this.D,backDepth=this.depthFor('back'),originalPrefs=this.prefs,originalHeight=this.H;unitDepth=this.depthFor(wallId);this.D=unitDepth-(this.planning.walls?.[wallId]?.baseboard??0);const floorOffset=this.planning.walls?.[wallId]?.floorOffset??0;this.H-=floorOffset;
+    const originalDepth=this.D,backDepth=this.depthFor('back'),originalPrefs=this.prefs,originalHeight=this.H;
+    const wallOptions=this.planning.walls?.[wallId];
+    const wallTop=Math.min(originalHeight,wallOptions?.ceilingHeight??this.ceilingHeight);
+    unitDepth=this.depthFor(wallId);this.D=unitDepth-(wallOptions?.baseboard??0);
+    const floorOffset=wallOptions?.floorOffset??0;this.H=Math.max(0,wallTop-floorOffset);
     const priority=this.planning.walls?.[wallId]?.priority;
     const roleMap:Record<string,WallRole>={hanging:'hanging-only',shoes:'shoes-only',folded:'drawers-only',accessories:'all'};
     role=roleMap[priority??'']??role;
     if(priority==='accessories')this.prefs={...this.prefs,priorityItems:['accessories']};
-    const excluded:Array<[number,number]>=(this.planning.windows??[]).filter(w=>w.wall===wallId&&w.sill<this.H).map(w=>[w.offset,w.offset+w.width]);
-    const prototype:ClosetWall={wallId,label,elevationRef,width,height:originalHeight,unitDepth,zones:[]};
+    // Opening measurements are above finished floor, while builders work relative
+    // to the raised cabinet base. Compare both bounds in the same coordinates.
+    const excluded:Array<[number,number]>=(this.planning.windows??[]).filter(w=>w.wall===wallId&&w.sill<wallTop&&w.sill+w.height>floorOffset+TOE_KICK).map(w=>[w.offset,w.offset+w.width]);
+    const prototype:ClosetWall={wallId,label,elevationRef,width,height:wallTop,unitDepth,zones:[]};
     const footprint=wallFootprint(prototype,{dimensions:{width:this.W,height:this.H,depth:originalDepth},roomDimensions:{roomWidth:this.roomW,roomDepth:this.roomD},walls:[{...prototype,wallId:'back',unitDepth:backDepth}]});
     for(const obstacle of this.planning.obstacles??[])if(overlaps(footprint,obstacle)){
       const vertical=['left','right','corridor-a','corridor-b'].includes(wallId);
@@ -326,7 +332,7 @@ export class ClosetLayoutEngine {
 
   /** Island unit — 36" high counter with jewellery drawers + accessory shelf */
   private buildIslandWall(width: number, height: number): ClosetWall {
-    height=Math.min(height,this.H);
+    height=Math.min(height,this.H,this.planning.walls?.['island-unit']?.ceilingHeight??this.ceilingHeight);
     const depth=this.depthFor('island-unit');
     const canHaveDrawers=elementFits('drawers',height,depth);
     const zones: ClosetZone[] = [];

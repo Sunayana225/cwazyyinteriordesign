@@ -48,9 +48,10 @@ describe('live workflow guidance',()=>{
   it('offers different handoffs after modeled conflicts and shortages are resolved',()=>{
     const layout=clearLayout();layout.planning={windows:[{id:'survey',wall:'back',offset:4,width:12,sill:92,height:2}]};
     const before=structuredClone(layout);
-    expect(workspaceReview('homeowner',layout).next.action).toBe('library');
-    expect(workspaceReview('architect',layout).next.title).toBe('Review coordination package');
-    expect(workspaceReview('designer',layout).next.title).toBe('Prepare the client review');
+    expect(workspaceReview('homeowner',layout,'current').next.action).toBe('library');
+    expect(workspaceReview('architect',layout,'current').next.title).toBe('Review coordination package');
+    expect(workspaceReview('designer',layout,'current').next.title).toBe('Prepare the client review');
+    expect(workspaceReview('architect',layout,'stale').next.title).toBe('Recheck the changed room');
     expect(layout).toEqual(before);
   });
 });

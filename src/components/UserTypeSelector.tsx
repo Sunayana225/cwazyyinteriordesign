@@ -54,7 +54,7 @@ export function UserTypeSelector() {
     
     // Navigate to configure page after a brief delay
     setTimeout(() => {
-      router.push('/configure');
+      router.push(`/configure?mode=${type}`);
     }, 800);
   };
 

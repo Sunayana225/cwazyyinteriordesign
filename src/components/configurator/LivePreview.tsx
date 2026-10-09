@@ -22,6 +22,7 @@ import { SpatialPreview } from './SpatialPreview';
 import dynamic from 'next/dynamic';
 import { drawerTargets, resolveOrganizers } from '@/lib/drawers';
 import { storageFit } from '@/lib/storageFit';
+import { wallElevation } from '@/lib/wallElevation';
 import type { DrawerInterior } from '@/lib/drawers';
 
 const EMPTY_OVERRIDES: ZoneOverrides = {};
@@ -128,12 +129,7 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
     if (!layout) return null;
     const wall: ClosetWall | undefined = layout.walls?.[safeWallIdx];
     if (!wall) return layout;
-    return {
-      ...layout,
-      dimensions: { width: wall.width, height: wall.height, depth: wall.unitDepth },
-      zones:      wall.zones,
-      walls:      [wall],
-    };
+    return wallElevation(layout,wall);
   }, [layout, safeWallIdx]);
 
   useEffect(() => {
@@ -292,7 +288,7 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
       {showExportSettings&&layout&&<ExportSettingsDialog layout={layout} config={config} initial={settings} activeWall={layout.walls[activeWallIdx]?.wallId} savedDesigns={savedDesigns} onExport={handleExport} onClose={()=>setShowExportSettings(false)} busy={isExporting}/>}
       <button className="studio-library-button text-sm self-start" onClick={() => setShowCustomModal(true)}>Manage saved designs ({savedDesigns.length})</button>
       <StudioGuide role={config.userInfo?.userType} onAction={openStudioTool} hasLayout={!!layout} hasDrawers={drawers.length > 0} canEdit={!!onConfigChange} hasFloorPlan={!!layout&&!['reach-in','wardrobe-wall'].includes(layout.closetType)}/>
-      {layout&&config.userInfo&&config.userInfo.userType!=='browsing'&&<WorkspaceReview role={config.userInfo.userType} preferences={config.userInfo} layout={layout} onAction={openStudioTool}/>}
+      {layout&&config.userInfo&&config.userInfo.userType!=='browsing'&&<WorkspaceReview role={config.userInfo.userType} preferences={config.userInfo} config={config} onChange={onConfigChange} layout={layout} onAction={openStudioTool}/>}
       <div hidden={activeTab!=='drawing'||showSpatial||showFloorPlan} className="studio-display-options flex flex-wrap gap-3 text-sm"><label><input type="checkbox" checked={showDimensions} onChange={e => setShowDimensions(e.target.checked)} /> Dimensions</label><label><input type="checkbox" checked={showLabels} onChange={e => setShowLabels(e.target.checked)} /> Labels</label><label><input type="checkbox" checked={highContrast} onChange={e=>setHighContrast(e.target.checked)}/> High contrast drawing</label></div>
       {/* Tabs */}
       <div role="tablist" aria-label="Preview views" className="flex flex-wrap bg-cream-100 rounded-lg p-1">

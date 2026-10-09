@@ -30,13 +30,14 @@ export function StudioGuide({ onAction, hasLayout, hasDrawers, canEdit, hasFloor
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const [showStarter, setShowStarter] = useState(true);
+  const collapseKey=`alveo-studio-guide-collapsed:${role}`;
   useEffect(() => {
-    try { setShowStarter(localStorage.getItem('alveo-studio-guide-collapsed') !== 'true'); } catch { /* Guidance remains usable when storage is unavailable. */ }
-  }, []);
+    try { setShowStarter((localStorage.getItem(collapseKey)??(role==='homeowner'?localStorage.getItem('alveo-studio-guide-collapsed'):null)) !== 'true'); } catch { setShowStarter(true); }
+  }, [collapseKey,role]);
   const toggleStarter = () => {
     const next = !showStarter;
     setShowStarter(next);
-    try { localStorage.setItem('alveo-studio-guide-collapsed', String(!next)); } catch { /* Keep the current session preference. */ }
+    try { localStorage.setItem(collapseKey, String(!next)); } catch { /* Keep the current session preference. */ }
   };
   const rank=(id:StudioTool)=>{const index=workflow.tools.indexOf(id);return index<0?workflow.tools.length:index;};
   const available = TOOLS.filter(tool => tool.id !== 'floor' || hasFloorPlan).sort((a,b)=>rank(a.id)-rank(b.id));

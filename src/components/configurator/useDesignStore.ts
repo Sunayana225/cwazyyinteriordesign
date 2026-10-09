@@ -49,8 +49,10 @@ export function useDesignStore() {
       else if (draft?.version === 1 && validConfig(draft.config)) setConfig(restoredConfig(draft.config));
       else {
         if (raw) { draftWritable.current = false; setNotice('The draft could not be restored. It has been kept in storage. Save a named design before leaving.'); }
-        const mode = sessionStorage.getItem('userType');
-        if (isUserRole(mode)) setConfig(c => ({ ...c, userInfo: { ...DEFAULT_CONFIG.userInfo, userType: mode } }));
+        try {
+          const mode = sessionStorage.getItem('userType');
+          if (isUserRole(mode)) setConfig(c => ({ ...c, userInfo: { ...DEFAULT_CONFIG.userInfo, userType: mode } }));
+        } catch { /* Session preferences must not disable working draft storage. */ }
       }
     } catch { draftWritable.current = false; setNotice('Draft storage is unavailable. Changes remain in this tab until you leave.'); }
     // A fresh homepage choice changes the workspace, never the restored design.
@@ -60,6 +62,14 @@ export function useDesignStore() {
       if(isUserRole(role))chosenRole.current=role;
       sessionStorage.removeItem('alveo-pending-role');
     } catch { /* A saved draft remains usable when session storage is unavailable. */ }
+    // The URL carries an explicit choice when session storage is blocked. Remove
+    // this one-shot parameter so a later reload cannot undo an in-editor change.
+    const url=new URL(window.location.href),requestedRole=url.searchParams.get('mode');
+    if(isUserRole(requestedRole))chosenRole.current=requestedRole;
+    if(url.searchParams.has('mode')){
+      url.searchParams.delete('mode');
+      window.history.replaceState(window.history.state,'',url.pathname+url.search+url.hash);
+    }
     // Retain the consumed choice through React's development effect replay, which
     // otherwise restores the old draft a second time and loses the selection.
     const role=chosenRole.current;

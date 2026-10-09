@@ -5,6 +5,7 @@ import { validInteriors, interiorIssue } from './drawers';
 import { validPlanning, canonicalPlanning, planningIssues } from './planning';
 import { validColumns, columnsIssue } from './layoutColumns';
 import { isUserRole, USER_ROLES } from './userRoles';
+import { validSurveyConfirmation } from './surveyReview';
 
 export const SAVED_KEY = 'alveo-saved-designs';
 export const DRAFT_KEY = 'alveo-draft';
@@ -21,7 +22,8 @@ export function pickFields<T extends object>(value: T, keys: readonly string[]):
   return Object.fromEntries(keys.filter(key => Object.prototype.hasOwnProperty.call(value, key)).map(key => [key, (value as Record<string, unknown>)[key]])) as T;
 }
 export function canonicalConfig(c: ClosetConfiguration): ClosetConfiguration {
-  const next = pickFields(c, ['closetType','dimensions','roomDimensions','userInfo','wardrobe','shoes','amenities','zoneOverrides','drawerInteriors','planning','inventoryPlanning']);
+  const next = pickFields(c, ['closetType','dimensions','roomDimensions','userInfo','wardrobe','shoes','amenities','zoneOverrides','drawerInteriors','planning','inventoryPlanning','surveyConfirmation']);
+  if(c.surveyConfirmation)next.surveyConfirmation=pickFields(c.surveyConfirmation,['version','geometry','confirmedAt']);
   next.dimensions = pickFields(c.dimensions, ['width','height','depth','cabinetHeight']);
   next.userInfo = pickFields(c.userInfo, ['userType','stylePreference','woodFinish','drawerPreference','priorityItems','hardwareFinish','accentColor']);
   next.wardrobe = pickFields(c.wardrobe, Object.keys(DEFAULT_CONFIG.wardrobe));
@@ -50,7 +52,7 @@ export function validConfig(value: unknown): value is ClosetConfiguration {
     const v = (actual as Record<string, unknown>)[k];
     return k === 'jewelry' ? typeof v === 'boolean' : finite(v) && Number.isInteger(v);
   });
-  return (c.dimensions?.cabinetHeight === undefined || (finite(c.dimensions.cabinetHeight) && c.dimensions.cabinetHeight > 0)) && validInventoryPlanning(c.inventoryPlanning) && validPlanning(c.planning) && (c.closetType === undefined || TYPES.includes(c.closetType)) && record(c.dimensions) &&
+  return validSurveyConfirmation(c.surveyConfirmation) && (c.dimensions?.cabinetHeight === undefined || (finite(c.dimensions.cabinetHeight) && c.dimensions.cabinetHeight > 0)) && validInventoryPlanning(c.inventoryPlanning) && validPlanning(c.planning) && (c.closetType === undefined || TYPES.includes(c.closetType)) && record(c.dimensions) &&
     Object.keys(DEFAULT_CONFIG.dimensions).every(k => finite(c.dimensions[k as keyof typeof c.dimensions])) &&
     (c.roomDimensions === undefined || (record(c.roomDimensions) && finite(c.roomDimensions.roomWidth) && finite(c.roomDimensions.roomDepth))) &&
     counts(c.wardrobe, DEFAULT_CONFIG.wardrobe) && counts(c.shoes, DEFAULT_CONFIG.shoes) &&
@@ -101,6 +103,7 @@ export function readDesigns(raw: string | null): SavedDesign[] {
 export function invalidConfigurationField(value:unknown):string{
   if(!record(value))return 'record';
   const c=value as Record<string,any>,planning=planningIssues(c.planning);
+  if(!validSurveyConfirmation(c.surveyConfirmation))return 'surveyConfirmation';
   if(planning.length)return planning[0];
   if(!validInventoryPlanning(c.inventoryPlanning))return inventoryPlanningIssue(c.inventoryPlanning);
   const finite=(v:unknown)=>typeof v==='number'&&Number.isFinite(v)&&v>=0;

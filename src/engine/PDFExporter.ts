@@ -71,9 +71,10 @@ export function buildPrintDocument(designs: PDFExportOptions[]): string {
     .organizer svg{max-height:170mm}tr{break-inside:avoid}.schedule{break-before:page}.print-revision{font-size:9px;color:#444}@page{size:${paper} ${orientation}}${orientation==='landscape'?'svg,.organizer svg{max-height:130mm}':''}@media print{.print-revision{position:fixed;bottom:-10mm;left:0}}
     </style></head><body><div class="print-revision">Alvéo plan v1 · ${esc(new Date().toISOString())} · NOT TO SCALE</div>${designs.map(renderDesign).join('')}</body></html>`;
 }
-async function printHTML(html: string) {
-  const popup = window.open('', '_blank');
+async function printHTML(html: string, target?:Window) {
+  const popup = target??window.open('', '_blank');
   if (!popup) throw new Error('Print window was blocked. Allow pop-ups and try again.');
+  if(popup.closed)throw new Error('The print window was closed before printing.');
   await new Promise<void>((resolve, reject) => {
     let started = false;
     const timeout = window.setTimeout(() => { popup.close(); reject(new Error('Print preparation timed out. Please try again.')); }, 15000);
@@ -92,15 +93,15 @@ async function printHTML(html: string) {
     popup.document.write(html); popup.document.close();
   });
 }
-export async function exportLayoutToPDF(options: PDFExportOptions) {
-  await printHTML(buildPrintDocument([options]));
+export async function exportLayoutToPDF(options: PDFExportOptions, target?:Window) {
+  await printHTML(buildPrintDocument([options]),target);
 }
-export async function exportMultipleDesignsToPDF(designs: SavedDesign[]) {
+export async function exportMultipleDesignsToPDF(designs: SavedDesign[], target?:Window) {
   if (!designs.length) throw new Error('Select at least one saved design.');
   const invalid = designs.filter(d => !validConfig(d.config));
   if (invalid.length) throw new Error('Cannot export invalid designs: ' + invalid.map(d => d.name).join(', '));
   const prepared = designs.map(d => ({ config: d.config, fileName: d.name, layout: new ClosetLayoutEngine(d.config as ClosetConfiguration).calculateLayout() }));
-  await printHTML(buildPrintDocument(prepared));
+  await printHTML(buildPrintDocument(prepared),target);
 }
 
 

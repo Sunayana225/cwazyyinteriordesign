@@ -1,3 +1,4 @@
+import {measuredTies} from './tieStorage';
 import { hangerSpacing, shoePairWidths, bagDimensions, type HangingCategory } from './fitMeasurements';
 import type { PlanningOptions, WardrobeItems, ShoeCollection } from '@/types/closet';
 import { EMPTY_WARDROBE, FOLDED_PER_DRAWER, SHOE_PAIR_WIDTH } from './design';
@@ -34,7 +35,7 @@ export function readInventoryCSV(raw:string):Inventory{
   lines.forEach((line,i)=>{const parts=line.split(','),key=parts[0]?.trim(),text=parts[1]?.trim(),n=Number(text);if(parts.length!==2||!INVENTORY_KEYS.includes(key)||seen.has(key)||!text||!Number.isInteger(n)||n<0||n>(key.endsWith('.jewelry')?1:10000))throw new Error(`Invalid inventory CSV row ${i+2}. Use each supported category once with a whole count.`);seen.add(key);v=setInventoryValue(v,key,n);});
   if(seen.size!==INVENTORY_KEYS.length)throw new Error('Inventory CSV must include every category. Download the CSV template first.');return v;
 }
-export function incrementalDemand(key:string,planning?:PlanningOptions){const field=key.split('.')[1],spacing=hangerSpacing(planning);if(Object.prototype.hasOwnProperty.call(spacing,field))return `${spacing[field as HangingCategory]*(field==='suits'?2:1)} in hanging rod`;if(field in FOLDED_PER_DRAWER)return `${(1/FOLDED_PER_DRAWER[field as keyof typeof FOLDED_PER_DRAWER]).toFixed(3)} standard drawer equivalents`;if(field in SHOE_PAIR_WIDTH)return `${shoePairWidths(planning)[field as keyof ShoeCollection]} in shelf width plus shoe-height clearance`;if(field==='bags'){const size=bagDimensions(planning);return `${size.width} in shelf width with ${size.height} in clear opening (including handles)`;}return '1 accessory allocation (jewelry is a yes/no request)';}
+export function incrementalDemand(key:string,planning?:PlanningOptions){const field=key.split('.')[1],spacing=hangerSpacing(planning);if(Object.prototype.hasOwnProperty.call(spacing,field))return `${spacing[field as HangingCategory]*(field==='suits'?2:1)} in hanging rod`;if(field in FOLDED_PER_DRAWER)return `${(1/FOLDED_PER_DRAWER[field as keyof typeof FOLDED_PER_DRAWER]).toFixed(3)} standard drawer equivalents`;if(field in SHOE_PAIR_WIDTH)return `${shoePairWidths(planning)[field as keyof ShoeCollection]} in shelf width plus shoe-height clearance`;if(field==='ties'&&measuredTies(planning)){const size=measuredTies(planning)!;return `${size.width} × ${size.depth} × ${size.height} in in a dedicated single-layer tray`;}if(field==='bags'){const size=bagDimensions(planning);return `${size.width} in shelf width with ${size.height} in clear opening (including handles)`;}return '1 accessory allocation (jewelry is a yes/no request)';}
 
 
 export function inventoryIssue(value:unknown):string|null{

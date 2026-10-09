@@ -215,6 +215,7 @@ export interface ClosetCalculationInput {
 export type CalculationResult = ClosetLayout;
 
 export interface PlanningOptions {
+  tieDimensions?:import('@/lib/tieStorage').TieDimensions;
   upperStorage?:boolean; // Use spare height above hanging and shoes; enabled by default.
   accessoryShelfOpening?:number; // Minimum clear opening for adaptive accessory shelves (inches).
   garmentLengths?:{long:number;short:number};

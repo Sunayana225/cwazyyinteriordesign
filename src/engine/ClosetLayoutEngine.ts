@@ -1,5 +1,6 @@
 import { wallReservations } from '@/lib/wallReservations';
 import { drawingRecordIssue, type DrawingRecord } from '@/lib/drawingRecord';
+import {measuredTies,tieTrayCapacity} from '@/lib/tieStorage';
 import { shoeShelves, shoeColumnWidth } from '@/lib/shoePlanning';
 import { remainingInventory, type InventoryBudget } from '@/lib/inventoryBudget';
 import { hangingWidths } from '@/lib/hangingAllocation';
@@ -766,6 +767,14 @@ export class ClosetLayoutEngine {
       curAFF += DRAWER_JEW + DRAWER_GAP;
     }
     const drawerHeight = this.drawerHeight();
+    const ties=measuredTies(this.planning);
+    if(ties&&this.wardrobe.ties>0){
+      const tray={height:ties.height+1,width:colW-4,depth:this.D-6,position:curAFF,purpose:'ties'},capacity=tieTrayCapacity(tray,this.planning);
+      const count=capacity>0?Math.min(6,Math.ceil(this.wardrobe.ties/capacity)):0;
+      for(let i=0;i<count&&curAFF+tray.height<=maxAFF+.000001;i++){
+        drawers.push({...tray,position:curAFF});curAFF+=tray.height+DRAWER_GAP;
+      }
+    }
     while (curAFF + drawerHeight <= maxAFF) {
       drawers.push({ height: drawerHeight, width: colW - 4, depth: this.D - 6, position: curAFF, purpose: 'folded' });
       curAFF += drawerHeight + DRAWER_GAP;
@@ -866,7 +875,10 @@ export class ClosetLayoutEngine {
 
   private calcDrawerStackHeight(): number {
     const stdCount = Math.min(Math.max(Math.ceil(foldedDemand(this.wardrobe) * 9 / this.drawerHeight()), 1), this.prefs.drawerPreference === 'many-small' ? 6 : 4);
-    const wanted = (this.wardrobe.jewelry ? DRAWER_JEW + DRAWER_GAP : 0) + stdCount * (this.drawerHeight() + DRAWER_GAP) - DRAWER_GAP + DRAWER_MARG * 2;
+    const ties=measuredTies(this.planning),tieHeight=ties?ties.height+1:0;
+    const tieCapacity=ties?tieTrayCapacity({width:COL_HANG_MIN-4,depth:this.D-6,height:tieHeight},this.planning):0;
+    const tieCount=tieCapacity>0?Math.min(6,Math.ceil(this.wardrobe.ties/tieCapacity)):0;
+    const wanted = tieCount*(tieHeight+DRAWER_GAP)+(this.wardrobe.jewelry ? DRAWER_JEW + DRAWER_GAP : 0) + stdCount * (this.drawerHeight() + DRAWER_GAP) - DRAWER_GAP + DRAWER_MARG * 2;
     // Reserving 32 in for hanging above goes negative in a short cabinet, which used to
     // produce an inverted zone. Give the drawers whatever clear height there is, and
     // report none at all rather than a negative stack.

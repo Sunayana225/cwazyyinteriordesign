@@ -16,6 +16,7 @@ import { surveyState } from '@/lib/surveyReview';
 import { unassessedStorage } from '@/lib/storageFit';
 import { householdDemand,HOUSEHOLD_DEMAND_NOTE } from '@/lib/householdDemand';
 import { drawingRecordLabel } from '@/lib/drawingRecord';
+import {tieAssumptions} from '@/lib/tieStorage';
 
 export interface PDFExportOptions {
   layout: ClosetLayout;
@@ -63,6 +64,7 @@ function renderDesign({ layout, config, fileName = 'Current design', showDimensi
   return `<article><h1>${esc(settings.project||fileName)}</h1><p>${esc(fileName)} · ${esc(settings.contact)}</p><p>Alvéo · ${esc(new Date().toLocaleDateString())} · Planning layout</p><p>${record} · Not construction approval</p>
     <h2>Space specifications — effective dimensions</h2>${table(specs,false)}${surveyNote}${settings.notes&&config.surveyRecord?`<p>Site survey author: ${esc(config.surveyRecord.author?.trim()||'Not recorded')}; survey date: ${esc(config.surveyRecord.date||'Not recorded')}. This is the recorded site survey, separate from the review confirmation date.</p>`:''}
     <h2>Capacity and fit</h2><p>Utilization: ${layout.utilizationScore}%. A high utilization score does not mean every item fits.</p>
+    ${config.wardrobe?.ties?`<p>${esc(tieAssumptions(config.planning))}</p>`:''}
     ${unassessedStorage(config)?`<p>${esc(unassessedStorage(config))}</p>`:''}
     <p>${esc(hangerAssumptions(config.planning))}</p><p>${esc(shoeAssumptions(config.planning))}</p><p>${esc(bagAssumptions(config.planning))}</p>
     <p>Folded storage uses estimated usable volume relative to a ${FOLDED_REFERENCE.width} × ${FOLDED_REFERENCE.depth} × ${FOLDED_REFERENCE.height} in reference drawer, with ${FOLDED_REFERENCE.edgeClearance} in edge clearance and ${FOLDED_REFERENCE.bottomAllowance} in bottom allowance. Verify actual folded-item dimensions and packing.</p>

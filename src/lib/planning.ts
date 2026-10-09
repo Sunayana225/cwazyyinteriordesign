@@ -13,6 +13,10 @@ export function planningIssues(value:unknown):string[] {
   const number=(o:Record<string,unknown>,key:string,min:number,max:number,path:string,optional=false)=>{if(!(optional&&o[key]===undefined)&&!num(o[key],min,max))errors.push(`${path}.${key}: expected a number from ${min} to ${max}`);};
   const choice=(o:Record<string,unknown>,key:string,values:readonly string[],path:string,optional=false)=>{if(!(optional&&o[key]===undefined)&&!values.includes(o[key] as string))errors.push(`${path}.${key}: expected ${values.join(', ')}`);};
   number(value,'accessoryShelfOpening',8,36,'planning',true);
+  if(value.tieDimensions!==undefined){
+    if(!record(value.tieDimensions))errors.push('planning.tieDimensions: expected folded tie dimensions');
+    else for(const key of ['width','depth','height'])number(value.tieDimensions,key,.125,key==='height'?MAX_HEIGHT:key==='depth'?MAX_CABINET_DEPTH:MAX_DIMENSION,'planning.tieDimensions');
+  }
   if(value.bagDimensions!==undefined){
     if(!record(value.bagDimensions))errors.push('planning.bagDimensions: expected width and height measurements');
     else for(const key of Object.keys(value.bagDimensions)){
@@ -94,6 +98,7 @@ export function freeSpans(width:number,excluded:Array<[number,number]>):Array<[n
 }
 export function canonicalPlanning(p:PlanningOptions):PlanningOptions{
   const next:PlanningOptions={};
+  if(p.tieDimensions)next.tieDimensions={width:p.tieDimensions.width,depth:p.tieDimensions.depth,height:p.tieDimensions.height};
   if(p.upperStorage!==undefined)next.upperStorage=p.upperStorage;
   if(p.garmentLengths)next.garmentLengths={long:p.garmentLengths.long,short:p.garmentLengths.short};
   if(p.hangerSpacing)next.hangerSpacing={...p.hangerSpacing};

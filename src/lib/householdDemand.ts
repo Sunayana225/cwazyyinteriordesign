@@ -16,4 +16,4 @@ export function householdDemand(config:Partial<ClosetConfiguration>){
   return {members,rows,differences,matches:profiles.length>0&&differences.length===0};
 }
 
-export const HOUSEHOLD_DEMAND_NOTE='These are storage requirements, not assigned capacity. Everyday and seasonal demand remain separate; shared shelves and rods are not credited to each person twice. Reserve is calculated once from the active inventory, with item counts rounded up. Ties and jewelry are not measured by this report.';
+export const HOUSEHOLD_DEMAND_NOTE='These are storage requirements, not assigned capacity. Everyday and seasonal demand remain separate; shared shelves and rods are not credited to each person twice. Reserve is calculated once from the active inventory, with item counts rounded up. Jewelry is not measured; ties require the optional measured tie model.';

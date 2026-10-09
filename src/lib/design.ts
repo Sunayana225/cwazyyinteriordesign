@@ -3,6 +3,7 @@ import { MAX_DIMENSION, MAX_HEIGHT, MAX_CABINET_DEPTH } from './planning';
 import { MEASUREMENT_MINIMUMS } from './measurementPolicy';
 import { hangerSpacing, SHOE_WIDTH_DEFAULTS, shoeLengths, bagDimensions } from './fitMeasurements';
 import type { PlanningOptions } from '@/types/closet';
+import {measuredTies,tieTrayCapacity} from './tieStorage';
 
 /** Floors are what the generator can still draw something sensible for, not a
  * recommendation. Small spaces are real closets — a 24 in linen press, a 60 in
@@ -127,6 +128,7 @@ export function capacityReport(c: Pick<ClosetConfiguration, 'wardrobe' | 'shoes'
     ...Object.keys(SHOE_SPACING).map(key => ({ label: key, required: c.shoes[key as keyof typeof SHOE_SPACING], available: shelves.filter(s => s.purpose === key&&Number.isFinite(s.depth)&&s.depth>=lengths[key as keyof typeof SHOE_SPACING]).reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'pairs' })),
     { label: 'Bags', required: c.wardrobe.bags, available: shelves.filter(s => s.purpose === 'bags'&&s.spacing>=bagDimensions(c.planning).height).reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'bags' },
     { label: 'Belts', required: c.wardrobe.belts, available: shelves.filter(s => s.purpose === 'belts').reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'belts' },
+    ...(measuredTies(c.planning)?[{label:'Ties',required:c.wardrobe.ties,available:drawers.filter(d=>d.purpose==='ties').reduce((n,d)=>n+tieTrayCapacity(d,c.planning),0),unit:'folded ties'}]:[]),
   ];
 }
 export function escapeHTML(value: unknown): string {

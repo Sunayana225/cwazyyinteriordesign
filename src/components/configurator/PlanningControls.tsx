@@ -1,5 +1,6 @@
 'use client';
 import { HANGER_LABELS, hangerSpacing, shoePairWidths, shoeLengths, bagDimensions, type HangingCategory } from '@/lib/fitMeasurements';
+import {DEFAULT_TIE_DIMENSIONS,tieAssumptions} from '@/lib/tieStorage';
 import dynamic from 'next/dynamic';
 import { wallStorageHeight } from '@/lib/wallReservations';
 import { layoutInputKey } from '@/lib/preview';
@@ -51,6 +52,7 @@ export function PlanningControls({config,layout,onChange}:{config:Partial<Closet
   return <details id="studio-room-tools" ref={settingsRoot} className="room-settings border rounded p-3 mt-3"><summary>Room openings, wall preferences, and sizing assumptions</summary><SettingsNavigation root={settingsRoot} label="Room settings sections" items={[['assumptions','Fit assumptions'],['walls','Walls'],['door','Door'],['windows','Windows'],['obstacles','Obstacles']]}/>
     <p className="text-xs my-2">All measurements are inches. Room limit: {MAX_DIMENSION} × {MAX_DIMENSION}; ceiling: {MAX_HEIGHT}. Window spans reserve whole cabinet columns. Door checks are geometric planning estimates.</p>
     <section data-settings-section="assumptions" className="settings-card"><h3>Fit assumptions</h3><p className="settings-description">All measurements are in inches. Replace these estimates with measurements of your belongings.</p>
+      <fieldset className="mb-4"><legend className="font-semibold mb-2">Folded ties</legend><label><input type="checkbox" checked={!!p.tieDimensions} onChange={e=>update({tieDimensions:e.target.checked?{...DEFAULT_TIE_DIMENSIONS}:undefined})}/> Plan measured tie trays</label><p className="text-xs my-2">{tieAssumptions(p)} Up to six trays per bank are generated; remaining demand stays visible as a shortfall.</p>{p.tieDimensions&&<div className="grid sm:grid-cols-3 gap-2">{(['width','depth','height'] as const).map(key=><Measure key={key} label={`Folded tie ${key}`} min={.125} max={key==='height'?MAX_HEIGHT:key==='depth'?MAX_CABINET_DEPTH:MAX_DIMENSION} value={p.tieDimensions![key]} onChange={n=>update({tieDimensions:{...p.tieDimensions!,[key]:n}})}/>)}</div>}</fieldset>
       <fieldset className="mb-4"><legend className="font-semibold mb-2">Garments and hangers</legend><p className="text-xs mb-2">Measure occupied rod width with garments on their hangers. A suit reserves two pieces.</p><div className="grid grid-cols-2 gap-2">
         <Measure label="Long garment length" min={24} max={100} value={p.garmentLengths?.long??60} onChange={long=>update({garmentLengths:{long,short:p.garmentLengths?.short??30}})}/><Measure label="Short garment length" min={12} max={60} value={p.garmentLengths?.short??30} onChange={short=>update({garmentLengths:{short,long:p.garmentLengths?.long??60}})}/>
         {Object.entries(hangerSpacing(p)).map(([key,value])=><Measure key={key} label={`${HANGER_LABELS[key as HangingCategory]} hanger spacing`} min={.125} value={value} onChange={n=>update({hangerSpacing:{...p.hangerSpacing,[key]:n}})}/>)}

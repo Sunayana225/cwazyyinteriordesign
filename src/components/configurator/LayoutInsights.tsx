@@ -10,6 +10,7 @@ import { freeSpans } from '@/lib/planning';
 import { FOLDED_PER_DRAWER, FOLDED_REFERENCE } from '@/lib/design';
 import { storageFit, unassessedStorage } from '@/lib/storageFit';
 import { compareDrawerLayouts, type DrawerAlternative } from '@/lib/layoutAlternatives';
+import {tieAssumptions} from '@/lib/tieStorage';
 
 export function LayoutInsights({layout,config,onChange,onZone}:{layout:ClosetLayout;config:Partial<ClosetConfiguration>;onChange?:(c:Partial<ClosetConfiguration>)=>void;onZone?:(wall:string,index:number)=>void}){
   const last=useRef(layout),[previous,setPrevious]=useState<ClosetLayout|null>(null),[alternatives,setAlternatives]=useState<DrawerAlternative[]>([]);
@@ -24,6 +25,7 @@ export function LayoutInsights({layout,config,onChange,onZone}:{layout:ClosetLay
     <p className="text-sm my-2">{hangerAssumptions(config.planning)} Folded capacity scales with usable box volume relative to a {FOLDED_REFERENCE.width} × {FOLDED_REFERENCE.depth} × {FOLDED_REFERENCE.height} in drawer, allowing {FOLDED_REFERENCE.edgeClearance} in at each edge and {FOLDED_REFERENCE.bottomAllowance} in below the contents. This is a packing estimate; verify individual folded-item dimensions. Reference quantities: {Object.entries(FOLDED_PER_DRAWER).map(([k,v])=>`${v} ${k}`).join(', ')}. {shoeAssumptions(config.planning)} {bagAssumptions(config.planning)} Whole shelf capacities round down; required shelf counts round up. Shelf support-span assumption: {config.planning?.supportSpan??32} inches.</p>
     <section className="my-4 rounded-lg border border-sage-200 bg-cream-50 p-4" aria-label="Storage fit summary">
       <h3 className="font-semibold">{fit.total?`${fit.covered} of ${fit.total} storage needs covered`:'Add inventory to assess storage fit'}</h3>
+      {!!config.wardrobe?.ties&&<p className="text-sm my-2">{tieAssumptions(config.planning)}</p>}
       {unassessedStorage(config)&&<p className="text-sm my-2 text-amber-900">{unassessedStorage(config)}</p>}
       <p className="text-sm my-2">Hanging widths follow your clothing quantities and the number of rods that fit around drawers. Shoe widths account for the shelf heights you set. Edited column widths take precedence.</p>
       <p className="text-sm">{upperBoards?`${upperBoards} upper storage shelves added above hanging or shoes. These are extra seasonal spaces and do not count as drawer capacity.`:config.planning?.upperStorage===false?'Upper storage is off. Enable it in Fit assumptions to use spare height.':'No additional upper shelf meets the current minimum opening.'}</p>

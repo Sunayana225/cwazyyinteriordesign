@@ -1,5 +1,6 @@
 import type { ClosetZone, ShoeCollection, WardrobeItems, PlanningOptions } from '@/types/closet';
 import { capacityReport, EMPTY_WARDROBE, FOLDED_PER_DRAWER, hangingDemand } from './design';
+import {measuredTies} from './tieStorage';
 
 export interface InventoryBudget { wardrobe: WardrobeItems; shoes: ShoeCollection }
 
@@ -38,7 +39,6 @@ export function remainingInventory(inventory: InventoryBudget, zones: ClosetZone
   wardrobe.bags = Math.max(0, wardrobe.bags - capacity('Bags'));
   wardrobe.belts = Math.max(0, wardrobe.belts - capacity('Belts'));
   if (zones.some(zone => zone.drawers?.some(drawer => drawer.purpose === 'jewelry'))) wardrobe.jewelry = false;
-  // Ties have no measured capacity model yet: keep them outstanding rather
-  // than silently treating an unrelated drawer or rod as their allocation.
+  if(measuredTies(planning))wardrobe.ties=Math.max(0,wardrobe.ties-capacity('Ties'));
   return { wardrobe, shoes };
 }

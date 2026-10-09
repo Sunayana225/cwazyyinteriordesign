@@ -1,0 +1,56 @@
+name: Code quality and production smoke
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: quality-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      CI: 'true'
+      NEXT_TELEMETRY_DISABLED: '1'
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@949feb2413d6458794dcd2491c4babbbce0c15c1 # v7
+        with:
+          node-version: '22'
+          cache: npm
+      - name: Install locked dependencies
+        run: npm ci
+      - name: Lint application and tests
+        run: npm run lint
+      - name: Run regression tests
+        run: npm test
+      - name: Build and type-check production application
+        run: npm run build
+      - name: Enforce configurator JavaScript budget
+        run: npm run check:bundle
+      - name: Install Chromium for production smoke tests
+        run: npx playwright install --with-deps chromium
+      - name: Exercise save, restore, import, and print on production build
+        run: npm run test:production -- --reporter=line,html
+      - name: Retain test reports and bundle measurements
+        if: ${{ !cancelled() }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: quality-reports
+          path: |
+            playwright-report/
+            test-results-production/
+            test-results/bundle-report.json
+          retention-days: 7
+          if-no-files-found: ignore

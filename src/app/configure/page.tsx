@@ -6,13 +6,15 @@ import { ClosetConfiguration, SavedDesign } from '@/types/closet';
 import { EnhancedConfigurator } from '@/components/configurator/EnhancedConfigurator';
 import { LivePreview } from '@/components/configurator/LivePreview';
 import { useDesignStore } from '@/components/configurator/useDesignStore';
-import { RecoveryTools } from '@/components/configurator/RecoveryTools';
+import dynamic from 'next/dynamic';
+const RecoveryTools=dynamic(()=>import('@/components/configurator/RecoveryTools').then(m=>m.RecoveryTools),{loading:()=> <p role="status">Opening recovery tools…</p>});
 import { ArrowLeft } from 'lucide-react';
 import { STYLE_OPTIONS, WOOD_OPTIONS } from '@/lib/design';
 import { isUserRole, USER_ROLES, ROLE_WORKFLOWS } from '@/lib/userRoles';
 
 export default function ConfigurePage() {
   const store = useDesignStore();
+  const [storageOpen,setStorageOpen]=React.useState(false);
   const { config, setConfig, savedDesigns } = store;
   const userType = config.userInfo?.userType ?? 'homeowner';
   const finish = WOOD_OPTIONS.find(option => option.id === config.userInfo?.woodFinish) ?? WOOD_OPTIONS[2];
@@ -75,7 +77,7 @@ export default function ConfigurePage() {
 
         </div>
       </div>
-      <div className="studio-shell pb-8"><details className="studio-recovery"><summary>Device storage & recovery</summary><p className="text-sm my-3">Draft: {store.draftHealth} · Named designs: {store.namedHealth} · {store.pendingCount} pending operations</p><div className="flex flex-wrap gap-3"><button disabled={!store.pendingCount} onClick={store.retry}>Retry pending saves</button><button onClick={store.recover}>Download raw recovery data</button></div><RecoveryTools lastDraftAt={store.lastDraftAt} lastNamedAt={store.lastNamedAt} config={store.config} designs={store.savedDesigns} pendingOperations={store.pendingOperations} onReplaceDraft={store.replaceUnreadableDraft}/></details></div>
+      <div className="studio-shell pb-8"><details id="device-storage" className="studio-recovery" onToggle={e=>setStorageOpen(e.currentTarget.open)}><summary>Device storage & recovery</summary><p id="raw-recovery-scope" className="text-sm my-3">Raw recovery includes the stored draft and named designs, including project text, survey contacts, household names, and organizer contents when present. It is a full data copy, not a diagnostic report.</p><p className="text-sm my-3">Draft: {store.draftHealth} · Named designs: {store.namedHealth} · {store.pendingCount} pending operations</p><div className="flex flex-wrap gap-3"><button disabled={!store.pendingCount} onClick={store.retry}>Retry pending saves</button><button aria-describedby="raw-recovery-scope" onClick={store.recover}>Download raw recovery data</button></div>{storageOpen&&<RecoveryTools lastDraftAt={store.lastDraftAt} lastNamedAt={store.lastNamedAt} config={store.config} designs={store.savedDesigns} pendingOperations={store.pendingOperations} onReplaceDraft={store.replaceUnreadableDraft}/>}</details></div>
     </main>
   );
 }

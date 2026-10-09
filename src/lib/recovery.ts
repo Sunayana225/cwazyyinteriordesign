@@ -24,8 +24,12 @@ export function draftStatus(raw:string|null){
   try{const d=JSON.parse(raw);status.parseable=true;status.restorable=d?.version===1&&validConfig(d.config);if(!status.restorable)status.error=d?.version!==1?'Unsupported draft version':'config.'+invalidConfigurationField(d.config);}catch(e){status.error=(e as Error).message;}return status;
 }
 export function recoveryReport(storage:Pick<Storage,'length'|'key'|'getItem'>){
-  const health=(key:string,read:(raw:string|null)=>unknown[])=>{try{return {readable:true,records:read(storage.getItem(key)).length};}catch(e){return {readable:false,error:(e as Error).message};}};
-  return {version:2,generatedAt:new Date().toISOString(),usage:localStorageUsage(storage),breakdown:storageBreakdown(storage),named:health(SAVED_KEY,readDesigns),templates:health(TEMPLATE_KEY,readTemplates),shells:health(ROOM_SHELL_KEY,readShells),draft:draftStatus(storage.getItem(DRAFT_KEY))};
+  // Parser exceptions may quote the source, and validator paths may contain
+  // user-defined identifiers. Neither belongs in a shareable diagnostic report.
+  const health=(key:string,read:(raw:string|null)=>unknown[])=>{try{return {readable:true,records:read(storage.getItem(key)).length};}catch{return {readable:false,error:'Stored data could not be validated. Inspect it locally with recovery tools.'};}};
+  const {present,parseable,restorable}=draftStatus(storage.getItem(DRAFT_KEY));
+  const draft={present,parseable,restorable,...(present&&!restorable?{error:parseable?'Stored draft uses an unsupported version or invalid configuration.':'Stored draft is not valid JSON.'}:{})};
+  return {version:2,generatedAt:new Date().toISOString(),usage:localStorageUsage(storage),breakdown:storageBreakdown(storage),named:health(SAVED_KEY,readDesigns),templates:health(TEMPLATE_KEY,readTemplates),shells:health(ROOM_SHELL_KEY,readShells),draft};
 }
 export function storageError(error:unknown){
   const name=error&&typeof error==='object'&&'name' in error?String(error.name):'';

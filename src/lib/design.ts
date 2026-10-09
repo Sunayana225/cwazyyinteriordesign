@@ -1,4 +1,4 @@
-import type { ClosetConfiguration, ClosetLayout, ClosetWall, WardrobeItems } from '@/types/closet';
+import type { ClosetConfiguration, ClosetLayout, ClosetWall, WardrobeItems, DrawerConfig } from '@/types/closet';
 import { MAX_DIMENSION, MAX_HEIGHT, MAX_CABINET_DEPTH } from './planning';
 import { MEASUREMENT_MINIMUMS } from './measurementPolicy';
 
@@ -30,6 +30,16 @@ export function dimensionRange(field:string){return (field==='height'||field==='
 export const SHOE_SPACING = { boots: 25, heels: 8, sneakers: 8, flats: 6 };
 export const SHOE_PAIR_WIDTH = { boots: 7, heels: 4, sneakers: 5, flats: 4 };
 export const FOLDED_PER_DRAWER = { tShirts: 10, sweaters: 5, jeans: 6, underwear: 20 };
+/** Reference box dimensions for the existing category estimates, in inches.
+ * This is an approximate packing volume, not proof that a specific folded item fits. */
+export const FOLDED_REFERENCE = { width:20, depth:18, height:9, edgeClearance:.25, bottomAllowance:1 } as const;
+const finitePositive=(n:number)=>Number.isFinite(n)&&n>0?n:0;
+export function foldedDrawerCapacity(drawer:Pick<DrawerConfig,'width'|'depth'|'height'>):number {
+  const usable=(n:number,loss:number)=>Math.max(0,finitePositive(n)-loss);
+  const volume=usable(drawer.width,2*FOLDED_REFERENCE.edgeClearance)*usable(drawer.depth,2*FOLDED_REFERENCE.edgeClearance)*usable(drawer.height,FOLDED_REFERENCE.bottomAllowance);
+  const reference=(FOLDED_REFERENCE.width-2*FOLDED_REFERENCE.edgeClearance)*(FOLDED_REFERENCE.depth-2*FOLDED_REFERENCE.edgeClearance)*(FOLDED_REFERENCE.height-FOLDED_REFERENCE.bottomAllowance);
+  return Number.isFinite(volume)?volume/reference:0;
+}
 /** Usable well footprint per drawer category, in inches. `w`/`d` are the size to aim
  * for, `minW`/`minD` the smallest well still worth building. A `0` target means the
  * well spans that axis completely (a full-depth lane). Templates divide a measured
@@ -101,16 +111,16 @@ export interface CapacityRow { label: string; required: number; available: numbe
 export function capacityReport(c: Pick<ClosetConfiguration, 'wardrobe' | 'shoes'>, walls: Pick<ClosetWall, 'zones'>[]): CapacityRow[] {
   const zones = walls.flatMap(w => w.zones);
   const demand = hangingDemand(c.wardrobe);
-  const rodCapacity = (long: boolean) => zones.filter(z => (z.type === 'long-hang') === long).flatMap(z => z.rods ?? []).reduce((n,r) => n + r.length, 0);
+  const rodCapacity = (long: boolean) => zones.filter(z => (z.type === 'long-hang') === long).flatMap(z => z.rods ?? []).reduce((n,r) => n + finitePositive(r.length), 0);
   const drawers = zones.flatMap(z => z.drawers ?? []);
   const shelves = zones.flatMap(z => z.shelves ?? []);
   return [
     { label: 'Long hanging', required: demand.long, available: rodCapacity(true), unit: 'inches of rod' },
     { label: 'Short hanging (suits count twice)', required: demand.short, available: rodCapacity(false), unit: 'inches of rod' },
-    { label: 'Folded storage', required: foldedDemand(c.wardrobe), available: drawers.filter(d => d.purpose === 'folded').reduce((n,d) => n + d.height / 9, 0), unit: 'standard drawer equivalents' },
-    ...Object.keys(SHOE_SPACING).map(key => ({ label: key, required: c.shoes[key as keyof typeof SHOE_SPACING], available: shelves.filter(s => s.purpose === key).reduce((n,s) => n+s.count,0), unit: 'pairs' })),
-    { label: 'Bags', required: c.wardrobe.bags, available: shelves.filter(s => s.purpose === 'bags').reduce((n,s) => n+s.count,0), unit: 'bags' },
-    { label: 'Belts', required: c.wardrobe.belts, available: shelves.filter(s => s.purpose === 'belts').reduce((n,s) => n+s.count,0), unit: 'belts' },
+    { label: 'Folded storage', required: foldedDemand(c.wardrobe), available: drawers.filter(d => d.purpose === 'folded').reduce((n,d) => n + foldedDrawerCapacity(d), 0), unit: 'standard drawer equivalents' },
+    ...Object.keys(SHOE_SPACING).map(key => ({ label: key, required: c.shoes[key as keyof typeof SHOE_SPACING], available: shelves.filter(s => s.purpose === key).reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'pairs' })),
+    { label: 'Bags', required: c.wardrobe.bags, available: shelves.filter(s => s.purpose === 'bags').reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'bags' },
+    { label: 'Belts', required: c.wardrobe.belts, available: shelves.filter(s => s.purpose === 'belts').reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'belts' },
   ];
 }
 export function escapeHTML(value: unknown): string {

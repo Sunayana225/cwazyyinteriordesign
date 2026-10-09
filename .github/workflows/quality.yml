@@ -35,6 +35,8 @@ jobs:
         run: npm run lint
       - name: Run regression tests
         run: npm test
+      - name: Benchmark dense organizer editing and backup validation
+        run: npm run benchmark:organizers
       - name: Build and type-check production application
         run: npm run build
       - name: Enforce configurator JavaScript budget
@@ -52,5 +54,6 @@ jobs:
             playwright-report/
             test-results-production/
             test-results/bundle-report.json
+            test-results/organizer-benchmark.json
           retention-days: 7
           if-no-files-found: ignore

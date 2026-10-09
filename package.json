@@ -14,7 +14,8 @@
     "test:visual": "playwright test --config=playwright.visual.config.ts",
     "benchmark": "tsx scripts/benchmark.ts",
     "test:production": "playwright test --config=playwright.production.config.ts",
-    "check:bundle": "tsx scripts/bundle-budget.ts"
+    "check:bundle": "tsx scripts/bundle-budget.ts",
+    "benchmark:organizers": "tsx scripts/benchmark-organizers.ts"
   },
   "dependencies": {
     "clsx": "^2.1.0",

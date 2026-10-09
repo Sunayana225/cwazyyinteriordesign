@@ -1,0 +1,12 @@
+import {performance} from 'node:perf_hooks';
+import {mkdirSync,writeFileSync} from 'node:fs';
+import {organizerBenchmarkFixture} from './organizer-benchmark-fixture';
+import {validInteriors,interiorSVG,interiorWarnings,moveDivider} from '../src/lib/drawers';
+import {readBackup} from '../src/lib/storage';
+const fixture=organizerBenchmarkFixture();
+if(!validInteriors(fixture.plans))throw new Error('Benchmark fixture no longer satisfies organizer validation.');
+const warmups=5,samples=35;
+const measure=(work:()=>unknown,budgetMs:number)=>{const times:number[]=[];for(let i=0;i<warmups+samples;i++){const start=performance.now();work();if(i>=warmups)times.push(performance.now()-start);}times.sort((a,b)=>a-b);const p95Ms=times[Math.ceil(times.length*.95)-1];return {medianMs:+times[Math.floor(times.length/2)].toFixed(2),p95Ms:+p95Ms.toFixed(2),budgetMs,passed:p95Ms<=budgetMs};};
+const checks={retainedPlanValidation:measure(()=>{if(!validInteriors(fixture.plans))throw new Error('Invalid fixture');},250),backupValidation:measure(()=>readBackup(fixture.raw),500),denseSVG:measure(()=>interiorSVG(fixture.plan,fixture.drawer),50),editAndFit:measure(()=>{const moved=moveDivider(fixture.plan,'cell-0','cell-1',.6,0,fixture.drawer);interiorWarnings(moved,fixture.drawer);},20)};
+const report={version:1,generatedAt:new Date().toISOString(),runtime:{node:process.version,platform:process.platform,arch:process.arch},warmups,samples,fixture:fixture.description,checks};
+mkdirSync('test-results',{recursive:true});writeFileSync('test-results/organizer-benchmark.json',JSON.stringify(report,null,2));console.log(JSON.stringify(report,null,2));if(Object.values(checks).some(c=>!c.passed))process.exitCode=1;

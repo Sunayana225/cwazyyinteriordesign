@@ -35,6 +35,28 @@ describe('room geometry and editing',()=>{
     const c=config();c.planning={clearanceTarget:60};const l=layout(c);expect(l.walls.some(w=>w.wallId==='island-unit')).toBe(false);expect(islandRequirement(l)).toEqual({width:204,depth:168,target:60});expect(l.aisleWarnings.join(' ')).toContain('204');
     const a=circulation(layout());expect(a.aisles).toHaveLength(4);expect(a.narrowest.width).toBeGreaterThanOrEqual(36);
   });
+  it('uses the selected door model for suggestions, including square-only conflicts',()=>{
+    const l=layout();l.walls=[];l.roomDimensions={roomWidth:100,roomDepth:100};
+    l.planning={door:{wall:'front',offset:0,width:30,hinge:'left',swing:'in',check:'envelope'},obstacles:[{id:'a',label:'Corner',x:25,y:73,width:2,depth:2}]};
+    const positions=obstacleSuggestions(l,'a');expect(positions.length).toBeGreaterThan(0);
+    for(const pos of positions){const moved=structuredClone(l);Object.assign(moved.planning!.obstacles![0],pos);expect(doorAssessment(moved).conflicts).toEqual([]);}
+    l.planning.door!.check='sector';expect(obstacleSuggestions(l,'a')).toEqual([]);
+  });
+  it('keeps every suggested placement consistent across door orientations and sweep models',()=>{
+    for(const wall of ['front','back','left','right'] as const)for(const hinge of ['left','right'] as const)for(const swing of ['in','out'] as const)for(const check of ['envelope','sector'] as const){
+      const l=layout();l.walls=[];l.roomDimensions={roomWidth:100,roomDepth:100};
+      l.planning={door:{wall,offset:10,width:30,hinge,swing,check},obstacles:[{id:'a',label:'Object',x:-5,y:20,width:10,depth:10}]};
+      const positions=obstacleSuggestions(l,'a');expect(positions.length).toBeGreaterThan(0);
+      for(const pos of positions){const moved=structuredClone(l);Object.assign(moved.planning!.obstacles![0],pos);expect(doorAssessment(moved).conflicts).toEqual([]);expect(roomIssues(moved)).toEqual([]);}
+    }
+  });
+  it('finds nearby door-edge placements and returns none for an object larger than the room',()=>{
+    const l=layout();l.walls=[];l.roomDimensions={roomWidth:100,roomDepth:100};
+    l.planning={door:{wall:'front',offset:0,width:30,hinge:'left',swing:'in'},obstacles:[{id:'a',label:'Object',x:25,y:73,width:2,depth:2}]};
+    expect(obstacleSuggestions(l,'a')).toContainEqual({x:30.125,y:73});
+    const nearest=obstacleSuggestions(l,'a')[0];expect(Math.hypot(nearest.x-25,nearest.y-73)).toBe(5.125);
+    l.planning.obstacles![0].width=101;expect(obstacleSuggestions(l,'a')).toEqual([]);
+  });
   it('baseboard reduces usable drawer depth and floor offsets shift absolute placements',()=>{
     const c=config(),before=layout(c).walls.find(w=>w.wallId==='left')!;c.planning={walls:{left:{baseboard:2,floorOffset:4}}};const after=layout(c).walls.find(w=>w.wallId==='left')!;
     const a=before.zones.flatMap(z=>z.drawers??[])[0],b=after.zones.flatMap(z=>z.drawers??[])[0];expect(b.depth).toBe(a.depth-2);expect(b.position).toBe(a.position+4);expect(after.unitDepth).toBe(before.unitDepth);

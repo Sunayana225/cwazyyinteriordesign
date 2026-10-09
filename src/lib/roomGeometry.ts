@@ -41,10 +41,23 @@ export function sectorDistance(rect:Rect,radius:number):number{
   if(rect.x+rect.width<0||rect.y+rect.depth<0)return lines;
   return Math.min(lines,Math.max(0,Math.hypot(Math.max(0,rect.x),Math.max(0,rect.y))-radius));
 }
+/** One clearance predicate for both diagnostics and proposed object positions. */
+export function doorDistance(rect:Rect,door:Door,room:{width:number;depth:number}):number{
+  const local=doorLocalRect(rect,door,room);
+  return door.check==='sector'?sectorDistance(local,door.width):gap(local,{x:0,y:0,width:door.width,depth:door.width});
+}
+function doorEnvelope(door:Door,room:{width:number;depth:number}):Rect{
+  const point=(x:number,y:number)=>{
+    const s=door.offset+(door.hinge==='right'?door.width-x:x),t=y*(door.swing==='out'?-1:1);
+    return door.wall==='front'?{x:s,y:room.depth-t}:door.wall==='back'?{x:room.width-s,y:t}:door.wall==='left'?{x:t,y:s}:{x:room.width-t,y:room.depth-s};
+  };
+  const a=point(0,0),b=point(door.width,door.width);
+  return {x:Math.min(a.x,b.x),y:Math.min(a.y,b.y),width:Math.abs(a.x-b.x),depth:Math.abs(a.y-b.y)};
+}
 export function doorAssessment(layout:ClosetLayout){
   const door=layout.planning?.door,room=roomSize(layout);
   if(!door)return {conflicts:[] as string[],clearance:null as number|null,obstacleClearance:null as number|null,closestPair:null as string|null,outside:false};
-  const distance=(r:Rect)=>{const b=doorLocalRect(r,door,room);return door.check==='sector'?sectorDistance(b,door.width):gap(b,{x:0,y:0,width:door.width,depth:door.width});};
+  const distance=(r:Rect)=>doorDistance(r,door,room);
   const storage=storageFootprints(layout),objects=[...storage,...(layout.planning?.obstacles??[]).map(o=>({...o,label:o.label||'Unnamed obstacle'}))];
   const closest=objects.map(o=>({label:o.label,distance:distance(o)})).sort((a,b)=>a.distance-b.distance)[0],obstacles=layout.planning?.obstacles??[];
   return {obstacleClearance:obstacles.length?Math.min(...obstacles.map(distance)):null,closestPair:closest?`Door and ${closest.label} (${closest.distance.toFixed(2)} in)`:null,conflicts:Array.from(new Set(objects.filter(o=>distance(o)<=.00001).map(o=>o.label))),clearance:storage.length?Math.min(...storage.map(distance)):null,outside:door.offset+door.width>(['front','back'].includes(door.wall)?room.width:room.depth)};
@@ -63,10 +76,14 @@ export function islandRequirement(layout:ClosetLayout){
 export function obstacleSuggestions(layout:ClosetLayout,id:string):Array<{x:number;y:number}>{
   const o=layout.planning?.obstacles?.find(v=>v.id===id);if(!o)return [];
   const room=roomSize(layout),blocked=[...storageFootprints(layout),...(layout.planning?.obstacles??[]).filter(v=>v.id!==id)];
-  const door=layout.planning?.door,doorBlocked=door?.swing==='in'&&sectorDistance(doorLocalRect(o,door,room),door.width)<=.00001;
-  if(!doorBlocked&&!blocked.some(b=>overlaps(o,b))&&o.x+o.width<=room.width&&o.y+o.depth<=room.depth)return [];
-  const xs=Array.from(new Set([0,o.x,room.width-o.width,...blocked.flatMap(b=>[b.x-o.width,b.x+b.width])])),ys=Array.from(new Set([0,o.y,room.depth-o.depth,...blocked.flatMap(b=>[b.y-o.depth,b.y+b.depth])]));
-  return xs.flatMap(x=>ys.map(y=>({x,y}))).filter(p=>p.x>=0&&p.y>=0&&p.x+o.width<=room.width&&p.y+o.depth<=room.depth&&!blocked.some(b=>overlaps({...o,...p},b))&&(!layout.planning?.door||layout.planning.door.swing!=='in'||sectorDistance(doorLocalRect({...o,...p},layout.planning.door,room),layout.planning.door.width)>.00001)).sort((a,b)=>Math.hypot(a.x-o.x,a.y-o.y)-Math.hypot(b.x-o.x,b.y-o.y)).slice(0,3);
+  const door=layout.planning?.door;
+  const clear=(r:Rect)=>r.x>=0&&r.y>=0&&r.x+r.width<=room.width&&r.y+r.depth<=room.depth&&!blocked.some(b=>overlaps(r,b))&&(!door||doorDistance(r,door,room)>.00001);
+  if(clear(o))return [];
+  const envelope=door?doorEnvelope(door,room):null;
+  // Stand off the door boundary by one input increment: touching its sweep is a conflict.
+  const xs=Array.from(new Set([0,o.x,room.width-o.width,...blocked.flatMap(b=>[b.x-o.width,b.x+b.width]),...(envelope?[envelope.x-o.width-.125,envelope.x+envelope.width+.125]:[])]));
+  const ys=Array.from(new Set([0,o.y,room.depth-o.depth,...blocked.flatMap(b=>[b.y-o.depth,b.y+b.depth]),...(envelope?[envelope.y-o.depth-.125,envelope.y+envelope.depth+.125]:[])]));
+  return xs.flatMap(x=>ys.map(y=>({x,y}))).filter(p=>clear({...o,...p})).sort((a,b)=>Math.hypot(a.x-o.x,a.y-o.y)-Math.hypot(b.x-o.x,b.y-o.y)).slice(0,3);
 }
 
 export function ceilingWarnings(layout:ClosetLayout){return layout.walls.flatMap(w=>{const ceiling=layout.planning?.walls?.[w.wallId]?.ceilingHeight;if(ceiling===undefined)return [];const top=Math.max(0,...w.zones.map(z=>z.y+z.height));return top>ceiling?[`${w.label}: generated storage reaches ${top.toFixed(2)} in, ${(top-ceiling).toFixed(2)} in above the measured ceiling note.`]:[];});}

@@ -1,4 +1,6 @@
 'use client';
+import dynamic from 'next/dynamic';
+const DrawerAlternativeCard=dynamic(()=>import('./DrawerAlternativeCard'));
 import { useEffect, useRef, useState } from 'react';
 import type { ClosetConfiguration, ClosetLayout } from '@/types/closet';
 import { hangerAssumptions, shoeAssumptions, bagAssumptions } from '@/lib/fitMeasurements';
@@ -37,12 +39,7 @@ export function LayoutInsights({layout,config,onChange,onZone}:{layout:ClosetLay
     <button className="border rounded px-3 py-2" onClick={()=>{setCompared(true);const result=compareDrawerLayouts(config as ClosetConfiguration,layout);setAlternatives(result.alternatives);setRejected(result.rejected);}}>Compare feasible drawer layouts</button>
     {compared&&<p role="status" className="text-sm my-2">{alternatives.length ? `${alternatives.length} drawer layout options meet the current room, door, aisle, and obstacle checks. Review capacity shortfalls before choosing.` : 'No drawer layout options meet the current room, door, aisle, and obstacle checks. Adjust the room dimensions, cabinet depths, or obstacle positions and compare again.'}</p>}
     {rejected.map(r=><details key={r.preference} className="border rounded p-2"><summary>Why {r.preference} was excluded</summary>{r.issues.map(([group,messages])=><div key={group}><h4>{group}</h4><ul>{messages.map((message,i)=><li key={i}>{message}</li>)}</ul></div>)}</details>)}
-    {alternatives.length>0&&<div className="my-2"><p className="text-sm">Distinct layouts, ranked by unmet demand within each category. Your priority categories carry twice the weight. This compares three drawer preferences, not every possible layout.</p>{alternatives.map(a=><section className="border rounded p-3 my-2" aria-label={`${a.preference} layout option`} key={a.preference}>
-      <h4>{a.preference}: {a.layout.totalStorage.drawerCount} drawers; {a.layout.totalStorage.hangingRods.toFixed(2)} ft rods</h4><p className="text-sm">{storageFit(a.layout.capacity).shortfalls.length} capacity shortfalls · weighted unmet demand {(a.score*100).toFixed(1)}%</p>
-      {a.equivalentPreferences.length>1&&<p className="text-xs">Same geometry for: {a.equivalentPreferences.join(', ')}.</p>}
-      <h5 className="text-sm mt-2">Capacity changes before applying</h5>{a.changes.length?<ul className="text-xs list-disc pl-5">{a.changes.map(change=><li key={change.label} className={change.delta<0?'text-amber-900':''}>{change.label}: {change.delta>0?'gains':'loses'} {Math.abs(change.delta).toFixed(2)} {change.unit}</li>)}</ul>:<p className="text-xs">No measured capacity change from the current layout.</p>}
-      <button className="border rounded px-3 py-2 mt-2" disabled={!onChange} onClick={()=>onChange?.({userInfo:{...config.userInfo!,drawerPreference:a.preference}})}>Use {a.preference} alternative</button>
-    </section>)}</div>}
+    {alternatives.length>0&&<div className="my-2"><p className="text-sm">Distinct layouts, ranked by unmet demand within each category. Your priority categories carry twice the weight. This compares three drawer preferences, not every possible layout.</p>{alternatives.map(a=><DrawerAlternativeCard key={a.preference} alternative={a} current={layout} config={config} onChange={onChange}/>)}</div>}
   </details>;
 }
 

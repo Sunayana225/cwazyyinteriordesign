@@ -6,7 +6,7 @@ import { ClosetConfiguration, ClosetLayout, ClosetWall, ZoneOverrides, DrawerPos
 import { ClosetLayoutEngine } from '@/engine/ClosetLayoutEngine';
 import { ClosetSVGRenderer } from '@/renderer/ClosetSVGRenderer';
 import { usePreviewExport } from './usePreviewExport';
-import { renderFloorPlan } from '@/renderer/FloorPlanRenderer';
+
 import { Download, Layers, Lightbulb, BarChart2, Bookmark, ChevronDown, X, Trash2, Palette, TriangleAlert } from 'lucide-react';
 import type { LibraryActions } from './LibraryTools';
 import { DrawingCanvas } from './DrawingCanvas';
@@ -35,6 +35,7 @@ const SavedDesignDialog = dynamic(() => import('./SavedDesignDialog').then(modul
 const LayoutCanvas = dynamic(() => import('./LayoutCanvas').then(module => module.LayoutCanvas), {
   loading: () => <p role="status">Opening wall editor…</p>,
 });
+const FloorPlanCanvas=dynamic(()=>import('./FloorPlanCanvas'),{loading:()=> <p role="status">Loading floor plan…</p>});
 const WorkspaceReview = dynamic(() => import('./WorkspaceReview').then(module => module.WorkspaceReview), {
   loading: () => <p role="status">Opening room review…</p>,
 });
@@ -327,7 +328,7 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
               </div>
               <p className="studio-drawing-help">{showSpatial ? 'Explore the room in 3D. Select a drawer to design its interior.' : showFloorPlan ? 'Select a wall to open its elevation. Select a room object to edit its settings.' : 'Select a drawer face to design its compartments. Use “Rearrange elements” below to change this wall’s columns.'}</p>
               {layout&&showSpatial&&<SpatialPreview layout={layout} preferences={config.userInfo} onDrawerClick={onConfigChange?setEditingDrawer:undefined}/>}
-              {layout&&showFloorPlan&&<DrawingCanvas viewKey="floor-plan" views={views.current} onObjectClick={(kind,id)=>{if(kind==='wall'){setActiveWallIdx(layout.walls.findIndex(w=>w.wallId===id));setShowFloorPlan(false);}else window.dispatchEvent(new CustomEvent('alveo-focus-obstacle',{detail:id}));}} svg={renderFloorPlan(layout,{roomWidth:layout.roomDimensions?.roomWidth??120,roomDepth:layout.roomDimensions?.roomDepth??120,unitDepth:config.dimensions?.depth??24,interactive:true})}/>}
+              {layout&&showFloorPlan&&<FloorPlanCanvas layout={layout} views={views.current} onObjectClick={(kind,id)=>{if(kind==='wall'){setActiveWallIdx(layout.walls.findIndex(w=>w.wallId===id));setShowFloorPlan(false);}else window.dispatchEvent(new CustomEvent('alveo-focus-room-object',{detail:{kind,id}}));}}/>}
               {/* Wall selector tabs — shown for multi-wall closet types */}
               {!showSpatial&&!showFloorPlan&&numWalls > 1 && layout?.walls && (
                 <div className="flex gap-2 mb-4 flex-wrap">

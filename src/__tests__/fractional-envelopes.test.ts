@@ -3,8 +3,8 @@ import {DEFAULT_CONFIG,TYPES} from '@/lib/design';
 import {ClosetLayoutEngine} from '@/engine/ClosetLayoutEngine';
 import {canonicalConfig} from '@/lib/storage';
 
-it.each(TYPES)('preserves fractional envelopes and repeatability near physical thresholds: %s',closetType=>{
-  for(const width of [23.875,24,35.875,36,47.875,48,71.875,72,95.875,96,120.125])
+const cases=TYPES.flatMap(closetType=>[23.875,24,35.875,36,47.875,48,71.875,72,95.875,96,120.125].map(width=>({closetType,width})));
+it.each(cases)('preserves fractional envelopes and repeatability: $closetType / $width in',({closetType,width})=>{
   for(const height of [30,30.125,47.875,72.125,83.875,96.125])
   for(const depth of [9,11.875,12,19.875,20,24.125]){
     const c=structuredClone(DEFAULT_CONFIG);c.closetType=closetType;c.dimensions={width,height,depth};c.roomDimensions={roomWidth:width,roomDepth:width+24.125};c.planning={walls:{back:{floorOffset:11.875},left:{floorOffset:5.125}}};

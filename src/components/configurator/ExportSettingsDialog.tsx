@@ -7,6 +7,7 @@ import { PrintPresets } from './PrintPresets';
 import { PrintPagePreview } from './PrintPagePreview';
 import { SettingsNavigation } from './SettingsNavigation';
 import { ROLE_WORKFLOWS, rolePrintPreset } from '@/lib/userRoles';
+import {ExportPreflight} from './ExportPreflight';
 export function ExportSettingsDialog({layout,config,initial,onExport,onClose,busy,activeWall,savedDesigns=[]}:{layout:ClosetLayout;config:Partial<ClosetConfiguration>;initial:PrintSettings;onExport:(settings:PrintSettings,snapshot:{layout:ClosetLayout;config:Partial<ClosetConfiguration>})=>Promise<void>;onClose:()=>void;busy:boolean;activeWall?:string;savedDesigns?:SavedDesign[]}){
   const [snapshot]=useState(()=>structuredClone({layout,config})),[settings,setSettings]=useState<PrintSettings & {walls:string[]}>({...initial,comparison:undefined,comparisonName:undefined,walls:initial.walls?.filter(id=>layout.walls.some(w=>w.wallId===id))??layout.walls.map(w=>w.wallId)}),dialog=useRef<HTMLDialogElement>(null),origin=useRef<HTMLElement|null>(null);
   useEffect(()=>{origin.current=document.activeElement as HTMLElement;dialog.current?.showModal();return()=>{requestAnimationFrame(()=>origin.current?.focus());};},[]);
@@ -19,6 +20,7 @@ export function ExportSettingsDialog({layout,config,initial,onExport,onClose,bus
     <p className="settings-editor-hint">Choose the pages and supporting details to share. This export uses a snapshot of the design captured when you opened this window.</p>
     <SettingsNavigation root={dialog} label="Print settings sections" items={[["project","Project & paper"],["content","Drawings & schedules"],["files","Files & comparison"]]}/>
     <fieldset disabled={busy}>
+      <ExportPreflight layout={snapshot.layout} config={snapshot.config} settings={settings} onIncludeAll={()=>setSettings({...settings,walls:snapshot.layout.walls.map(w=>w.wallId)})}/>
       <section className="settings-card studio-workflow-print" aria-label={`${workflow.label} print preset`}>
         <h3>{workflow.label} review package</h3><p className="settings-description">{workflow.printDescription}</p>
         <button type="button" onClick={()=>{setSettings(current=>rolePrintPreset(role,current,snapshot.layout.walls.map(w=>w.wallId)));setPresetApplied(true);}}>Apply {workflow.label.toLowerCase()} print preset</button>

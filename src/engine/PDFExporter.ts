@@ -13,10 +13,10 @@ import { wallElevation } from '@/lib/wallElevation';
 import { FOLDED_REFERENCE } from '@/lib/design';
 import { hangerAssumptions, shoeAssumptions, bagAssumptions } from '@/lib/fitMeasurements';
 import { surveyState } from '@/lib/surveyReview';
-import { unassessedStorage } from '@/lib/storageFit';
 import { householdDemand,HOUSEHOLD_DEMAND_NOTE } from '@/lib/householdDemand';
 import { drawingRecordLabel } from '@/lib/drawingRecord';
 import {tieAssumptions} from '@/lib/tieStorage';
+import {exportPreflight} from '@/lib/exportPreflight';
 
 export interface PDFExportOptions {
   layout: ClosetLayout;
@@ -34,6 +34,8 @@ function renderDesign({ layout, config, fileName = 'Current design', showDimensi
   const room = layout.roomDimensions;
   const floor = settings.floorPlan&&isWalkIn(layout.closetType) && room ? `<section class="drawing"><h2>Floor plan</h2>${renderFloorPlan(layout, { ...room, unitDepth: layout.dimensions.depth })}<p>${layout.planning?.door?'Configured door; verify swing clearance on site.':'Door location and 30-inch width are illustrative; confirm on site.'}</p></section>` : '';
   const capacity = layout.capacity ?? (validConfig(config) ? capacityReport(config, layout.walls) : []);
+  const checks=exportPreflight(layout,config,settings);
+  const preflight=`<section class="preflight"><h2>Review before sharing</h2><p>${checks.geometry.length} modeled room conflicts · ${checks.shortages.length} storage shortages · ${checks.omitted.length} omitted elevations</p><p>${esc(checks.surveyNote)}</p>${checks.unassessed?`<p>${esc(checks.unassessed)}</p>`:''}${([['Room conflicts',checks.geometry],['Storage shortages',checks.shortages],['Package omissions',checks.scope]] as const).map(([label,items])=>items.length?`<h3>${label}</h3><ul>${items.map(text=>`<li>${esc(text)}</li>`).join('')}</ul>`:'').join('')}<p>Review outstanding model checks and site measurements before proceeding. These automated checks do not approve fabrication or installation.</p></section>`;
   const table = (rows: string[][], header=true) => `<table>${header&&rows.length?`<thead><tr>${rows[0].map(v=>`<th>${esc(v)}</th>`).join('')}</tr></thead>`:''}<tbody>${rows.slice(header?1:0).map(row => `<tr>${row.map(value => `<td>${esc(value)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
   const demand=householdDemand(config);
   const householdFit=settings.household&&demand.members.length?`<section class="schedule"><h2>Demand by household and season</h2><p>${esc(HOUSEHOLD_DEMAND_NOTE)}</p><p>${demand.matches?'Profile totals match active inventory.':'Draft profile totals differ from active inventory. The layout uses active inventory; profile demand is for comparison.'}</p>${table([['Category / unit','Everyday profiles','Seasonal profiles','Active inventory','Reserve addition','Active total'],...demand.rows.filter(r=>r.current+r.everyday+r.seasonal>0).map(r=>[r.label+' / '+r.unit,...[r.everyday,r.seasonal,r.current,r.reserve,r.total].map(n=>n.toFixed(2))])])}${demand.members.map(m=>`<h3>${esc(m.name)} — ${m.season}</h3>${table([['Demand before reserve','Required','Unit'],...m.rows.filter(r=>r.required>0).map(r=>[r.label,r.required.toFixed(2),r.unit])])}`).join('')}${demand.differences.length?`<h3>Profile differences</h3>${table([['Category','Active','In profiles'],...demand.differences.map(d=>[d.label,String(d.current),String(d.profiles)])])}`:''}</section>`:'';
@@ -62,10 +64,9 @@ function renderDesign({ layout, config, fileName = 'Current design', showDimensi
   const reserveNotes=settings.reserveNotes?`<section class="schedule"><h2>Reserve percentages and inventory notes</h2>${table([['Category','Reserve (%)'],...INVENTORY_KEYS.filter(k=>(config.inventoryPlanning?.reserve?.[k]??0)>0).map(k=>[inventoryLabel(k),String(config.inventoryPlanning?.reserve?.[k])])])}${Object.entries(config.inventoryPlanning?.notes??{}).map(([k,v])=>`<p>${esc(k)}: ${esc(v??'')}</p>`).join('')}</section>`:'';
   const changes=settings.comparison?`<section class="schedule"><h2>Changes from ${esc(settings.comparisonName??'reference design')}</h2>${table([['Dimension or quantity','Before','Current'],...configurationChanges(settings.comparison,config)])}</section>`:'';
   return `<article><h1>${esc(settings.project||fileName)}</h1><p>${esc(fileName)} · ${esc(settings.contact)}</p><p>Alvéo · ${esc(new Date().toLocaleDateString())} · Planning layout</p><p>${record} · Not construction approval</p>
-    <h2>Space specifications — effective dimensions</h2>${table(specs,false)}${surveyNote}${settings.notes&&config.surveyRecord?`<p>Site survey author: ${esc(config.surveyRecord.author?.trim()||'Not recorded')}; survey date: ${esc(config.surveyRecord.date||'Not recorded')}. This is the recorded site survey, separate from the review confirmation date.</p>`:''}
+    ${preflight}<h2>Space specifications — effective dimensions</h2>${table(specs,false)}${surveyNote}${settings.notes&&config.surveyRecord?`<p>Site survey author: ${esc(config.surveyRecord.author?.trim()||'Not recorded')}; survey date: ${esc(config.surveyRecord.date||'Not recorded')}. This is the recorded site survey, separate from the review confirmation date.</p>`:''}
     <h2>Capacity and fit</h2><p>Utilization: ${layout.utilizationScore}%. A high utilization score does not mean every item fits.</p>
     ${config.wardrobe?.ties?`<p>${esc(tieAssumptions(config.planning))}</p>`:''}
-    ${unassessedStorage(config)?`<p>${esc(unassessedStorage(config))}</p>`:''}
     <p>${esc(hangerAssumptions(config.planning))}</p><p>${esc(shoeAssumptions(config.planning))}</p><p>${esc(bagAssumptions(config.planning))}</p>
     <p>Folded storage uses estimated usable volume relative to a ${FOLDED_REFERENCE.width} × ${FOLDED_REFERENCE.depth} × ${FOLDED_REFERENCE.height} in reference drawer, with ${FOLDED_REFERENCE.edgeClearance} in edge clearance and ${FOLDED_REFERENCE.bottomAllowance} in bottom allowance. Verify actual folded-item dimensions and packing.</p>
     ${table([['Storage', 'Required', 'Provided', 'Shortfall'], ...capacity.map(r => [r.label, r.required.toFixed(1) + ' ' + r.unit, r.available.toFixed(1), Math.max(0,r.required-r.available).toFixed(1)])])}

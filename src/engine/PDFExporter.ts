@@ -14,6 +14,7 @@ import { FOLDED_REFERENCE } from '@/lib/design';
 import { hangerAssumptions, shoeAssumptions, bagAssumptions } from '@/lib/fitMeasurements';
 import { surveyState } from '@/lib/surveyReview';
 import { unassessedStorage } from '@/lib/storageFit';
+import { householdDemand,HOUSEHOLD_DEMAND_NOTE } from '@/lib/householdDemand';
 
 export interface PDFExportOptions {
   layout: ClosetLayout;
@@ -31,6 +32,8 @@ function renderDesign({ layout, config, fileName = 'Current design', showDimensi
   const floor = settings.floorPlan&&isWalkIn(layout.closetType) && room ? `<section class="drawing"><h2>Floor plan</h2>${renderFloorPlan(layout, { ...room, unitDepth: layout.dimensions.depth })}<p>${layout.planning?.door?'Configured door; verify swing clearance on site.':'Door location and 30-inch width are illustrative; confirm on site.'}</p></section>` : '';
   const capacity = layout.capacity ?? (validConfig(config) ? capacityReport(config, layout.walls) : []);
   const table = (rows: string[][], header=true) => `<table>${header&&rows.length?`<thead><tr>${rows[0].map(v=>`<th>${esc(v)}</th>`).join('')}</tr></thead>`:''}<tbody>${rows.slice(header?1:0).map(row => `<tr>${row.map(value => `<td>${esc(value)}</td>`).join('')}</tr>`).join('')}</tbody></table>`;
+  const demand=householdDemand(config);
+  const householdFit=settings.household&&demand.members.length?`<section class="schedule"><h2>Demand by household and season</h2><p>${esc(HOUSEHOLD_DEMAND_NOTE)}</p><p>${demand.matches?'Profile totals match active inventory.':'Draft profile totals differ from active inventory. The layout uses active inventory; profile demand is for comparison.'}</p>${table([['Category / unit','Everyday profiles','Seasonal profiles','Active inventory','Reserve addition','Active total'],...demand.rows.filter(r=>r.current+r.everyday+r.seasonal>0).map(r=>[r.label+' / '+r.unit,...[r.everyday,r.seasonal,r.current,r.reserve,r.total].map(n=>n.toFixed(2))])])}${demand.members.map(m=>`<h3>${esc(m.name)} — ${m.season}</h3>${table([['Demand before reserve','Required','Unit'],...m.rows.filter(r=>r.required>0).map(r=>[r.label,r.required.toFixed(2),r.unit])])}`).join('')}${demand.differences.length?`<h3>Profile differences</h3>${table([['Category','Active','In profiles'],...demand.differences.map(d=>[d.label,String(d.current),String(d.profiles)])])}`:''}</section>`:'';
   const warnings = [...(layout.inputWarnings ?? []), ...layout.aisleWarnings, ...layout.layoutWarnings.map(w => w.message + ': ' + w.designerNote)];
   const specs = [
     ['Closet type', layout.closetType], ['Height', layout.dimensions.height + ' in'], ['Cabinet depth', layout.dimensions.depth + ' in'],
@@ -65,7 +68,7 @@ function renderDesign({ layout, config, fileName = 'Current design', showDimensi
     <h2>Warnings</h2>${warnings.length ? `<ul>${warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : '<p>No calculated warnings.</p>'}
     <h2>Recommendations</h2><ul>${layout.recommendations.map(r => `<li>${esc(r)}</li>`).join('')}</ul>
     <h2>Inventory</h2>${table(Object.entries({ ...config.wardrobe, ...config.shoes }).map(([k,v]) => [k.replace(/([A-Z])/g, ' $1'), typeof v === 'boolean' ? (v ? 'Yes' : 'No') : String(v)]),false)}
-    ${floor}${drawings}${organizers}${materials}${roomSchedule}${reservations}${wallSchedule}${household}${reserveNotes}${changes}<footer>Planning purposes only. Not to scale. Verify dimensions, support, door clearance, and installation requirements before construction.</footer></article>`;
+    ${floor}${drawings}${organizers}${materials}${roomSchedule}${reservations}${wallSchedule}${household}${householdFit}${reserveNotes}${changes}<footer>Planning purposes only. Not to scale. Verify dimensions, support, door clearance, and installation requirements before construction.</footer></article>`;
 }
 export function buildPrintDocument(designs: PDFExportOptions[]): string {
   const settings=designs[0]?.settings??DEFAULT_PRINT,paper=settings.paper==='Letter'?'Letter':'A4',orientation=settings.orientation==='landscape'?'landscape':'portrait';

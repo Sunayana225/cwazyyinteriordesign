@@ -5,10 +5,11 @@ import { DRAFT_KEY, SAVED_KEY, nextDesignName, readDesigns, serializeDesigns, va
 import { downloadText } from '@/lib/download';
 import { ClosetLayoutEngine } from '@/engine/ClosetLayoutEngine';
 import { drawerTargets, resolveOrganizers } from '@/lib/drawers';
-import type { ClosetConfiguration, SavedDesign } from '@/types/closet';
+import type { ClosetConfiguration, SavedDesign, UserRole } from '@/types/closet';
 import { getPreset } from '@/lib/presets';
 import { storageError, draftStatus } from '@/lib/recovery';
 import { copyDesign } from '@/lib/designLibrary';
+import { isUserRole } from '@/lib/userRoles';
 function restoredConfig(config:ClosetConfiguration){const c=canonicalConfig(config);if(c.drawerInteriors)c.drawerInteriors=resolveOrganizers(c.drawerInteriors,drawerTargets(new ClosetLayoutEngine(c).calculateLayout()));return c;}
 
 export function useDesignStore() {
@@ -30,6 +31,7 @@ export function useDesignStore() {
   const sourcePreset = useRef<string | null>(null);
   const draftWritable = useRef(true);
   const draftRaw=useRef<string|null>(null);
+  const chosenRole=useRef<UserRole|null>(null);
   const pending = useRef<Array<((current: SavedDesign[]) => SavedDesign[]) & {operation?:string}>>([]);
   useEffect(() => {
     try { lastRaw.current = localStorage.getItem(SAVED_KEY); setSavedDesigns(readDesigns(lastRaw.current)); setNamedHealth('Saved'); }
@@ -40,14 +42,28 @@ export function useDesignStore() {
       const raw = localStorage.getItem(DRAFT_KEY);
       draftRaw.current=raw;
       const draft = raw ? JSON.parse(raw) : null;
-      if (preset && !(draft?.sourcePreset === sourcePreset.current && draft?.version === 1 && validConfig(draft.config))) setConfig(preset);
+      if (preset && !(draft?.sourcePreset === sourcePreset.current && draft?.version === 1 && validConfig(draft.config))) {
+        const role=validConfig(draft?.config)?draft.config.userInfo.userType:preset.userInfo.userType;
+        setConfig({...preset,userInfo:{...preset.userInfo,userType:role}});
+      }
       else if (draft?.version === 1 && validConfig(draft.config)) setConfig(restoredConfig(draft.config));
       else {
         if (raw) { draftWritable.current = false; setNotice('The draft could not be restored. It has been kept in storage. Save a named design before leaving.'); }
         const mode = sessionStorage.getItem('userType');
-        if (mode && ['homeowner', 'renter', 'designer', 'browsing'].includes(mode)) setConfig(c => ({ ...c, userInfo: { ...DEFAULT_CONFIG.userInfo, userType: mode as ClosetConfiguration['userInfo']['userType'] } }));
+        if (isUserRole(mode)) setConfig(c => ({ ...c, userInfo: { ...DEFAULT_CONFIG.userInfo, userType: mode } }));
       }
     } catch { draftWritable.current = false; setNotice('Draft storage is unavailable. Changes remain in this tab until you leave.'); }
+    // A fresh homepage choice changes the workspace, never the restored design.
+    // Consume it once so a stale session choice cannot undo later role changes.
+    try {
+      const role=sessionStorage.getItem('alveo-pending-role');
+      if(isUserRole(role))chosenRole.current=role;
+      sessionStorage.removeItem('alveo-pending-role');
+    } catch { /* A saved draft remains usable when session storage is unavailable. */ }
+    // Retain the consumed choice through React's development effect replay, which
+    // otherwise restores the old draft a second time and loses the selection.
+    const role=chosenRole.current;
+    if(role)setConfig(c=>({...c,userInfo:{...DEFAULT_CONFIG.userInfo,...c.userInfo,userType:role}}));
     setDraftHealth(draftWritable.current ? 'Saved' : 'Paused — original draft preserved'); setReady(true);
     const changed = (e: StorageEvent) => {
       if (e.storageArea && e.storageArea !== localStorage) return;

@@ -51,8 +51,9 @@ export interface WardrobeItems {
   ties: number;
 }
 
+export type UserRole = 'homeowner' | 'renter' | 'designer' | 'architect' | 'browsing';
 export interface UserPreferences {
-  userType: 'homeowner' | 'renter' | 'designer' | 'browsing';
+  userType: UserRole;
   stylePreference: 'minimal' | 'glam' | 'rustic' | 'modern' | 'luxury';
   woodFinish: 'light' | 'medium' | 'dark' | 'white';
   drawerPreference: 'many-small' | 'few-large' | 'mixed';

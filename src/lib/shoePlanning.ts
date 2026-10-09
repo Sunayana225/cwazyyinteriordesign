@@ -1,5 +1,5 @@
 import type {ShelfConfig,ShoeCollection} from '@/types/closet';
-import {SHOE_PAIR_WIDTH,SHOE_SPACING} from './design';
+import {ELEMENT_FIT,SHOE_PAIR_WIDTH,SHOE_SPACING} from './design';
 const ORDER: Array<keyof ShoeCollection> = ['boots','heels','sneakers','flats'];
 /** Each row is a physical board with pair capacity; clearance excludes its one-inch allowance. */
 export function shoeShelves(inventory:ShoeCollection,height:number,width:number,clearances?:ShoeCollection):ShelfConfig[]{
@@ -19,7 +19,7 @@ export function shoeShelves(inventory:ShoeCollection,height:number,width:number,
  }
  // Keep heavy/tall shoes at the bottom after deciding how many rows each gets.
  for(const k of kinds)for(let row=0;row<k.rows;row++){
-  shelves.push({height:bottom,depth:12,spacing:k.opening,count:k.capacity,purpose:k.kind});bottom+=k.opening+1;
+  shelves.push({height:bottom,depth:ELEMENT_FIT['shoe-shelves'].depth,spacing:k.opening,count:k.capacity,purpose:k.kind});bottom+=k.opening+1;
  }
  return shelves;
 }

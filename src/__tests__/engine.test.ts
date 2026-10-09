@@ -9,6 +9,7 @@
 import { describe, it } from 'vitest';
 import assert from 'node:assert/strict';
 import { ClosetLayoutEngine } from '../engine/ClosetLayoutEngine';
+import { LIMITS } from '../lib/design';
 import type {
   ClosetCalculationInput, ClosetLayout, ClosetType,
 } from '../types/closet';
@@ -236,15 +237,24 @@ describe('Engine: corridor type', () => {
 // ─── Engine: dimension clamping ──────────────────────────────────────────────
 
 describe('Engine: dimension normalization', () => {
-  it('too-small height gets clamped to 84 with warning', () => {
-    const layout = calc({ dimensions: { width: 96, height: 60, depth: 24 } });
-    assert.ok(layout.dimensions.height >= 84, `height ${layout.dimensions.height} < 84`);
+  // Small spaces are supported now, so clamping happens at LIMITS, not the old 84/36.
+  // A 60 in kids' closet and a 20 in reach-in are legal and must pass through unchanged.
+  it('keeps real small-space measurements instead of clamping them up', () => {
+    const short = calc({ dimensions: { width: 96, height: 60, depth: 24 } });
+    assert.equal(short.dimensions.height, 60, `height ${short.dimensions.height} should be kept`);
+    const narrow = calc({ dimensions: { width: 20, height: 96, depth: 24 } });
+    assert.equal(narrow.dimensions.width, 20, `width ${narrow.dimensions.width} should be kept`);
+  });
+
+  it('clamps below the supported floor with a warning', () => {
+    const layout = calc({ dimensions: { width: 96, height: LIMITS.height - 10, depth: 24 } });
+    assert.ok(layout.dimensions.height >= LIMITS.height, `height ${layout.dimensions.height} < ${LIMITS.height}`);
     assert.ok((layout.inputWarnings?.length ?? 0) > 0, 'expected input warnings');
   });
 
-  it('too-small width gets clamped to 36 with warning', () => {
-    const layout = calc({ dimensions: { width: 20, height: 96, depth: 24 } });
-    assert.ok(layout.dimensions.width >= 36, `width ${layout.dimensions.width} < 36`);
+  it('clamps a sub-floor width with a warning', () => {
+    const layout = calc({ dimensions: { width: LIMITS.width - 5, height: 96, depth: 24 } });
+    assert.ok(layout.dimensions.width >= LIMITS.width, `width ${layout.dimensions.width} < ${LIMITS.width}`);
     assert.ok((layout.inputWarnings?.length ?? 0) > 0, 'expected input warnings');
   });
 

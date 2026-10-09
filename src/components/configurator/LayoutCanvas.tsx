@@ -3,8 +3,8 @@ import { useEffect, useRef, useState } from 'react';
 import type { PointerEvent as ReactPointerEvent } from 'react';
 import type { ClosetWall, LayoutColumn, LayoutColumnType } from '@/types/closet';
 import {
-  COLUMN_TYPES, COLUMN_LABEL, COLUMN_MIN_WIDTH, MAX_COLUMNS,
-  columnsFromWall, normalizeColumns, moveColumn, resizeColumn, retypeColumn, addColumn, removeColumn,
+  COLUMN_TYPES, COLUMN_LABEL, COLUMN_MIN_WIDTH, COLUMN_SNAP, MAX_COLUMNS,
+  columnsFromWall, normalizeColumns, moveColumn, resizeColumn, retypeColumn, addColumn, removeColumn, droppedTypes, fittedColumnTypes,
 } from '@/lib/layoutColumns';
 
 const FILL: Record<LayoutColumnType,string> = {
@@ -15,8 +15,9 @@ const button='border rounded px-3 py-2 text-sm';
 /** Direct-manipulation editor for one wall elevation. Imports the generated design as
  * movable elements, then commits the arrangement as a column override on the
  * configuration — the layout itself is always regenerated, so edits must live there. */
-export function LayoutCanvas({wall,stored,onCommit,onClose}:{
+export function LayoutCanvas({wall,stored,fitAllowances,onCommit,onClose}:{
   wall:ClosetWall; stored?:LayoutColumn[];
+  fitAllowances?:{floorOffset?:number;baseboard?:number};
   onCommit:(columns:LayoutColumn[]|null)=>void; onClose:()=>void;
 }) {
   const generated=()=>normalizeColumns(columnsFromWall(wall),wall.width);
@@ -52,7 +53,7 @@ export function LayoutCanvas({wall,stored,onCommit,onClose}:{
     if(active.kind==='resize'){
       const i=columns.findIndex(c=>c.id===active.id);if(i<0)return;
       const left=columns.slice(0,i).reduce((n,c)=>n+c.width,0);
-      change(resizeColumn(columns,active.id,at-left,wall.width));
+      change(resizeColumn(columns,active.id,at-left,wall.width,COLUMN_SNAP));
     } else {
       // Reorder as the pointer crosses a neighbour's midpoint.
       let edge=0,target=columns.length-1;
@@ -70,6 +71,10 @@ export function LayoutCanvas({wall,stored,onCommit,onClose}:{
   let cursor=0;
   const placed=columns.map(c=>{const x=cursor;cursor+=c.width;return {...c,x};});
   const fmt=(n:number)=>`${n.toFixed(1)} in`;
+  // Storage the generated wall had that this arrangement drops, surfaced before commit.
+  const dropped=droppedTypes(columnsFromWall(wall),columns);
+  // Only elements this cabinet's height and depth can physically take.
+  const allowed=fittedColumnTypes(wall,fitAllowances);
 
   return <dialog ref={dialog} onCancel={event=>{event.preventDefault();onClose();}} aria-labelledby="layout-canvas-title" className="settings-dialog w-[95vw] max-w-5xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 rounded-xl backdrop:bg-black/40">
     <h2 id="layout-canvas-title" className="text-lg font-semibold">Rearrange {wall.label.toLowerCase()}</h2>
@@ -104,7 +109,7 @@ export function LayoutCanvas({wall,stored,onCommit,onClose}:{
         <label className="text-sm">Element type
           <select className="border rounded w-full p-2" value={current.type}
             onChange={e=>change(retypeColumn(columns,current.id,e.target.value as LayoutColumnType,wall.width),`Changed element ${index+1}.`)}>
-            {COLUMN_TYPES.map(t=><option key={t} value={t}>{COLUMN_LABEL[t]} (min {COLUMN_MIN_WIDTH[t]} in)</option>)}
+            {COLUMN_TYPES.filter(t=>allowed.includes(t)||t===current.type).map(t=><option key={t} value={t} disabled={!allowed.includes(t)}>{COLUMN_LABEL[t]} (min {COLUMN_MIN_WIDTH[t]} in){!allowed.includes(t)?' — no longer fits':''}</option>)}
           </select>
         </label>
         <label className="text-sm">Width (inches)
@@ -122,9 +127,9 @@ export function LayoutCanvas({wall,stored,onCommit,onClose}:{
 
     <fieldset className="border rounded-lg p-3 mt-3">
       <legend className="font-semibold">Add an element</legend>
-      <p className="settings-description">Added after the selected element, or at the end. The wall must have room for its minimum width.</p>
+      <p className="settings-description">Added after the selected element, or at the end. The wall must have room for its minimum width. Available elements account for cabinet height, depth, floor offset, and baseboard allowance.</p>
       <div className="flex flex-wrap gap-2">
-        {COLUMN_TYPES.map(t=>{
+        {allowed.map(t=>{
           const room=columns.reduce((n,c)=>n+COLUMN_MIN_WIDTH[c.type],0)+COLUMN_MIN_WIDTH[t]<=wall.width;
           return <button key={t} className={button} disabled={!room||columns.length>=MAX_COLUMNS}
             onClick={()=>change(addColumn(columns,t,index<0?columns.length:index+1,wall.width),`Added ${COLUMN_LABEL[t]}.`)}>
@@ -135,6 +140,10 @@ export function LayoutCanvas({wall,stored,onCommit,onClose}:{
     </fieldset>
 
     <p role="status" className="text-sm mt-3">{message||`${columns.length} elements filling ${fmt(columns.reduce((n,c)=>n+c.width,0))} of ${fmt(wall.width)}.`}</p>
+    {dropped.length>0&&<p role="status" className="text-sm mt-2 border border-amber-400 rounded p-2">
+      The generated design used {dropped.map(t=>COLUMN_LABEL[t].toLowerCase()).join(', ')} on this wall and your arrangement has none.
+      That storage moves elsewhere or goes unplaced — check the capacity summary after you choose Done.
+    </p>}
 
     <footer className="settings-dialog-footer bg-white border-t pt-3 mt-4 flex flex-wrap gap-3">
       <button className="bg-charcoal-600 text-white rounded-lg px-4 py-3" onClick={()=>{onCommit(columns);onClose();}}>Done — use this arrangement</button>

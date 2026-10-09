@@ -7,7 +7,7 @@ import { accessoryShelves } from '@/lib/accessoryShelves';
 import { reserveInventory, validInventoryPlanning } from '@/lib/inventoryPlanning';
 import { validColumns, resolveColumns, COLUMN_MIN_WIDTH } from '@/lib/layoutColumns';
 import type { ZoneOverrides, LayoutColumn } from '@/types/closet';
-import { EMPTY_WARDROBE, LIMITS, SHOE_SPACING, SHOE_PAIR_WIDTH as SHOE_PAIR_W, foldedDemand, hangingDemand, capacityReport } from '@/lib/design';
+import { EMPTY_WARDROBE, LIMITS, SHOE_SPACING, SHOE_PAIR_WIDTH as SHOE_PAIR_W, foldedDemand, hangingDemand, capacityReport, ELEMENT_FIT, elementFits, TOE_KICK } from '@/lib/design';
 import { MAX_DIMENSION, MAX_HEIGHT, MAX_INVENTORY, validPlanning, freeSpans, wallFootprint, overlaps } from '@/lib/planning';
 import type { PlanningOptions } from '@/types/closet';
 ﻿import {
@@ -28,10 +28,9 @@ type WallRole =
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 // Architectural constants  (sourced from drawing encyclopedia v1.0)
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
-const TOE_KICK    = 3;   // 3" non-usable base gap
+const UNIT_DEPTH  = 24;  // standard storage unit depth
 const SHELF_THICK = 1;   // shelf panel thickness
 const ROD_INSET   = 1.5; // inches from shelf underside to rod centre
-const UNIT_DEPTH  = 24;  // standard storage unit depth
 
 
 // Rod heights A.F.F. from drawing encyclopedia Ch.14
@@ -225,7 +224,7 @@ export class ClosetLayoutEngine {
       this.inputWarnings.push(`${label}: storage excluded around obstacle ${obstacle.label}.`);
     }
     const spans=freeSpans(width,excluded);
-    let zones=spans.flatMap(([start,end])=>this.buildWall(wallId,label,elevationRef,end-start,unitDepth,role).zones.map(z=>({...z,x:z.x+start})));
+    let zones=spans.flatMap(([start,end])=>this.buildWall(wallId,label,elevationRef,end-start,unitDepth,role,spans.length===1&&end-start>=width-.001).zones.map(z=>({...z,x:z.x+start})));
     // Append after all spans, so a new shelf above the first span cannot shift
     // organizer IDs belonging to drawers in the second span.
     if(this.planning.upperStorage!==false)zones=withUpperStorage(zones,this.D,this.planning.accessoryShelfOpening);
@@ -274,6 +273,9 @@ export class ClosetLayoutEngine {
   private buildWall(
     wallId: ClosetWall['wallId'], label: string, elevationRef: string,
     width: number, unitDepth: number, role: WallRole,
+    /** False when this span is a window/obstacle leftover rather than the whole wall.
+     * A narrow leftover reports nothing; a genuinely narrow wall gets shelves. */
+    fullSpan = true,
   ): ClosetWall {
     const wardrobe = this.wardrobe, shoes = this.shoes;
     // Explicit recipes describe requested storage, including intentional spare
@@ -284,7 +286,7 @@ export class ClosetLayoutEngine {
       this.shoes = this.remaining.shoes;
     }
     try {
-      const wall = this.buildWallForDemand(wallId, label, elevationRef, width, unitDepth, role);
+      const wall = this.buildWallForDemand(wallId, label, elevationRef, width, unitDepth, role, fullSpan);
       if (this.remaining) this.remaining = remainingInventory(this.remaining, wall.zones);
       return wall;
     } finally {
@@ -300,8 +302,9 @@ export class ClosetLayoutEngine {
     width:        number,
     unitDepth:    number,
     role:         WallRole,
+    fullSpan =    true,
   ): ClosetWall {
-    if (width < 12) return { wallId, label, elevationRef, width, height: this.H, unitDepth, zones: [] };
+    if (width < LIMITS.width) return { wallId, label, elevationRef, width, height: this.H, unitDepth, zones: [] };
     // A canvas-edited wall replaces the engine's column decision but keeps every other
     // step below (supports, annotation), so overrides are additive per wall.
     const edited = resolveColumns(this.columns[wallId], { width });
@@ -314,15 +317,22 @@ export class ClosetLayoutEngine {
       const shelves=accessoryShelves(reserve,this.H-TOE_KICK,this.D,this.wardrobe.bags,this.wardrobe.belts>0,this.planning.accessoryShelfOpening);
       zones.push({ type: 'top-shelves', x: width - reserve, y: TOE_KICK, width: reserve, height: this.H - TOE_KICK, shelves, contentLabel: 'Bags, accessories and adjustable shelves' });
     }
+    // Retain useful shelves when the requested elements cannot fit. Never fill a
+    // span deliberately excluded by a window or obstacle.
+    if (!zones.length && fullSpan) this.addFallbackShelves(zones, 0, width, TOE_KICK, Math.max(1, this.H - TOE_KICK));
     this.annotateZones(zones);
     return { wallId, label, elevationRef, width, height: this.H, unitDepth, zones };
   }
 
   /** Island unit — 36" high counter with jewellery drawers + accessory shelf */
   private buildIslandWall(width: number, height: number): ClosetWall {
+    height=Math.min(height,this.H);
+    const depth=this.depthFor('island-unit');
+    const canHaveDrawers=elementFits('drawers',height,depth);
     const zones: ClosetZone[] = [];
-    const drawerW  = Math.round(width * 0.6);
+    const drawerW  = canHaveDrawers?Math.round(width * 0.6):0;
     const shelfW   = width - drawerW;
+    if(!canHaveDrawers)this.inputWarnings.push('Island drawers omitted: the cabinet depth is too shallow; open shelves are provided instead.');
 
     // Drawer stack inside the island counter
     const drawers: DrawerConfig[] = [];
@@ -339,13 +349,13 @@ export class ClosetLayoutEngine {
       drawers.push({ height: drawerHeight, width: drawerW - 4, depth: this.depthFor('island-unit') - 6, position: curY, purpose: i === 0 ? 'belts & ties' : 'accessories' });
       curY += drawerHeight + DRAWER_GAP;
     }
-    zones.push({ type: 'drawers', x: 0, y: 0, width: drawerW, height, drawers, contentLabel: 'Island drawers' });
+    if(canHaveDrawers)zones.push({ type: 'drawers', x: 0, y: 0, width: drawerW, height, drawers, contentLabel: 'Island drawers' });
 
     // Open shelf compartment on the other side
     zones.push({
       type: 'top-shelves', x: drawerW, y: 0, width: shelfW, height,
       shelves: [
-        { height: Math.round(height * 0.5), depth: this.depthFor('island-unit') - 4, spacing: Math.round(height * 0.5), count: 1, purpose: 'display' },
+        { height: Math.round(height * 0.5), depth: depth - 4, spacing: height-Math.round(height * 0.5)-SHELF_THICK, count: 1, purpose: 'display' },
       ],
       contentLabel: 'Open display',
     });
@@ -503,7 +513,7 @@ export class ClosetLayoutEngine {
     const totalShoes = this.countShoes();
     const zones: ClosetZone[] = [];
 
-    if (totalShoes > 0 && W >= COL_HANG_MIN + COL_SHOE_W) {
+    if (totalShoes > 0 && elementFits('shoe-shelves',this.H-TOE_KICK,this.D) && W >= COL_HANG_MIN + COL_SHOE_W) {
       const shoeW = this.calcShoeColumnWidth(W - COL_HANG_MIN);
       const hangW = W - shoeW;
       // Hanging/drawer column (left)
@@ -529,6 +539,7 @@ export class ClosetLayoutEngine {
 
   private addLongHangZone(out: ClosetZone[], x: number, w: number, yBottom: number, height: number) {
     if(w<COL_HANG_MIN){this.inputWarnings.push(`Hanging omitted: this span is narrower than the ${COL_HANG_MIN}-inch minimum.`);return;}
+    if(!this.zoneFits('long-hang',height))return;
     const requested=this.planning.garmentLengths?.long;
     const rodAFF = Math.min(yBottom + height - SHELF_THICK - ROD_INSET, requested?yBottom+requested+2:ROD_LONG+4);
     if(requested&&rodAFF-yBottom<requested)this.inputWarnings.push('Long garments exceed the available hanging clearance.');
@@ -541,6 +552,7 @@ export class ClosetLayoutEngine {
   private addShortHangZone(out: ClosetZone[], x: number, w: number, yBottom: number, height: number) {
     if(w<COL_HANG_MIN){this.inputWarnings.push(`Hanging omitted: this span is narrower than the ${COL_HANG_MIN}-inch minimum.`);return;}
     if (height < 30) return;  // not enough space for any hang zone
+    if(!this.zoneFits('short-hang',height))return;
     const zoneTopAFF = yBottom + height;
     const short=this.planning.garmentLengths?.short;
     const upperRod = Math.min(zoneTopAFF - SHELF_THICK - ROD_INSET, Math.max(ROD_DBL_HI, yBottom + (short ? short + 2 : 30)));
@@ -559,12 +571,14 @@ export class ClosetLayoutEngine {
 
   private addDrawerZone(out: ClosetZone[], x: number, w: number, yBottom: number, totalH: number) {
     if(w<COLUMN_MIN_WIDTH.drawers){this.inputWarnings.push(`Drawers omitted: this span is narrower than the ${COLUMN_MIN_WIDTH.drawers}-inch minimum.`);return;}
+    if(!this.zoneFits('drawers',totalH))return;
     const drawers = this.buildDrawerList(w, yBottom, totalH);
     if (!drawers.length) return;
     out.push({ type: 'drawers', x, y: yBottom, width: w, height: totalH, drawers });
   }
 
   private addShoeColumn(out: ClosetZone[], x: number, w: number, yBottom: number, totalH: number) {
+    if(!this.zoneFits('shoe-shelves',totalH))return;
     const shelves = this.buildShoeShelves(totalH, w);
     if (!shelves.length) return;
     out.push({ type: 'shoe-shelves', x, y: yBottom, width: w, height: totalH, shelves });
@@ -574,16 +588,18 @@ export class ClosetLayoutEngine {
 
   /** Place drawers at bottom / middle / top of the short-hang column */
   private buildDrawerAndHang(out: ClosetZone[], x: number, w: number, drawerH: number): void {
+    const clear=Math.max(0,this.H-TOE_KICK);
+    drawerH=Math.min(clear,Math.max(0,drawerH));
+    const freeHeight=clear-drawerH;
     switch (this.drawerPosition) {
       case 'top': {
-        const hangH = Math.max(this.H - TOE_KICK - drawerH, 20);
+        const hangH = freeHeight;
         this.addShortHangZone(out, x, w, TOE_KICK, hangH);
         this.addDrawerZone(out, x, w, TOE_KICK + hangH, drawerH);
         break;
       }
       case 'middle': {
-        const totalHang = Math.max(this.H - TOE_KICK - drawerH, 40);
-        const lowerH    = Math.max(Math.round(totalHang * 0.38), 20);
+        const lowerH    = Math.min(freeHeight,Math.max(Math.round(freeHeight * 0.38),20));
         const upperY    = TOE_KICK + lowerH + drawerH;
         const upperH    = this.H - upperY;
         this.addShortHangZone(out, x, w, TOE_KICK, lowerH);
@@ -758,15 +774,50 @@ export class ClosetLayoutEngine {
 
   private fitColumnTypes(types:('long-hang'|'short-hang'|'shoe-shelves')[],width:number,drawers:boolean){
     const demand=hangingDemand(this.wardrobe),priority=this.prefs.priorityItems??[];
-    const selected=selectColumns(types.map(type=>({
+    // Drop elements the cabinet physically cannot take before competing for width,
+    // so a shallow or short unit never gets a rod it has no room for.
+    const clear=this.H-TOE_KICK;
+    const possible=types.filter(type=>elementFits(type,clear,this.D)
+      || (type==='short-hang' && drawers && elementFits('drawers',clear,this.D)));
+    const unfit=types.filter(type=>!possible.includes(type));
+    for(const type of unfit){
+      const need=ELEMENT_FIT[type];
+      this.inputWarnings.push(`${type.replace(/-/g,' ')} omitted: needs at least ${need.height} in of clear height and ${need.depth} in of depth; this cabinet has ${clear.toFixed(0)} by ${this.D.toFixed(0)} in.`);
+    }
+    if(!possible.length)return [];
+    const selected=selectColumns(possible.map(type=>({
       type,minimum:COLUMN_MIN_WIDTH[type],
       score:type==='shoe-shelves'?Object.values(this.shoes).filter(n=>n>0).length+(priority.includes('shoes')?2:0)
         :1+(priority.includes('hanging')?2:0)+(type==='short-hang'&&drawers?1+(priority.includes('folded')?2:0):0),
       demand:type==='shoe-shelves'?this.countShoes():type==='long-hang'?demand.long:demand.short,
     })),width);
-    const omitted=types.filter(type=>!selected.includes(type));
+    const omitted=possible.filter(type=>!selected.includes(type));
     if(omitted.length)this.inputWarnings.push(`${width.toFixed(2)}-inch span: omitted ${omitted.map(t=>t.replace(/-/g,' ')).join(', ')} to preserve minimum column widths. Change priorities, widen the span, or use fewer column types.`);
     return selected;
+  }
+
+  /** Last-resort storage for a span nothing else fits: adjustable shelves, which need
+   * the least height and depth of any element. A wall above the supported minimum must
+   * never come back empty — an empty elevation reads as a broken drawing, not a choice. */
+  private addFallbackShelves(out: ClosetZone[], x: number, w: number, yBottom: number, height: number): void {
+    if(w<=0||!elementFits('top-shelves',height,this.D))return;
+    const shelves=accessoryShelves(w,height,this.D,0,false,this.planning.accessoryShelfOpening);
+    if(!shelves.length)return;
+    out.push({
+      type: 'top-shelves', x, y: yBottom, width: w, height,
+      shelves,
+      contentLabel: 'Adjustable shelves',
+    });
+    this.inputWarnings.push(`${w.toFixed(0)}-inch span: fitted with adjustable shelves because the requested storage does not fit.`);
+  }
+
+  /** Guard the actual builders too: priority walls and saved recipes bypass automatic selection. */
+  private zoneFits(type:keyof typeof ELEMENT_FIT,height:number):boolean {
+    if(elementFits(type,height,this.D))return true;
+    const need=ELEMENT_FIT[type];
+    const message=`${type.replace(/-/g,' ')} omitted: needs at least ${need.height} in of clear height and ${need.depth} in of depth; this space has ${height.toFixed(2)} by ${this.D.toFixed(2)} in.`;
+    if(!this.inputWarnings.includes(message))this.inputWarnings.push(message);
+    return false;
   }
 
   private distributeWidths(types: ('long-hang' | 'short-hang' | 'shoe-shelves')[], W: number, shortRods=2): number[] {
@@ -797,7 +848,13 @@ export class ClosetLayoutEngine {
 
   private calcDrawerStackHeight(): number {
     const stdCount = Math.min(Math.max(Math.ceil(foldedDemand(this.wardrobe) * 9 / this.drawerHeight()), 1), this.prefs.drawerPreference === 'many-small' ? 6 : 4);
-    return Math.min(this.H - TOE_KICK - 32, (this.wardrobe.jewelry ? DRAWER_JEW + DRAWER_GAP : 0) + stdCount * (this.drawerHeight() + DRAWER_GAP) - DRAWER_GAP + DRAWER_MARG * 2);
+    const wanted = (this.wardrobe.jewelry ? DRAWER_JEW + DRAWER_GAP : 0) + stdCount * (this.drawerHeight() + DRAWER_GAP) - DRAWER_GAP + DRAWER_MARG * 2;
+    // Reserving 32 in for hanging above goes negative in a short cabinet, which used to
+    // produce an inverted zone. Give the drawers whatever clear height there is, and
+    // report none at all rather than a negative stack.
+    const clear = this.H - TOE_KICK;
+    const room = this.D>=ELEMENT_FIT['short-hang'].depth && clear >= 32 + ELEMENT_FIT.drawers.height ? clear - 32 : clear;
+    return Math.max(0, Math.min(room, wanted));
   }
 
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -936,13 +993,17 @@ export class ClosetLayoutEngine {
 
     // ── Personalization-aware recommendations ──
     if (userType === 'renter') {
-      recs.push('Renter tip: Consider freestanding closet systems (IKEA PAX, Elfa) that don\'t require wall anchoring. Keep receipts for security deposit returns.');
+      recs.push('Renter planning: record existing doors, windows and baseboards before arranging storage. Freestanding furniture may still require anchoring; follow its installation instructions and confirm permission for modifications.');
       if (this.closetType !== 'reach-in' && this.closetType !== 'wardrobe-wall') {
-        recs.push('As a renter, check with your landlord before modifying walk-in closets. Tension-rod systems and freestanding units work well.');
+        recs.push('Review the room opening schedule with your landlord or installer before changing a walk-in closet.');
       }
     }
+    if (userType === 'architect') {
+      recs.push('Architect review: coordinate openings, floor offsets and cabinet depths, then review clearance and capacity warnings before exporting the room schedule.');
+      recs.push('These are planning drawings. Verify survey measurements, construction details and installation requirements for the project.');
+    }
     if (userType === 'designer') {
-      recs.push('Designer note: All measurements are in inches. Elevation drawings include AFF (Above Finished Floor) references for construction documents.');
+      recs.push('Designer note: All measurements are in inches. Elevation drawings include AFF (Above Finished Floor) references for design review.');
       recs.push('Export PDF includes Smart Suggestions suitable for client presentation. Edit design name before exporting for professional labeling.');
     }
 

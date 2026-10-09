@@ -2,7 +2,7 @@ import { describe, it, expect } from 'vitest';
 import { ClosetLayoutEngine } from '@/engine/ClosetLayoutEngine';
 import { ClosetSVGRenderer } from '@/renderer/ClosetSVGRenderer';
 import { buildPrintDocument } from '@/engine/PDFExporter';
-import { DEFAULT_CONFIG, TYPES, capacityReport, dimensionErrors, formatInches, hangingDemand } from '@/lib/design';
+import { DEFAULT_CONFIG, TYPES, LIMITS, capacityReport, dimensionErrors, formatInches, hangingDemand } from '@/lib/design';
 import { nextDesignName, readDesigns, serializeDesigns, validConfig } from '@/lib/storage';
 import type { ClosetConfiguration, DrawerPosition } from '@/types/closet';
 const config = () => structuredClone(DEFAULT_CONFIG);
@@ -56,8 +56,11 @@ describe('Audit geometry', () => {
 });
 describe('Audit inputs and storage', () => {
   it('validates dimensions and preserves fractional unit formatting', () => {
+    // 60 in is a legal kids'/under-stair height now; only sub-floor values error.
     const c=config(); expect(dimensionErrors(c)).toEqual([]); c.dimensions.height=60;
-    expect(dimensionErrors(c)[0]).toContain('84'); expect(formatInches(95.875)).toBe('7\'-11.875"'); expect(formatInches(95.99)).toBe('8\'-0"');
+    expect(dimensionErrors(c)).toEqual([]);
+    c.dimensions.height=LIMITS.height-1;
+    expect(dimensionErrors(c)[0]).toContain(String(LIMITS.height)); expect(formatInches(95.875)).toBe('7\'-11.875"'); expect(formatInches(95.99)).toBe('8\'-0"');
   });
   it('normalizes nonfinite and negative inventory with warnings', () => {
     const c=config(); c.wardrobe.shirts=NaN; c.shoes.boots=-4; c.dimensions.height=Infinity;

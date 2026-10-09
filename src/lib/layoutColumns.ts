@@ -1,4 +1,5 @@
 import { MAX_DIMENSION } from './planning';
+import { TOE_KICK, elementFits } from './design';
 import type { ClosetWall, LayoutColumn, LayoutColumnType } from '@/types/closet';
 
 /** Element vocabulary offered on the canvas, in palette order. */
@@ -13,6 +14,8 @@ export const COLUMN_LABEL: Record<LayoutColumnType,string> = {
 };
 /** A wall wider than this many columns stops being legible on an elevation. */
 export const MAX_COLUMNS = 12;
+/** Drag-resize increment in inches, so a dragged edge lands on a buildable dimension. */
+export const COLUMN_SNAP = .25;
 const close=(a:number,b:number)=>Math.abs(a-b)<.001;
 
 /** The element a generated column represents. Zones stack within one column (a drawer
@@ -59,14 +62,18 @@ export function moveColumn(columns:LayoutColumn[],id:string,toIndex:number):Layo
   next.splice(Math.max(0,Math.min(next.length,toIndex)),0,col);return next;
 }
 /** Resize one column, taking the difference from its right-hand neighbour so the wall
- * stays full. The neighbour never shrinks below its own minimum. */
-export function resizeColumn(columns:LayoutColumn[],id:string,width:number,wallWidth:number):LayoutColumn[] {
+ * stays full. The neighbour never shrinks below its own minimum. `snap` rounds the
+ * dragged edge to a usable increment so a dragged column reads as a buildable
+ * dimension rather than 23.7 in; pass 0 to keep the exact value. */
+export function resizeColumn(columns:LayoutColumn[],id:string,width:number,wallWidth:number,snap=0):LayoutColumn[] {
   const i=columns.findIndex(c=>c.id===id);if(i<0||!Number.isFinite(width))return columns;
   const partner=i+1<columns.length?i+1:i-1;if(partner<0)return normalizeColumns(columns,wallWidth);
   const pair=columns[i].width+columns[partner].width;
   const low=COLUMN_MIN_WIDTH[columns[i].type],high=pair-COLUMN_MIN_WIDTH[columns[partner].type];
   if(high<low)return columns;
-  const w=Math.max(low,Math.min(high,width));
+  // Snap first, then clamp, so snapping can never push a column under its minimum.
+  const wanted=snap>0?Math.round(width/snap)*snap:width;
+  const w=Math.max(low,Math.min(high,wanted));
   return columns.map((c,n)=>n===i?{...c,width:w}:n===partner?{...c,width:pair-w}:c);
 }
 /** Change what a column is, keeping its place and width. Widening to meet a larger
@@ -95,6 +102,20 @@ export function resolveColumns(stored:LayoutColumn[]|undefined,wall:{width:numbe
   if(!stored?.length)return null;
   const out=normalizeColumns(stored,wall.width);
   return out;
+}
+/** Element types this wall can physically take, using the same `ELEMENT_FIT` gate the
+ * engine applies, so the canvas never offers a column the engine would drop. */
+export function fittedColumnTypes(wall:{height:number;unitDepth:number},allowances:{floorOffset?:number;baseboard?:number}={}):LayoutColumnType[] {
+  const clear=Math.max(0,wall.height-TOE_KICK-(allowances.floorOffset??0));
+  const depth=Math.max(0,wall.unitDepth-(allowances.baseboard??0));
+  return COLUMN_TYPES.filter(type=>elementFits(type,clear,depth));
+}
+/** Storage types the generated design provided that an edited arrangement no longer
+ * has. Lets the editor say so before the user commits, rather than leaving the loss
+ * to surface later in the capacity report. */
+export function droppedTypes(generated:LayoutColumn[],edited:LayoutColumn[]):LayoutColumnType[] {
+  const kept=new Set(edited.map(c=>c.type));
+  return [...new Set(generated.map(c=>c.type))].filter(t=>!kept.has(t));
 }
 /** Field path of the first problem, for import error messages. Mirrors the style of
  * `interiorIssue` in `src/lib/drawers.ts`. */

@@ -1,4 +1,4 @@
-import { GENERATOR_CAPABILITIES } from './measurementPolicy';
+import { GENERATOR_CAPABILITIES, MEASUREMENT_MINIMUMS } from './measurementPolicy';
 import type { ClosetLayout, ClosetWall, PlanningOptions } from '@/types/closet';
 export const WALL_IDS:ClosetWall['wallId'][]=['back','left','right','corridor-a','corridor-b','island-unit'];
 export const MAX_DIMENSION=GENERATOR_CAPABILITIES.roomSpan,MAX_HEIGHT=GENERATOR_CAPABILITIES.ceilingHeight,MAX_CABINET_DEPTH=GENERATOR_CAPABILITIES.cabinetDepth,MAX_INVENTORY=10000;
@@ -21,7 +21,7 @@ export function planningIssues(value:unknown):string[] {
     if(key==='door'){choice(block,'wall',['front','back','left','right'],path);choice(block,'hinge',['left','right'],path);choice(block,'swing',['in','out'],path);choice(block,'check',['envelope','sector'],path,true);number(block,'offset',0,MAX_DIMENSION,path);number(block,'width',18,72,path);}
     if(key==='walls')for(const [id,wall]of Object.entries(block)){
       if(!WALL_IDS.includes(id as ClosetWall['wallId'])||!record(wall)){errors.push(`${path}.${id}: expected a supported wall object`);continue;}
-      number(wall,'depth',18,MAX_CABINET_DEPTH,`${path}.${id}`,true);number(wall,'ceilingHeight',48,MAX_HEIGHT,`${path}.${id}`,true);number(wall,'baseboard',0,6,`${path}.${id}`,true);number(wall,'floorOffset',0,12,`${path}.${id}`,true);
+      number(wall,'depth',MEASUREMENT_MINIMUMS.depth,MAX_CABINET_DEPTH,`${path}.${id}`,true);number(wall,'ceilingHeight',MEASUREMENT_MINIMUMS.height,MAX_HEIGHT,`${path}.${id}`,true);number(wall,'baseboard',0,6,`${path}.${id}`,true);number(wall,'floorOffset',0,12,`${path}.${id}`,true);
       choice(wall,'priority',['default','hanging','shoes','folded','accessories'],`${path}.${id}`,true);
     }
   }

@@ -3,9 +3,9 @@ import { ClosetLayoutEngine } from '@/engine/ClosetLayoutEngine';
 import { DEFAULT_CONFIG } from '@/lib/design';
 import { validConfig, invalidConfigurationField } from '@/lib/storage';
 import {
-  COLUMN_MIN_WIDTH, COLUMN_TYPES, MAX_COLUMNS, columnsFromWall, normalizeColumns,
+  COLUMN_MIN_WIDTH, COLUMN_TYPES, COLUMN_SNAP, MAX_COLUMNS, columnsFromWall, normalizeColumns,
   moveColumn, resizeColumn, retypeColumn, addColumn, removeColumn, resolveColumns,
-  columnsIssue, validColumns,
+  droppedTypes, columnsIssue, validColumns,
 } from '@/lib/layoutColumns';
 import type { LayoutColumn } from '@/types/closet';
 
@@ -85,8 +85,27 @@ describe('Layout column overrides',()=>{
     const out=resolveColumns(stored,{width:96})!;
     fits(out,96);
   });
-  it('rejects malformed overrides with the offending field path',()=>{
-    expect(columnsIssue(undefined)).toBeNull();
+  it('snaps a dragged edge to a buildable increment without breaking the wall',()=>{
+    const cols=normalizeColumns([{id:'a',type:'long-hang',width:40},{id:'b',type:'short-hang',width:40}],80);
+    // A messy drag value lands on the snap grid, and the pair still covers the wall.
+    const out=resizeColumn(cols,'a',33.37,80,COLUMN_SNAP);
+    expect(out[0].width).toBeCloseTo(33.25,5);
+    fits(out,80);
+    // Snapping never pushes a column under its minimum, even aiming below it.
+    const floored=resizeColumn(cols,'a',1,80,COLUMN_SNAP);
+    expect(floored[0].width).toBeGreaterThanOrEqual(COLUMN_MIN_WIDTH['long-hang']);
+    fits(floored,80);
+    // Opting out keeps the exact value.
+    expect(resizeColumn(cols,'a',33.37,80,0)[0].width).toBeCloseTo(33.37,5);
+  });
+  it('reports storage the generated wall had that an arrangement drops',()=>{
+    const generated:LayoutColumn[]=[{id:'a',type:'long-hang',width:30},{id:'b',type:'drawers',width:20}];
+    expect(droppedTypes(generated,generated)).toEqual([]);
+    expect(droppedTypes(generated,[{id:'a',type:'long-hang',width:50}])).toEqual(['drawers']);
+    // Reordering or resizing is not a loss; only a missing type counts.
+    expect(droppedTypes(generated,[{id:'b',type:'drawers',width:20},{id:'a',type:'long-hang',width:30}])).toEqual([]);
+  });
+  it('rejects malformed overrides with the offending field path',()=>{    expect(columnsIssue(undefined)).toBeNull();
     expect(validColumns({back:[{id:'a',type:'long-hang',width:30}]})).toBe(true);
     expect(columnsIssue([])).toBe('zoneOverrides.columns');
     expect(columnsIssue({nowhere:[{id:'a',type:'long-hang',width:30}]})).toBe('zoneOverrides.columns.nowhere');

@@ -63,11 +63,17 @@ test('changes from a second tab preserve both saves', async ({ page, context }) 
 });
 test('gallery presets open real configurations', async ({ page }) => {
   await page.goto('/gallery');
-  await page.getByRole('link',{name:'View and customize layout'}).nth(3).click();
-  await expect(page).toHaveURL(/preset=4/);
+  const open=page.getByRole('link',{name:'View and customize layout'}).nth(3);
+  const preset=(await open.getAttribute('href'))?.match(/preset=(\d+)/)?.[1];
+  await open.click();
+  // Client-side navigation commits the URL only once the /configure route is served, which is slow on a cold dev build.
+  await expect(page).toHaveURL(new RegExp(`preset=${preset}`),{timeout:30000});
   await expect(page.getByText('EL-D · ISLAND UNIT')).toBeVisible();
-  const c=await page.evaluate(()=>JSON.parse(localStorage.getItem('alveo-draft')!).config);
-  expect(c.userInfo.stylePreference).toBe('luxury'); expect(c.roomDimensions.roomWidth).toBe(192);
+  // A previous draft exists already; wait for the new preset's debounced save.
+  await expect.poll(()=>page.evaluate(()=>{
+    const c=JSON.parse(localStorage.getItem('alveo-draft')!).config;
+    return {style:c.userInfo.stylePreference,width:c.roomDimensions?.roomWidth};
+  })).toEqual({style:'luxury',width:192});
 });
 test('preview controls change the actual SVG', async ({ page }) => {
   await page.getByRole('tab',{name:'Style',exact:true}).click();

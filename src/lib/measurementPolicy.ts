@@ -8,6 +8,9 @@ export const GENERATOR_CAPABILITIES = {
   cabinetDepth: 120,
 } as const;
 
+/** Shared input floors for the room form, wall overrides, and saved-project validation. */
+export const MEASUREMENT_MINIMUMS = { width:12, height:30, depth:9, roomDepth:24 } as const;
+
 export type MeasurementField = 'width' | 'height' | 'depth' | 'roomDepth';
 export function measurementFeedback(field: string, inches: number): string | undefined {
   if (!Number.isFinite(inches) || inches <= 0) return undefined;

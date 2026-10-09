@@ -6,16 +6,24 @@ import { printSections, organizerPageWarnings } from '@/lib/printSettings';
 import { PrintPresets } from './PrintPresets';
 import { PrintPagePreview } from './PrintPagePreview';
 import { SettingsNavigation } from './SettingsNavigation';
+import { ROLE_WORKFLOWS, rolePrintPreset } from '@/lib/userRoles';
 export function ExportSettingsDialog({layout,config,initial,onExport,onClose,busy,activeWall,savedDesigns=[]}:{layout:ClosetLayout;config:Partial<ClosetConfiguration>;initial:PrintSettings;onExport:(settings:PrintSettings,snapshot:{layout:ClosetLayout;config:Partial<ClosetConfiguration>})=>Promise<void>;onClose:()=>void;busy:boolean;activeWall?:string;savedDesigns?:SavedDesign[]}){
   const [snapshot]=useState(()=>structuredClone({layout,config})),[settings,setSettings]=useState<PrintSettings & {walls:string[]}>({...initial,comparison:undefined,comparisonName:undefined,walls:initial.walls?.filter(id=>layout.walls.some(w=>w.wallId===id))??layout.walls.map(w=>w.wallId)}),dialog=useRef<HTMLDialogElement>(null),origin=useRef<HTMLElement|null>(null);
   useEffect(()=>{origin.current=document.activeElement as HTMLElement;dialog.current?.showModal();return()=>{requestAnimationFrame(()=>origin.current?.focus());};},[]);
   const [showPages,setShowPages]=useState(false),[comparisonId,setComparisonId]=useState("");
+  const role=snapshot.config.userInfo?.userType??'homeowner',workflow=ROLE_WORKFLOWS[role];
+  const [presetApplied,setPresetApplied]=useState(false);
   const sections=printSections(snapshot.layout,snapshot.config,settings),field='border rounded p-2 w-full';
   return <dialog ref={dialog} aria-labelledby="print-settings-title" onCancel={onClose} className="settings-dialog print-settings-dialog max-h-[90vh] overflow-auto p-5 rounded-xl backdrop:bg-black/40">
     <header className="settings-dialog-header"><div><p className="studio-eyebrow">EXPORT YOUR DESIGN</p><h2 id="print-settings-title" className="text-xl">Print options and preview</h2></div><button onClick={onClose} disabled={busy} aria-label="Close print settings">Close</button></header>
     <p className="settings-editor-hint">Choose the pages and supporting details to share. This export uses a snapshot of the design captured when you opened this window.</p>
     <SettingsNavigation root={dialog} label="Print settings sections" items={[["project","Project & paper"],["content","Drawings & schedules"],["files","Files & comparison"]]}/>
     <fieldset disabled={busy}>
+      <section className="settings-card studio-workflow-print" aria-label={`${workflow.label} print preset`}>
+        <h3>{workflow.label} review package</h3><p className="settings-description">{workflow.printDescription}</p>
+        <button type="button" onClick={()=>{setSettings(current=>rolePrintPreset(role,current,snapshot.layout.walls.map(w=>w.wallId)));setPresetApplied(true);}}>Apply {workflow.label.toLowerCase()} print preset</button>
+        {presetApplied&&<p role="status">Workflow preset applied. Review the selected sections below.</p>}
+      </section>
       <div className="print-settings-grid">
         <div className="settings-form-stack">
           <section className="settings-card" data-settings-section="project" aria-labelledby="print-project-heading"><h3 id="print-project-heading">01 / Project & paper</h3><label>Project title<input maxLength={120} className={field} value={settings.project} onChange={e=>setSettings({...settings,project:e.target.value})}/></label><label>Designer / contact<input maxLength={200} className={field} value={settings.contact} onChange={e=>setSettings({...settings,contact:e.target.value})}/></label><div className="settings-field-grid"><label>Paper size<select className={field} value={settings.paper} onChange={e=>setSettings({...settings,paper:e.target.value as 'A4'})}><option>A4</option><option>Letter</option></select></label><label>Page orientation<select className={field} value={settings.orientation} onChange={e=>setSettings({...settings,orientation:e.target.value as 'portrait'})}><option>portrait</option><option>landscape</option></select></label></div></section>

@@ -9,6 +9,7 @@ import { useDesignStore } from '@/components/configurator/useDesignStore';
 import { RecoveryTools } from '@/components/configurator/RecoveryTools';
 import { ArrowLeft } from 'lucide-react';
 import { STYLE_OPTIONS, WOOD_OPTIONS } from '@/lib/design';
+import { isUserRole, USER_ROLES, ROLE_WORKFLOWS } from '@/lib/userRoles';
 
 export default function ConfigurePage() {
   const store = useDesignStore();
@@ -23,7 +24,7 @@ export default function ConfigurePage() {
       <div className="studio-topbar">
         <div className="studio-shell flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3"><Link href="/" aria-label="Back to home" className="studio-back"><ArrowLeft className="w-4 h-4"/></Link><span className="studio-eyebrow">ALVÉO / DESIGN STUDIO</span></div>
-          <div className="flex items-center gap-4"><span className="studio-save-state" role="status">{!store.ready?'Opening your workspace…':store.draftHealth==='Saved'?'Draft saved on this device':`Draft: ${store.draftHealth}`}</span><label className="studio-mode">Mode <select aria-label="User mode" value={userType} onChange={e=>setConfig(c=>({...c,userInfo:{...c.userInfo!,userType:e.target.value as 'homeowner'|'renter'|'designer'|'browsing'}}))}>{['homeowner','renter','designer','browsing'].map(t=><option key={t}>{t}</option>)}</select></label></div>
+          <div className="flex items-center gap-4"><span className="studio-save-state" role="status">{!store.ready?'Opening your workspace…':store.draftHealth==='Saved'?'Draft saved on this device':`Draft: ${store.draftHealth}`}</span><label className="studio-mode">Mode <select aria-label="User mode" disabled={!store.ready} value={userType} onChange={e=>{const role=e.target.value;if(isUserRole(role))setConfig(c=>({...c,userInfo:{...c.userInfo!,userType:role}}));}}>{USER_ROLES.map(role=><option key={role} value={role}>{ROLE_WORKFLOWS[role].label}</option>)}</select></label></div>
         </div>
       </div>
       <header className="studio-atelier">
@@ -60,6 +61,7 @@ export default function ConfigurePage() {
           <div className="studio-preview min-w-0">
             <LivePreview
               config={config}
+              restored={store.ready}
               savedDesigns={savedDesigns}
               onSaveDesign={store.save}
               onRemoveSavedDesign={store.remove}

@@ -6,7 +6,6 @@ import { ClosetConfiguration, ClosetLayout, ClosetWall, ZoneOverrides, DrawerPos
 import { ClosetLayoutEngine } from '@/engine/ClosetLayoutEngine';
 import { ClosetSVGRenderer } from '@/renderer/ClosetSVGRenderer';
 import { usePreviewExport } from './usePreviewExport';
-import { ExportSettingsDialog } from './ExportSettingsDialog';
 import { renderFloorPlan } from '@/renderer/FloorPlanRenderer';
 import { Download, Layers, Lightbulb, BarChart2, Bookmark, ChevronDown, X, Trash2, Palette, TriangleAlert } from 'lucide-react';
 import type { LibraryActions } from './LibraryTools';
@@ -35,6 +34,12 @@ const SavedDesignDialog = dynamic(() => import('./SavedDesignDialog').then(modul
 const LayoutCanvas = dynamic(() => import('./LayoutCanvas').then(module => module.LayoutCanvas), {
   loading: () => <p role="status">Opening wall editor…</p>,
 });
+const WorkspaceReview = dynamic(() => import('./WorkspaceReview').then(module => module.WorkspaceReview), {
+  loading: () => <p role="status">Opening room review…</p>,
+});
+const ExportSettingsDialog = dynamic(() => import('./ExportSettingsDialog').then(module => module.ExportSettingsDialog), {
+  loading: () => <p role="status">Opening print options…</p>,
+});
 
 interface LivePreviewProps {
   config: Partial<ClosetConfiguration>;
@@ -46,9 +51,11 @@ interface LivePreviewProps {
   onDuplicateSavedDesign?: (id: string) => Promise<boolean>;
   onConfigChange?: (updates: Partial<ClosetConfiguration>) => void;
   libraryActions?:LibraryActions;
+  /** False until the stored draft has been restored, so the drawing is never built from the placeholder config. */
+  restored?:boolean;
 }
 
-export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedDesign, onRenameSavedDesign, onOpenSavedDesign, onDuplicateSavedDesign, onConfigChange, libraryActions }: LivePreviewProps) {
+export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedDesign, onRenameSavedDesign, onOpenSavedDesign, onDuplicateSavedDesign, onConfigChange, libraryActions, restored=true }: LivePreviewProps) {
   const [activeTab, setActiveTab] = useState<'drawing' | 'summary' | 'tips' | 'style'>('drawing');
   const [activeWallIdx, setActiveWallIdx] = useState(0);
   const [selectedZone,setSelectedZone]=useState<{wall:string;index:number}|null>(null);
@@ -90,7 +97,7 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
     }
   };
 
-  const isReady = !!(config.dimensions?.width && config.wardrobe && config.shoes && config.userInfo);
+  const isReady = !!(restored && config.dimensions?.width && config.wardrobe && config.shoes && config.userInfo);
 
   const calculationKey=layoutInputKey(config,zoneOverrides);
   const calculation = useMemo(() => {
@@ -284,7 +291,8 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
 
       {showExportSettings&&layout&&<ExportSettingsDialog layout={layout} config={config} initial={settings} activeWall={layout.walls[activeWallIdx]?.wallId} savedDesigns={savedDesigns} onExport={handleExport} onClose={()=>setShowExportSettings(false)} busy={isExporting}/>}
       <button className="studio-library-button text-sm self-start" onClick={() => setShowCustomModal(true)}>Manage saved designs ({savedDesigns.length})</button>
-      <StudioGuide onAction={openStudioTool} hasLayout={!!layout} hasDrawers={drawers.length > 0} canEdit={!!onConfigChange} hasFloorPlan={!!layout&&!['reach-in','wardrobe-wall'].includes(layout.closetType)}/>
+      <StudioGuide role={config.userInfo?.userType} onAction={openStudioTool} hasLayout={!!layout} hasDrawers={drawers.length > 0} canEdit={!!onConfigChange} hasFloorPlan={!!layout&&!['reach-in','wardrobe-wall'].includes(layout.closetType)}/>
+      {layout&&config.userInfo&&config.userInfo.userType!=='browsing'&&<WorkspaceReview role={config.userInfo.userType} preferences={config.userInfo} layout={layout} onAction={openStudioTool}/>}
       <div hidden={activeTab!=='drawing'||showSpatial||showFloorPlan} className="studio-display-options flex flex-wrap gap-3 text-sm"><label><input type="checkbox" checked={showDimensions} onChange={e => setShowDimensions(e.target.checked)} /> Dimensions</label><label><input type="checkbox" checked={showLabels} onChange={e => setShowLabels(e.target.checked)} /> Labels</label><label><input type="checkbox" checked={highContrast} onChange={e=>setHighContrast(e.target.checked)}/> High contrast drawing</label></div>
       {/* Tabs */}
       <div role="tablist" aria-label="Preview views" className="flex flex-wrap bg-cream-100 rounded-lg p-1">
@@ -365,7 +373,7 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
                 <>
                 <div hidden={showSpatial||showFloorPlan}><DrawingCanvas key={layout?.walls[safeWallIdx]?.wallId} viewKey={layout?.walls[safeWallIdx]?.wallId} views={views.current} svg={svgContent} onDrawerClick={setEditingDrawer} selectedDrawer={editingDrawer} selectedZone={selectedZone?.wall===layout?.walls[safeWallIdx]?.wallId?selectedZone?.index:null} highContrast={highContrast}/></div>
                 {onConfigChange&&layout?.walls[safeWallIdx]&&!showSpatial&&!showFloorPlan&&<p className="my-3"><button className="border rounded px-3 py-2 text-sm" data-rearrange-wall={layout.walls[safeWallIdx].wallId} onClick={()=>setRearranging(layout.walls[safeWallIdx].wallId)}>Rearrange elements on this wall{zoneOverrides.columns?.[layout.walls[safeWallIdx].wallId]?.length?' · Customized':''}</button></p>}
-                {rearrangingWall&&<LayoutCanvas wall={rearrangingWall} stored={zoneOverrides.columns?.[rearrangingWall.wallId]} onClose={()=>setRearranging(null)}
+                {rearrangingWall&&<LayoutCanvas wall={rearrangingWall} fitAllowances={config.planning?.walls?.[rearrangingWall.wallId]} stored={zoneOverrides.columns?.[rearrangingWall.wallId]} onClose={()=>setRearranging(null)}
                   onCommit={cols=>{const next={...(zoneOverrides.columns??{})};if(cols)next[rearrangingWall.wallId]=cols;else delete next[rearrangingWall.wallId];
                     setZoneOverrides({...zoneOverrides,columns:Object.keys(next).length?next:undefined});setWarningsDismissed(new Set());}}/>}
                 {onConfigChange&&drawers.length>0&&<details className="border rounded-lg p-3 mt-3"><summary className="font-semibold">Drawer organizers</summary><p className="text-sm my-2">Click a drawer face above, or choose one below, to design its compartments.</p><div className="flex flex-wrap gap-2">{drawers.map(d=><button key={d.id} data-drawer-open={d.id} className="border rounded px-3 py-2 text-sm" onClick={()=>{setActiveWallIdx(layout?.walls.findIndex(w=>w.wallId===d.id.split(':')[0])??0);setEditingDrawer(d.id);}}>{d.label}{organizers[d.id]?' · Customized':''}</button>)}</div><label className="block my-2 text-sm"><input type="checkbox" checked={openIllustration} onChange={e=>setOpenIllustration(e.target.checked)}/> Show open-drawer illustration</label>{openIllustration&&<button onClick={()=>setEditingDrawer(drawers[0].id)} aria-label="Design compartments from open drawer illustration"><svg viewBox="0 0 240 140" role="img" aria-label="Open drawer illustration"><path d="M30 25 H190 V80 H30 Z" fill="#d5b995" stroke="#66523a"/><path d="M30 45 L10 105 H170 L190 45 Z" fill="#eee1ca" stroke="#66523a"/><path d="M10 105 H170 V130 H10 Z" fill="#b7966e" stroke="#66523a"/><path d="M70 117 H110" stroke="#242424" strokeWidth="4"/><text x="95" y="80" fontSize="12" textAnchor="middle">Design compartments</text></svg></button>}</details>}
@@ -374,6 +382,9 @@ export function LivePreview({ config, savedDesigns, onSaveDesign, onRemoveSavedD
                 {targetDrawer&&onConfigChange&&<DrawerDesigner key={targetDrawer.id} target={targetDrawer} targets={drawers} existing={organizers} value={organizers[targetDrawer.id]} clipboard={drawerClipboard} onCopy={setDrawerClipboard} onClose={()=>setEditingDrawer(null)} locationSVG={svgContent} onRemove={()=>{const next={...organizers};delete next[targetDrawer.id];onConfigChange({drawerInteriors:next});}} onApply={(ids,plan)=>{const next={...organizers};ids.forEach(id=>{next[id]={...structuredClone(plan),identity:drawers.find(d=>d.id===id)?.identity};});onConfigChange({drawerInteriors:next});}}/>}
 
                 </>
+              ) : !restored ? (
+                /* ── Draft not restored yet — never draw the placeholder config ── */
+                <p className="py-10 text-center text-sm text-charcoal-400" role="status">Opening your workspace…</p>
               ) : isReady ? (
                 /* ── Ready but SVG failed ── */
                 <div className="py-10 text-center space-y-2">

@@ -3,15 +3,14 @@
 import React, { useState } from 'react';
 import { motion } from 'framer-motion';
 import { useRouter } from 'next/navigation';
-import { Home, Users, Palette, Eye } from 'lucide-react';
+import { Home, Users, Palette, Eye, Ruler } from 'lucide-react';
 
-type UserType = 'homeowner' | 'renter' | 'designer' | 'browsing';
+import type { UserRole as UserType } from '@/types/closet';
+import { ROLE_WORKFLOWS } from '@/lib/userRoles';
 
 interface UserTypeOption {
   type: UserType;
   icon: React.ComponentType<any>;
-  title: string;
-  description: string;
   color: string;
 }
 
@@ -19,29 +18,26 @@ const userTypes: UserTypeOption[] = [
   {
     type: 'homeowner',
     icon: Home,
-    title: 'Homeowner',
-    description: 'Planning a renovation or new build',
     color: 'bg-taupe-100 border-taupe-300 hover:bg-taupe-200'
   },
   {
     type: 'renter',
     icon: Users,
-    title: 'Renter',
-    description: 'Making the most of existing space',
     color: 'bg-cream-100 border-cream-300 hover:bg-cream-200'
   },
   {
     type: 'designer',
     icon: Palette,
-    title: 'Interior Designer',
-    description: 'Planning for a client',
     color: 'bg-charcoal-100 border-charcoal-300 hover:bg-charcoal-200'
+  },
+  {
+    type: 'architect',
+    icon: Ruler,
+    color: 'bg-taupe-100 border-taupe-300 hover:bg-taupe-200'
   },
   {
     type: 'browsing',
     icon: Eye,
-    title: 'Just Browsing',
-    description: 'Looking for inspiration',
     color: 'bg-gray-100 border-gray-300 hover:bg-gray-200'
   }
 ];
@@ -54,7 +50,7 @@ export function UserTypeSelector() {
     setSelectedType(type);
     
     // Store user type in sessionStorage for later use
-    try { sessionStorage.setItem('userType', type); } catch { /* Navigation still works without storage. */ }
+    try { sessionStorage.setItem('userType', type); sessionStorage.setItem('alveo-pending-role',type); } catch { /* Navigation still works without storage. */ }
     
     // Navigate to configure page after a brief delay
     setTimeout(() => {
@@ -94,10 +90,10 @@ export function UserTypeSelector() {
                 
                 <div className="flex-1">
                   <h3 className="font-serif text-2xl font-semibold text-charcoal-600 mb-2">
-                    {option.title}
+                    {ROLE_WORKFLOWS[option.type].label}
                   </h3>
                   <p className="text-charcoal-500 text-lg">
-                    {option.description}
+                    {ROLE_WORKFLOWS[option.type].introduction}
                   </p>
                 </div>
               </div>

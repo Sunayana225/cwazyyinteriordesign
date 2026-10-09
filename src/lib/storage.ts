@@ -4,6 +4,7 @@ import type { ClosetConfiguration, SavedDesign } from '@/types/closet';
 import { validInteriors, interiorIssue } from './drawers';
 import { validPlanning, canonicalPlanning, planningIssues } from './planning';
 import { validColumns, columnsIssue } from './layoutColumns';
+import { isUserRole, USER_ROLES } from './userRoles';
 
 export const SAVED_KEY = 'alveo-saved-designs';
 export const DRAFT_KEY = 'alveo-draft';
@@ -53,7 +54,7 @@ export function validConfig(value: unknown): value is ClosetConfiguration {
     Object.keys(DEFAULT_CONFIG.dimensions).every(k => finite(c.dimensions[k as keyof typeof c.dimensions])) &&
     (c.roomDimensions === undefined || (record(c.roomDimensions) && finite(c.roomDimensions.roomWidth) && finite(c.roomDimensions.roomDepth))) &&
     counts(c.wardrobe, DEFAULT_CONFIG.wardrobe) && counts(c.shoes, DEFAULT_CONFIG.shoes) &&
-    record(c.userInfo) && ['homeowner', 'renter', 'designer', 'browsing'].includes(c.userInfo.userType) &&
+    record(c.userInfo) && isUserRole(c.userInfo.userType) &&
     STYLES.includes(c.userInfo.stylePreference) && FINISHES.includes(c.userInfo.woodFinish) &&
     ['many-small', 'few-large', 'mixed'].includes(c.userInfo.drawerPreference) &&
     Array.isArray(c.userInfo.priorityItems) && c.userInfo.priorityItems.every(p => ['hanging', 'shoes', 'folded', 'accessories'].includes(p)) &&
@@ -115,7 +116,7 @@ export function invalidConfigurationField(value:unknown):string{
     for(const field of Object.keys(defaults)){const v=c[block][field];if(field==='jewelry'?typeof v!=='boolean':!finite(v)||!Number.isInteger(v))return `${block}.${field}`;}
   }
   if(!record(c.userInfo))return 'userInfo';
-  for(const [field,values]of [['userType',['homeowner','renter','designer','browsing']],['stylePreference',STYLES],['woodFinish',FINISHES],['drawerPreference',['many-small','few-large','mixed']]] as const)if(!(values as readonly string[]).includes(c.userInfo[field]))return `userInfo.${field}`;
+  for(const [field,values]of [['userType',USER_ROLES],['stylePreference',STYLES],['woodFinish',FINISHES],['drawerPreference',['many-small','few-large','mixed']]] as const)if(!(values as readonly string[]).includes(c.userInfo[field]))return `userInfo.${field}`;
   if(!Array.isArray(c.userInfo.priorityItems))return 'userInfo.priorityItems';
   const priority=c.userInfo.priorityItems.findIndex((v:unknown)=>!['hanging','shoes','folded','accessories'].includes(v as string));if(priority>=0)return `userInfo.priorityItems[${priority}]`;
   if(c.zoneOverrides!==undefined&&!record(c.zoneOverrides))return 'zoneOverrides';

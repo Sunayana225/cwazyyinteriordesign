@@ -161,7 +161,8 @@ export function DimensionsStep({ config, onUpdate, userType, onValidityChange }:
     switch (userType) {
       case 'renter':    return "Measure carefully — we'll design around your existing space constraints";
       case 'homeowner': return 'Planning new construction? We can suggest optimal dimensions too';
-      case 'designer':  return "Professional tip: We'll handle all the clearance calculations";
+      case 'designer':  return 'Confirm the client survey, then coordinate finishes and interior details';
+      case 'architect': return 'Record survey dimensions, then review openings, offsets and clearance assumptions';
       default:          return "Measure wall-to-wall — we'll account for baseboards and trim";
     }
   };

@@ -442,3 +442,32 @@
 .gallery-closing{text-align:center;margin-top:80px;background:#e9ede5;padding:60px 24px;border-radius:8px}.gallery-closing h2{font-family:Georgia,serif;font-size:clamp(30px,4vw,48px);line-height:1.15}.gallery-closing>p:not(.gallery-eyebrow){max-width:520px;margin:20px auto;font-size:14px;line-height:1.8;color:#526354}.gallery-closing a{display:inline-flex;gap:20px;align-items:center;background:#283e37;color:white;padding:15px 24px;border-radius:4px;font-size:14px}.gallery-disclaimer{font-size:11px;text-align:center;color:#626e61;line-height:1.7;margin:24px auto;max-width:700px}
 .gallery-studio :is(button,a):focus-visible{outline:3px solid #ab7840;outline-offset:4px}
 @media(max-width:760px){.gallery-studio{padding-top:95px}.gallery-intro{grid-template-columns:1fr;gap:24px;padding-bottom:36px}.gallery-intro-note{justify-self:start}.gallery-toolbar{align-items:stretch;flex-direction:column;gap:12px}.gallery-view{align-self:flex-start}.gallery-grid{grid-template-columns:1fr;gap:28px}.gallery-art{height:300px}.gallery-card-body{padding:20px}.gallery-card-title h2{font-size:26px}.gallery-collection-meta>p:last-child{display:none}.gallery-closing{margin-top:40px}.gallery-specs{gap:8px}.gallery-specs dd{font-size:12px}}
+
+/* Workspace guidance follows the selected role while keeping every tool reachable. */
+.studio-guide-intro .studio-role-label { margin:0 0 6px; font-size:10px; letter-spacing:.13em; text-transform:uppercase; color:#6b5030; }
+.studio-role-note { margin-top:14px; font-size:12px; line-height:1.6; color:#675848; }
+.studio-workflow-print { margin-bottom:18px; }
+
+.studio-role-review { margin:12px 0 18px; padding:18px; border:1px solid #d8c8b0; border-radius:4px; background:#fffcf7; color:#4d3c28; }
+.studio-role-review-heading { display:flex; flex-wrap:wrap; justify-content:space-between; gap:8px; align-items:center; }
+.studio-role-review h3 { font-size:20px; color:#3c3022; }
+.studio-role-review-heading>span { font-size:10px; letter-spacing:.08em; text-transform:uppercase; }
+.studio-role-metrics { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin:14px 0; }
+.studio-role-metrics button { padding:12px; border:1px solid #dfd0bb; text-align:left; background:#f6f0e6; }
+.studio-role-metrics strong { display:block; font-size:22px; font-weight:500; }
+.studio-role-metrics span { display:block; font-size:11px; line-height:1.5; }
+.studio-role-review :is(p,li) { font-size:12px; line-height:1.6; margin:8px 0; }
+.studio-role-review ul { list-style:disc; padding-left:20px; }
+.studio-role-review summary { font-size:12px; padding:10px 0; cursor:pointer; }
+.studio-role-next { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:16px; margin-top:14px; background:#f4ecdf; border-left:3px solid #967447; }
+.studio-role-next h4 { font-size:16px; margin-top:5px; }
+.studio-role-next>div>span { font-size:10px; letter-spacing:.1em; text-transform:uppercase; }
+.studio-role-next button { flex-shrink:0; background:#493a29; color:#fffaf3; border-radius:3px; padding:11px 14px; font-size:12px; }
+.studio-role-palette { margin-top:14px; padding:0 2px 12px; border-bottom:1px solid #dfd0bb; }
+.studio-role-palette button,.studio-role-link { font-size:12px; text-decoration:underline; text-underline-offset:3px; padding:8px 12px 8px 0; }
+@media(max-width:520px) { .studio-role-next { flex-direction:column; align-items:stretch; } }
+.studio-role-table { overflow-x:auto; }
+.studio-role-table table { border-collapse:collapse; width:100%; font-size:12px; }
+.studio-role-table :is(th,td) { padding:10px 8px; border-bottom:1px solid #dfd0bb; text-align:left; }
+.studio-role-table caption { text-align:left; padding:8px; font-size:11px; }
+@media(max-width:520px) { .studio-role-metrics { grid-template-columns:1fr; } .studio-role-metrics button { display:flex; align-items:center; gap:12px; } }

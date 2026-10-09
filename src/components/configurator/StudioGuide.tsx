@@ -2,8 +2,12 @@
 
 import { useEffect, useRef, useState } from 'react';
 import { ArrowUpRight, BookOpen, Search } from 'lucide-react';
+import Link from 'next/link';
+import { ROLE_WORKFLOWS } from '@/lib/userRoles';
+import type { StudioTool } from '@/lib/userRoles';
+import type { UserRole } from '@/types/closet';
 
-export type StudioTool = 'drawers' | 'arrange' | 'style' | 'spatial' | 'floor' | 'fit' | 'room' | 'inventory' | 'library' | 'print';
+export type { StudioTool } from '@/lib/userRoles';
 
 const TOOLS: { id: StudioTool; title: string; description: string; keywords: string }[] = [
   { id: 'drawers', title: 'Design drawer compartments', description: 'Divide a drawer, choose an organizer template, and size each compartment.', keywords: 'jewelry jewellery tray dividers watches rings' },
@@ -18,9 +22,11 @@ const TOOLS: { id: StudioTool; title: string; description: string; keywords: str
   { id: 'print', title: 'Prepare drawings for export', description: 'Choose paper, measurements, and project details before printing.', keywords: 'pdf download print share' },
 ];
 
-export function StudioGuide({ onAction, hasLayout, hasDrawers, canEdit, hasFloorPlan }: {
+export function StudioGuide({ onAction, hasLayout, hasDrawers, canEdit, hasFloorPlan, role='homeowner' }: {
   onAction: (tool: StudioTool) => void; hasLayout: boolean; hasDrawers: boolean; canEdit: boolean; hasFloorPlan: boolean;
+  role?:UserRole;
 }) {
+  const workflow=ROLE_WORKFLOWS[role];
   const [query, setQuery] = useState('');
   const searchRef = useRef<HTMLInputElement>(null);
   const [showStarter, setShowStarter] = useState(true);
@@ -32,18 +38,25 @@ export function StudioGuide({ onAction, hasLayout, hasDrawers, canEdit, hasFloor
     setShowStarter(next);
     try { localStorage.setItem('alveo-studio-guide-collapsed', String(!next)); } catch { /* Keep the current session preference. */ }
   };
-  const available = TOOLS.filter(tool => tool.id !== 'floor' || hasFloorPlan);
+  const rank=(id:StudioTool)=>{const index=workflow.tools.indexOf(id);return index<0?workflow.tools.length:index;};
+  const available = TOOLS.filter(tool => tool.id !== 'floor' || hasFloorPlan).sort((a,b)=>rank(a.id)-rank(b.id));
   const matches = available.filter(tool => `${tool.title} ${tool.description} ${tool.keywords}`.toLowerCase().includes(query.trim().toLowerCase()));
   const unavailable = (tool: StudioTool) => tool === 'library' ? '' : !hasLayout ? 'Complete your room and inventory first.' :
     ['drawers', 'arrange', 'style', 'room', 'inventory'].includes(tool) && !canEdit ? 'Editing is unavailable in this preview.' :
     tool === 'drawers' && !hasDrawers ? 'Add folded clothes or jewelry to include drawers.' : '';
   return <section id="studio-guide" className="studio-guide" aria-labelledby="studio-guide-title" tabIndex={-1}>
-    <div className="studio-guide-intro"><BookOpen size={18} aria-hidden="true"/><div><h3 id="studio-guide-title">Make this design your own</h3><p>Start with your room and wardrobe, then refine the details.</p></div><button type="button" className="studio-guide-toggle" aria-expanded={showStarter} aria-controls="studio-getting-started" onClick={toggleStarter}>{showStarter ? 'Hide getting started' : 'Show getting started'}</button></div>
+    <div className="studio-guide-intro"><BookOpen size={18} aria-hidden="true"/><div><p className="studio-role-label">{workflow.label} workspace</p><h3 id="studio-guide-title">{workflow.heading}</h3><p>{workflow.description}</p></div><button type="button" className="studio-guide-toggle" aria-expanded={showStarter} aria-controls="studio-getting-started" onClick={toggleStarter}>{showStarter ? 'Hide getting started' : 'Show getting started'}</button></div>
     <div id="studio-getting-started" className="studio-guide-start" hidden={!showStarter}>
-      <a href="#design-brief" onClick={() => document.getElementById('design-brief')?.focus()}><span>01</span><strong>Set your brief</strong><small>Shape, measurements & inventory</small></a>
-      <button type="button" disabled={!!unavailable('drawers')} onClick={() => onAction('drawers')}><span>02</span><strong>Customize a drawer</strong><small>{unavailable('drawers') || 'Try templates, dividers & labels'}</small></button>
-      <button type="button" disabled={!!unavailable('fit')} onClick={() => onAction('fit')}><span>03</span><strong>Review what fits</strong><small>Capacity, shortfalls & alternatives</small></button>
+      {workflow.tasks.map((task,index)=>{
+        const content=<><span>{String(index+1).padStart(2,'0')}</span><strong>{task.title}</strong><small>{task.action==='brief'||task.action==='gallery'?task.detail:unavailable(task.action)||task.detail}</small></>;
+        if(task.action==='brief')return <a key={task.action} href="#design-brief" onClick={()=>document.getElementById('design-brief')?.focus()}>{content}</a>;
+        if(task.action==='gallery')return <Link key={task.action} href="/gallery">{content}</Link>;
+        const tool=task.action;
+        return <button key={tool} type="button" disabled={!!unavailable(tool)} onClick={()=>onAction(tool)}>{content}</button>;
+      })}
     </div>
+    {role==='renter'&&<p className="studio-role-note">This mode helps plan around existing features. Installation permissions and anchoring still need to be checked for the selected furniture.</p>}
+    {role==='browsing'&&<p className="studio-role-note">Gallery designs are editable starting points. Replace their measurements and inventory before assessing your own storage fit.</p>}
     <details className="studio-tool-directory">
       <summary>Explore all design tools <span>{available.length} tools</span></summary>
       <label className="studio-tool-search"><Search size={16} aria-hidden="true"/><span className="sr-only">Find a design tool</span><input ref={searchRef} type="search" placeholder="Try “jewelry”, “windows”, or “PDF”" value={query} onChange={event => setQuery(event.target.value)}/></label>

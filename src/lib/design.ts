@@ -1,7 +1,31 @@
 import type { ClosetConfiguration, ClosetLayout, ClosetWall, WardrobeItems } from '@/types/closet';
 import { MAX_DIMENSION, MAX_HEIGHT, MAX_CABINET_DEPTH } from './planning';
+import { MEASUREMENT_MINIMUMS } from './measurementPolicy';
 
-export const LIMITS = { width: 36, height: 84, depthMin: 18, depthMax: MAX_CABINET_DEPTH, roomDepth: 48, widthMax:MAX_DIMENSION,heightMax:MAX_HEIGHT,roomDepthMax:MAX_DIMENSION };
+/** Floors are what the generator can still draw something sensible for, not a
+ * recommendation. Small spaces are real closets — a 24 in linen press, a 60 in
+ * kids' or under-stair closet, a 14 in coat press — so the engine degrades the
+ * elements it offers instead of refusing the measurement. See ELEMENT_FIT. */
+export const LIMITS = { width: MEASUREMENT_MINIMUMS.width, height: MEASUREMENT_MINIMUMS.height, depthMin: MEASUREMENT_MINIMUMS.depth, depthMax: MAX_CABINET_DEPTH, roomDepth: MEASUREMENT_MINIMUMS.roomDepth, widthMax:MAX_DIMENSION,heightMax:MAX_HEIGHT,roomDepthMax:MAX_DIMENSION };
+/** Smallest clear height and cabinet depth each element physically needs, in inches.
+ * Depth is the constraint most often missed: a garment on a hanger needs roughly
+ * 20 in front-to-back, so a shallow cabinet gets shelves and drawers, never a rod. */
+export const ELEMENT_FIT = {
+  'long-hang':    { height: 68, depth: 20 },
+  'short-hang':   { height: 30, depth: 20 },
+  'shoe-shelves': { height: 20, depth: 12 },
+  'drawers':      { height: 12, depth: 12 },
+  'top-shelves':  { height: 15, depth: 9  },
+} as const;
+export type FittedElement = keyof typeof ELEMENT_FIT;
+/** Non-usable base gap below the lowest element, in inches. Shared so the engine and
+ * the layout canvas compute the same clear height. */
+export const TOE_KICK = 3;
+/** Whether an element can physically be built in a cabinet of this height and depth. */
+export function elementFits(element:FittedElement,height:number,depth:number){
+  const need=ELEMENT_FIT[element];
+  return height>=need.height&&depth>=need.depth;
+}
 export function dimensionRange(field:string){return (field==='height'||field==='cabinetHeight')?{min:LIMITS.height,max:LIMITS.heightMax}:field==='depth'?{min:LIMITS.depthMin,max:LIMITS.depthMax}:field==='roomDepth'?{min:LIMITS.roomDepth,max:LIMITS.roomDepthMax}:{min:LIMITS.width,max:LIMITS.widthMax};}
 export const SHOE_SPACING = { boots: 25, heels: 8, sneakers: 8, flats: 6 };
 export const SHOE_PAIR_WIDTH = { boots: 7, heels: 4, sneakers: 5, flats: 4 };

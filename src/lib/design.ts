@@ -1,7 +1,7 @@
 import type { ClosetConfiguration, ClosetLayout, ClosetWall, WardrobeItems, DrawerConfig } from '@/types/closet';
 import { MAX_DIMENSION, MAX_HEIGHT, MAX_CABINET_DEPTH } from './planning';
 import { MEASUREMENT_MINIMUMS } from './measurementPolicy';
-import { hangerSpacing, SHOE_WIDTH_DEFAULTS, shoeLengths } from './fitMeasurements';
+import { hangerSpacing, SHOE_WIDTH_DEFAULTS, shoeLengths, bagDimensions } from './fitMeasurements';
 import type { PlanningOptions } from '@/types/closet';
 
 /** Floors are what the generator can still draw something sensible for, not a
@@ -125,7 +125,7 @@ export function capacityReport(c: Pick<ClosetConfiguration, 'wardrobe' | 'shoes'
     { label: 'Short hanging (suits count twice)', required: demand.short, available: rodCapacity(false), unit: 'inches of rod' },
     { label: 'Folded storage', required: foldedDemand(c.wardrobe), available: drawers.filter(d => d.purpose === 'folded').reduce((n,d) => n + foldedDrawerCapacity(d), 0), unit: 'standard drawer equivalents' },
     ...Object.keys(SHOE_SPACING).map(key => ({ label: key, required: c.shoes[key as keyof typeof SHOE_SPACING], available: shelves.filter(s => s.purpose === key&&Number.isFinite(s.depth)&&s.depth>=lengths[key as keyof typeof SHOE_SPACING]).reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'pairs' })),
-    { label: 'Bags', required: c.wardrobe.bags, available: shelves.filter(s => s.purpose === 'bags').reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'bags' },
+    { label: 'Bags', required: c.wardrobe.bags, available: shelves.filter(s => s.purpose === 'bags'&&s.spacing>=bagDimensions(c.planning).height).reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'bags' },
     { label: 'Belts', required: c.wardrobe.belts, available: shelves.filter(s => s.purpose === 'belts').reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'belts' },
   ];
 }

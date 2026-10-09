@@ -213,6 +213,7 @@ export interface PlanningOptions {
   shoeHeights?:ShoeCollection;
   shoePairWidths?:Partial<ShoeCollection>;
   shoeLengths?:Partial<ShoeCollection>;
+  bagDimensions?:{width?:number;height?:number};
   supportSpan?:number;
   clearanceTarget?:number;
   walls?:Partial<Record<ClosetWall['wallId'],{depth?:number;priority?:'default'|'hanging'|'shoes'|'folded'|'accessories';ceilingHeight?:number;baseboard?:number;floorOffset?:number}>>;

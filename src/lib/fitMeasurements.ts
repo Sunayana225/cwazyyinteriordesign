@@ -12,6 +12,17 @@ function shoeMeasurements(defaults:ShoeCollection,values:Partial<ShoeCollection>
 }
 export const shoePairWidths=(p?:PlanningOptions)=>shoeMeasurements(SHOE_WIDTH_DEFAULTS,p?.shoePairWidths,GENERATOR_CAPABILITIES.roomSpan);
 export const shoeLengths=(p?:PlanningOptions)=>shoeMeasurements(SHOE_LENGTH_DEFAULTS,p?.shoeLengths,GENERATOR_CAPABILITIES.cabinetDepth);
+export function bagDimensions(p?:PlanningOptions):{width:number;height:number} {
+  const width=p?.bagDimensions?.width,height=p?.bagDimensions?.height;
+  return {
+    width:typeof width==='number'&&Number.isFinite(width)&&width>=.125&&width<=GENERATOR_CAPABILITIES.roomSpan?width:10,
+    height:typeof height==='number'&&Number.isFinite(height)&&height>=.125&&height<=GENERATOR_CAPABILITIES.ceilingHeight?height:p?.accessoryShelfOpening??14,
+  };
+}
+export function bagAssumptions(p?:PlanningOptions):string {
+  const size=bagDimensions(p);
+  return `Bag envelope: ${size.width} in wide including handles and side clearance; ${size.height} in high including raised handles and access clearance. Measure the largest bag you plan to store. Unmeasured width defaults to 10 in; unmeasured height follows the minimum accessory shelf opening. Shelf depth and individual bag shapes still need verification.`;
+}
 export function shoeAssumptions(p?:PlanningOptions):string {
   const widths=shoePairWidths(p),lengths=shoeLengths(p);
   return `Shoe measurements: ${Object.keys(widths).map(key=>`${key} pair width ${widths[key as keyof ShoeCollection]} in, length ${lengths[key as keyof ShoeCollection]} in`).join('; ')}. Pair width includes both shoes and side clearance. Length includes front-to-back clearance; a pair counts only when its shelf is deep enough. Defaults are estimates.`;

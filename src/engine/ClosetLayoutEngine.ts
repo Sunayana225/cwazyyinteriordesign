@@ -8,7 +8,7 @@ import { reserveInventory, validInventoryPlanning } from '@/lib/inventoryPlannin
 import { validColumns, resolveColumns, COLUMN_MIN_WIDTH } from '@/lib/layoutColumns';
 import type { ZoneOverrides, LayoutColumn } from '@/types/closet';
 import { EMPTY_WARDROBE, LIMITS, SHOE_SPACING, foldedDemand, hangingDemand, capacityReport, ELEMENT_FIT, elementFits, TOE_KICK } from '@/lib/design';
-import { shoeLengths } from '@/lib/fitMeasurements';
+import { shoeLengths, bagDimensions } from '@/lib/fitMeasurements';
 import { MAX_DIMENSION, MAX_HEIGHT, MAX_INVENTORY, validPlanning, freeSpans, wallFootprint, overlaps } from '@/lib/planning';
 import type { PlanningOptions } from '@/types/closet';
 ﻿import {
@@ -266,7 +266,7 @@ export class ClosetLayoutEngine {
         case 'drawers':      this.addDrawerZone(zones, curX, w, TOE_KICK, Math.max(drawerH, Math.min(top, DRAWER_STD + DRAWER_MARG * 2))); break;
         case 'top-shelves':
           zones.push({ type: 'top-shelves', x: curX, y: TOE_KICK, width: w, height: top,
-            shelves: accessoryShelves(w,top,this.D,this.wardrobe.bags,false,this.planning.accessoryShelfOpening),
+            shelves: accessoryShelves(w,top,this.D,this.wardrobe.bags,false,this.planning.accessoryShelfOpening,this.planning.bagDimensions),
             contentLabel: 'Shelves and accessories' });
           break;
         default:
@@ -321,10 +321,10 @@ export class ClosetLayoutEngine {
     if(edited && edited.length<(this.columns[wallId]?.length??0))this.inputWarnings.push(`${label}: some edited columns cannot meet their minimum widths in this span. Widen the span or revise the column types.`);
     const wantsAccessories = this.wardrobe.bags > 0 || this.wardrobe.belts > 0;
     const reserve = !edited && wantsAccessories && ['all', 'drawers-only', 'drawers-and-shoes'].includes(role) && width >= 48
-      ? Math.min(width / 2, this.prefs.priorityItems.includes('accessories') ? 36 : 24) : 0;
+      ? Math.min(width / 2, Math.max(this.prefs.priorityItems.includes('accessories') ? 36 : 24,this.wardrobe.bags>0?bagDimensions(this.planning).width+4:0)) : 0;
     const zones = edited ? this.buildZonesFromColumns(edited, width) : this.buildZonesForRole(role, width - reserve);
     if (reserve) {
-      const shelves=accessoryShelves(reserve,this.H-TOE_KICK,this.D,this.wardrobe.bags,this.wardrobe.belts>0,this.planning.accessoryShelfOpening);
+      const shelves=accessoryShelves(reserve,this.H-TOE_KICK,this.D,this.wardrobe.bags,this.wardrobe.belts>0,this.planning.accessoryShelfOpening,this.planning.bagDimensions);
       zones.push({ type: 'top-shelves', x: width - reserve, y: TOE_KICK, width: reserve, height: this.H - TOE_KICK, shelves, contentLabel: 'Bags, accessories and adjustable shelves' });
     }
     // Retain useful shelves when the requested elements cannot fit. Never fill a

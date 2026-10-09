@@ -1,5 +1,5 @@
 'use client';
-import { HANGER_LABELS, hangerSpacing, shoePairWidths, shoeLengths, type HangingCategory } from '@/lib/fitMeasurements';
+import { HANGER_LABELS, hangerSpacing, shoePairWidths, shoeLengths, bagDimensions, type HangingCategory } from '@/lib/fitMeasurements';
 import dynamic from 'next/dynamic';
 import { layoutInputKey } from '@/lib/preview';
 import type { ObstacleProposal } from './ObstacleMovePreview';
@@ -61,6 +61,7 @@ export function PlanningControls({config,layout,onChange}:{config:Partial<Closet
           <Measure label={`${key} shoe clearance`} min={2} max={36} value={p.shoeHeights?.[key as keyof typeof SHOE_SPACING]??SHOE_SPACING[key as keyof typeof SHOE_SPACING]} onChange={n=>update({shoeHeights:{...SHOE_SPACING,...p.shoeHeights,[key]:n}})}/>
         </div></fieldset>)}
       </fieldset>
+      <fieldset className="mb-4"><legend className="font-semibold mb-2">Bags</legend><p className="text-xs mb-2">Measure your largest bag with its handles raised, including side and access clearance.</p><div className="grid grid-cols-2 gap-2"><Measure label="Bag width including handles" min={.125} value={bagDimensions(p).width} onChange={width=>update({bagDimensions:{...p.bagDimensions,width}})}/><Measure label="Bag height including handles" min={.125} max={MAX_HEIGHT} value={bagDimensions(p).height} onChange={height=>update({bagDimensions:{...p.bagDimensions,height}})}/></div></fieldset>
       <fieldset><legend className="font-semibold mb-2">Shelves and access</legend><div className="grid grid-cols-2 gap-2"><Measure label="Minimum accessory shelf opening" min={8} max={36} value={p.accessoryShelfOpening??14} onChange={accessoryShelfOpening=>update({accessoryShelfOpening})}/><Measure label="Maximum unsupported shelf span" min={12} max={48} value={p.supportSpan??32} onChange={supportSpan=>update({supportSpan})}/><Measure label="Personal aisle clearance target" min={18} max={72} value={p.clearanceTarget??36} onChange={clearanceTarget=>update({clearanceTarget})}/></div></fieldset>
     <label className="flex items-start gap-2 my-3"><input type="checkbox" className="mt-1" checked={p.upperStorage!==false} onChange={e=>update({upperStorage:e.target.checked})}/><span>Use spare upper space for shelves<span className="block text-xs text-gray-600">Adds seasonal storage above rods and shoe openings when the minimum shelf opening fits. Turn off to leave those spaces open.</span></span></label>
     <p className="text-xs">The personal target is not a building-code assessment. Narrowest modeled storage aisle: {aisles.narrowest.name}, {aisles.narrowest.width.toFixed(2)} in. Room obstacles and door conflicts are checked separately.</p>

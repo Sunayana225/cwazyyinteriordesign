@@ -13,6 +13,13 @@ export function planningIssues(value:unknown):string[] {
   const number=(o:Record<string,unknown>,key:string,min:number,max:number,path:string,optional=false)=>{if(!(optional&&o[key]===undefined)&&!num(o[key],min,max))errors.push(`${path}.${key}: expected a number from ${min} to ${max}`);};
   const choice=(o:Record<string,unknown>,key:string,values:readonly string[],path:string,optional=false)=>{if(!(optional&&o[key]===undefined)&&!values.includes(o[key] as string))errors.push(`${path}.${key}: expected ${values.join(', ')}`);};
   number(value,'accessoryShelfOpening',8,36,'planning',true);
+  if(value.bagDimensions!==undefined){
+    if(!record(value.bagDimensions))errors.push('planning.bagDimensions: expected width and height measurements');
+    else for(const key of Object.keys(value.bagDimensions)){
+      if(key!=='width'&&key!=='height')errors.push(`planning.bagDimensions.${key}: unsupported bag measurement`);
+      else number(value.bagDimensions,key,.125,key==='height'?MAX_HEIGHT:MAX_DIMENSION,'planning.bagDimensions');
+    }
+  }
   if(value.hangerSpacing!==undefined){
     if(!record(value.hangerSpacing))errors.push('planning.hangerSpacing: expected category measurements');
     else for(const key of Object.keys(value.hangerSpacing)){
@@ -93,6 +100,7 @@ export function canonicalPlanning(p:PlanningOptions):PlanningOptions{
   if(p.shoeHeights)next.shoeHeights={boots:p.shoeHeights.boots,heels:p.shoeHeights.heels,sneakers:p.shoeHeights.sneakers,flats:p.shoeHeights.flats};
   if(p.shoePairWidths)next.shoePairWidths={...p.shoePairWidths};
   if(p.shoeLengths)next.shoeLengths={...p.shoeLengths};
+  if(p.bagDimensions)next.bagDimensions={...p.bagDimensions};
   if(p.accessoryShelfOpening!==undefined)next.accessoryShelfOpening=p.accessoryShelfOpening;
   if(p.supportSpan!==undefined)next.supportSpan=p.supportSpan;
   if(p.clearanceTarget!==undefined)next.clearanceTarget=p.clearanceTarget;

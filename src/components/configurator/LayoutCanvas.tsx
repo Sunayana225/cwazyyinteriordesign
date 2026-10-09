@@ -32,40 +32,58 @@ export function LayoutCanvas({wall,stored,fitAllowances,onCommit,onClose}:{
     return()=>{element?.close();if(opener instanceof HTMLElement&&opener.isConnected)opener.focus({preventScroll:true});};
   },[]);
   const strip=useRef<SVGSVGElement>(null);
-  const drag=useRef<{kind:'move'|'resize';id:string}|null>(null);
+  const drag=useRef<{kind:'move'|'resize';id:string;pointerId:number;target:Element;before:LayoutColumn[];current:LayoutColumn[]}|null>(null);
+
+  const finishDrag=(cancel=false)=>{
+    const active=drag.current;if(!active)return;
+    drag.current=null;
+    if(cancel){setColumns(active.before);setMessage('Drag cancelled. Previous arrangement restored.');}
+    else if(JSON.stringify(active.current)!==JSON.stringify(active.before)){setHistory(h=>[...h.slice(-24),active.before]);setMessage('Drag complete. Undo restores the whole gesture.');}
+    try{active.target.releasePointerCapture(active.pointerId);}catch{}
+  };
+  const beginDrag=(e:ReactPointerEvent,kind:'move'|'resize',id:string)=>{
+    if(!e.isPrimary||e.button!==0||drag.current)return;
+    // A reordered column changes DOM position; capture on the stable SVG instead.
+    const target=strip.current??e.currentTarget;
+    setSelected(id);drag.current={kind,id,pointerId:e.pointerId,target,before:columns,current:columns};
+    target.setPointerCapture(e.pointerId);
+  };
 
   const change=(next:LayoutColumn[],note='')=>{
+    if(drag.current)return;
     if(next===columns)return;
     setHistory(h=>[...h.slice(-24),columns]);setColumns(next);setMessage(note);
   };
-  const undo=()=>{const prev=history[history.length-1];if(!prev)return;setHistory(h=>h.slice(0,-1));setColumns(prev);setMessage('Reverted the last change.');};
+  const undo=()=>{if(drag.current){finishDrag(true);return;}const prev=history[history.length-1];if(!prev)return;setHistory(h=>h.slice(0,-1));setColumns(prev);setMessage('Reverted the last change.');};
   const current=columns.find(c=>c.id===selected)??null;
   const index=current?columns.findIndex(c=>c.id===current.id):-1;
   /** Pointer x as a position along the wall, in inches. */
-  const inches=(clientX:number)=>{
-    const box=strip.current?.getBoundingClientRect();
-    if(!box||!box.width)return 0;
-    return Math.max(0,Math.min(wall.width,(clientX-box.left)/box.width*wall.width));
+  const inches=(clientX:number,clientY:number)=>{
+    const matrix=strip.current?.getScreenCTM();
+    if(!matrix)return null;
+    // Account for viewBox letterboxing and transforms, not just the SVG's CSS box.
+    const point=new DOMPoint(clientX,clientY).matrixTransform(matrix.inverse());
+    return Math.max(0,Math.min(wall.width,point.x));
   };
   const onPointerMove=(e:ReactPointerEvent)=>{
-    const active=drag.current;if(!active)return;
-    const at=inches(e.clientX);
+    const active=drag.current;if(!active||active.pointerId!==e.pointerId)return;
+    const columns=active.current;
+    const preview=(next:LayoutColumn[])=>{active.current=next;setColumns(next);};
+    const at=inches(e.clientX,e.clientY);if(at===null)return;
     if(active.kind==='resize'){
       const i=columns.findIndex(c=>c.id===active.id);if(i<0)return;
       const left=columns.slice(0,i).reduce((n,c)=>n+c.width,0);
-      change(resizeColumn(columns,active.id,at-left,wall.width,COLUMN_SNAP));
+      preview(resizeColumn(columns,active.id,at-left,wall.width,COLUMN_SNAP));
     } else {
       // Reorder as the pointer crosses a neighbour's midpoint.
       let edge=0,target=columns.length-1;
       for(let i=0;i<columns.length;i++){if(at<edge+columns[i].width/2){target=i;break;}edge+=columns[i].width;}
       const from=columns.findIndex(c=>c.id===active.id);
-      if(from!==target)change(moveColumn(columns,active.id,target));
+      if(from!==target)preview(moveColumn(columns,active.id,target));
     }
   };
   const endDrag=(e:ReactPointerEvent)=>{
-    if(!drag.current)return;
-    drag.current=null;
-    try{(e.currentTarget as Element).releasePointerCapture(e.pointerId);}catch{}
+    if(drag.current?.pointerId===e.pointerId)finishDrag(e.type!=='pointerup');
   };
 
   let cursor=0;
@@ -76,17 +94,17 @@ export function LayoutCanvas({wall,stored,fitAllowances,onCommit,onClose}:{
   // Only elements this cabinet's height and depth can physically take.
   const allowed=fittedColumnTypes(wall,fitAllowances);
 
-  return <dialog ref={dialog} onCancel={event=>{event.preventDefault();onClose();}} aria-labelledby="layout-canvas-title" className="settings-dialog w-[95vw] max-w-5xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 rounded-xl backdrop:bg-black/40">
+  return <dialog ref={dialog} onKeyDown={e=>{if(e.key==='Escape'&&drag.current){e.preventDefault();e.stopPropagation();finishDrag(true);}}} onCancel={event=>{event.preventDefault();if(drag.current)finishDrag(true);else onClose();}} aria-labelledby="layout-canvas-title" className="settings-dialog w-[95vw] max-w-5xl max-h-[calc(100dvh-2rem)] overflow-y-auto p-5 rounded-xl backdrop:bg-black/40">
     <h2 id="layout-canvas-title" className="text-lg font-semibold">Rearrange {wall.label.toLowerCase()}</h2>
-    <p className="settings-description">Every part of the generated design is an element here. Drag to reorder, drag a divider to resize, or use the controls below. Nothing changes your design until you choose Done.</p>
+    <p className="settings-description">Every part of the generated design is an element here. Drag to reorder, drag a divider to resize, or use the controls below. Escape cancels an active drag; Undo restores a completed drag in one step. Nothing changes your design until you choose Done.</p>
 
     <svg ref={strip} viewBox={`0 0 ${wall.width} 60`} className="w-full border rounded bg-[#f6f7f3] touch-none" style={{height:200}}
-      onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag} role="img"
+      onPointerMove={onPointerMove} onPointerUp={endDrag} onPointerCancel={endDrag} onLostPointerCapture={endDrag} role="img"
       aria-label={`${wall.label} elevation, ${columns.length} elements across ${fmt(wall.width)}`}>
       {placed.map(c=><g key={c.id}>
         <rect data-layout-column={c.id} x={c.x} y={0} width={c.width} height={52} fill={FILL[c.type]}
           stroke={c.id===selected?'#1d4ed8':'#8aa08f'} strokeWidth={c.id===selected?1.2:.4}
-          onPointerDown={e=>{setSelected(c.id);drag.current={kind:'move',id:c.id};(e.currentTarget as Element).setPointerCapture(e.pointerId);}}
+          onPointerDown={e=>beginDrag(e,'move',c.id)}
           style={{cursor:'grab'}}/>
         <text x={c.x+c.width/2} y={24} textAnchor="middle" fontSize={2.6} fill="#2c3a2f" pointerEvents="none">{COLUMN_LABEL[c.type].slice(0,c.width<14?8:22)}</text>
         <text x={c.x+c.width/2} y={30} textAnchor="middle" fontSize={2.2} fill="#52655a" pointerEvents="none">{fmt(c.width)}</text>
@@ -95,7 +113,7 @@ export function LayoutCanvas({wall,stored,fitAllowances,onCommit,onClose}:{
       {/* Resize handles sit on the boundary and belong to the column on their left. */}
       {placed.slice(0,-1).map(c=><rect key={'grip-'+c.id} data-layout-resize={c.id} x={c.x+c.width-.8} y={0} width={1.6} height={52}
         fill="transparent" style={{cursor:'col-resize'}}
-        onPointerDown={e=>{e.stopPropagation();setSelected(c.id);drag.current={kind:'resize',id:c.id};(e.currentTarget as Element).setPointerCapture(e.pointerId);}}/>)}
+        onPointerDown={e=>{e.stopPropagation();beginDrag(e,'resize',c.id);}}/>)}
     </svg>
 
     <div className="flex flex-wrap gap-2 my-3" role="group" aria-label="Select an element">

@@ -1,4 +1,5 @@
 'use client';
+import { downloadText } from '@/lib/download';
 import { LibraryOrganization } from './LibraryOrganization';
 import { designMetrics, libraryFilter } from '@/lib/libraryOrganization';
 
@@ -39,15 +40,10 @@ export function SavedDesignDialog({ designs, close, remove, rename, open, duplic
   const visible = libraryFilter(findDesigns(designs, query, sort),filters);
   const hiddenSelected = designs.filter(d => validIds.has(d.id) && !visible.some(v => v.id === d.id)).length;
   const download = (items: SavedDesign[]) => {
-    let url: string | undefined;
     try {
-      url = URL.createObjectURL(new Blob([serializeDesigns(items)], { type: 'application/json' }));
-      const link = document.createElement('a');
-      link.href = url; link.download = `alveo-designs-${new Date().toISOString().slice(0, 10)}.json`;
-      document.body.appendChild(link); link.click(); link.remove();
+      downloadText(serializeDesigns(items), `alveo-designs-${new Date().toISOString().slice(0, 10)}.json`);
       setMessage(`Backup download requested for ${items.length} designs. Use Restore JSON backup to restore this file.`);
     } catch { setMessage('The backup could not be downloaded. Please try again.'); }
-    finally { if (url) { const objectUrl = url; setTimeout(() => URL.revokeObjectURL(objectUrl), 1000); } }
   };
   return <dialog ref={dialog} onCancel={close} onClose={close} aria-labelledby="saved-title" className="settings-dialog library-settings-dialog rounded-2xl p-6 max-h-[90vh] overflow-auto backdrop:bg-black/40">
     <header className="settings-dialog-header flex justify-between gap-4"><h2 id="saved-title" className="text-xl font-serif">Saved designs</h2><button onClick={close} aria-label="Close saved designs">Close</button></header>

@@ -1,4 +1,5 @@
 'use client';
+import { downloadText } from '@/lib/download';
 import { useEffect, useRef, useState } from 'react';
 import type { SVGProps } from 'react';
 import { CATEGORIES, MATERIALS, LINERS, PRESETS, templateCells, affordanceShapes, cellOpening, cellSize, defaultInterior, grid, innerSize, interiorSVG, interiorWarnings, adjacentAxis, mergeIssue, mergeCells, splitCell, transformInterior, spatialNeighbor, materialColor } from '@/lib/drawers';
@@ -75,7 +76,7 @@ export function DrawerDesigner({target,targets,value,clipboard,onCopy,onApply,on
     const ids=all?targets.filter(t=>Math.abs(t.drawer.width-target.drawer.width)<.01&&Math.abs(t.drawer.depth-target.drawer.depth)<.01&&Math.abs(t.drawer.height-target.drawer.height)<.01).map(t=>t.id):[target.id];
     onApply(ids,{...plan,identity:target.identity,source:{width:target.drawer.width,depth:target.drawer.depth,height:target.drawer.height}});onClose();
   };
-  const download=()=>{const blob=new Blob([interiorSVG(plan,target.drawer,includeNotes)],{type:'image/svg+xml'}),url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download='drawer-compartments.svg';a.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+  const download=()=>{try{downloadText(interiorSVG(plan,target.drawer,includeNotes),'drawer-compartments.svg','image/svg+xml');setMessage('SVG download requested.');}catch{setMessage('The organizer SVG could not be downloaded. Please try again.');}};
   const jumpTo=(selector:string)=>{const element=dialog.current?.querySelector<HTMLElement>(selector);if(!element)return;element.tabIndex=-1;element.focus({preventScroll:true});element.scrollIntoView({block:'start',behavior:'instant'});};
   const box='border rounded-lg px-3 py-2 w-full bg-white text-charcoal-600';
   const button='border border-cream-300 rounded-lg px-3 py-2 text-sm bg-white hover:bg-cream-100 disabled:opacity-40';

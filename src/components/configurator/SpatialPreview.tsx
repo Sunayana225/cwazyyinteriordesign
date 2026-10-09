@@ -1,4 +1,5 @@
 'use client';
+import { downloadText } from '@/lib/download';
 import { useMemo, useRef, useState } from 'react';
 import type { ClosetLayout, UserPreferences } from '@/types/closet';
 import { renderSpatial } from '@/renderer/SpatialRenderer';
@@ -8,6 +9,7 @@ import { circulation } from '@/lib/roomGeometry';
 export function SpatialPreview({layout,preferences,onDrawerClick}:{layout:ClosetLayout;preferences?:UserPreferences;onDrawerClick?:(id:string)=>void}) {
   const [angle,setAngle]=useState(-25),[zoom,setZoom]=useState(100),[labels,setLabels]=useState(true),[islandOnly,setIslandOnly]=useState(false);
   const [elevation,setElevation]=useState(33),[hiddenWalls,setHiddenWalls]=useState<string[]>([]),[dragMode,setDragMode]=useState(false);
+  const [downloadError,setDownloadError]=useState('');
   const drag=useRef<{x:number;angle:number;id:number}|null>(null),moved=useRef(false);
   const visibleDrawers=drawerTargets(layout).filter(d=>!hiddenWalls.includes(d.id.split(':')[0])&&(!islandOnly||d.id.startsWith('island-unit:')));
   const island=layout.walls.find(w=>w.wallId==='island-unit'&&w.zones.length);
@@ -15,9 +17,10 @@ export function SpatialPreview({layout,preferences,onDrawerClick}:{layout:Closet
   const svg=useMemo(()=>renderSpatial(layout,{angle,elevation,labels,islandOnly:!!island&&islandOnly,hiddenWalls,style:preferences?.stylePreference,woodFinish:preferences?.woodFinish,hardwareFinish:preferences?.hardwareFinish,interactive:!!onDrawerClick}),[layout,angle,elevation,labels,islandOnly,island,hiddenWalls,preferences?.stylePreference,preferences?.woodFinish,preferences?.hardwareFinish,onDrawerClick]);
   const reset=()=>{setAngle(-25);setElevation(33);setZoom(100);setIslandOnly(false);setHiddenWalls([]);setDragMode(false);};
   const openDrawer=(target:EventTarget|null)=>{const id=target instanceof Element?target.closest('[data-spatial-drawer]')?.getAttribute('data-spatial-drawer'):null;if(id&&visibleDrawers.some(d=>d.id===id))onDrawerClick?.(id);};
-  const download=()=>{const url=URL.createObjectURL(new Blob([renderSpatial(layout,options)],{type:'image/svg+xml'}));const link=document.createElement('a');link.href=url;link.download='closet-spatial-view.svg';link.click();setTimeout(()=>URL.revokeObjectURL(url),1000);};
+  const download=()=>{try{downloadText(renderSpatial(layout,options),'closet-spatial-view.svg','image/svg+xml');setDownloadError('');}catch{setDownloadError('The 3D drawing could not be downloaded. Please try again.');}};
   return <section aria-label="3D room preview" className="border border-cream-300 rounded-xl p-3 my-3">
     <h3 className="font-semibold">3D room view</h3>
+    {downloadError&&<p role="alert">{downloadError}</p>}
     <p className="text-sm my-2">See the generated cabinets together at their actual proportions. Open room boundaries keep the storage visible. Configured windows and door swings appear here; check obstacles in the floor plan.</p>
     <div className="flex flex-wrap items-center gap-3 text-sm">
       <button className="border rounded px-3 py-2" onClick={()=>setAngle(a=>(a-45)%360)}>Rotate left</button>

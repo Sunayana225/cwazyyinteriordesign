@@ -1,4 +1,5 @@
 import { wallReservations } from '@/lib/wallReservations';
+import { drawingRecordIssue, type DrawingRecord } from '@/lib/drawingRecord';
 import { shoeShelves, shoeColumnWidth } from '@/lib/shoePlanning';
 import { remainingInventory, type InventoryBudget } from '@/lib/inventoryBudget';
 import { hangingWidths } from '@/lib/hangingAllocation';
@@ -57,6 +58,7 @@ const COL_SHOE_W   = 24;  // preferred minimum for a dedicated shoe column
 // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
 export class ClosetLayoutEngine {
+  private drawingRecord?:DrawingRecord;
   private remaining: InventoryBudget | undefined;
   private ceilingHeight: number;
   private customCabinetHeight: boolean;
@@ -89,6 +91,7 @@ export class ClosetLayoutEngine {
   }
 
   constructor(input: ClosetCalculationInput) {
+    this.drawingRecord=drawingRecordIssue(input.drawingRecord)?undefined:input.drawingRecord;
     this.planning=validPlanning(input.planning)?input.planning??{}:{};
     this.columns=validColumns(input.zoneOverrides?.columns)?input.zoneOverrides?.columns??{}:{};
     const rawH     = input.dimensions.height;
@@ -141,7 +144,7 @@ export class ClosetLayoutEngine {
     this.inputWarnings=[...this.normalizedWarnings];
     this.remaining = { wardrobe: { ...this.wardrobe }, shoes: { ...this.shoes } };
     let walls: ClosetWall[];
-    try { walls = this.buildAllWalls(); }
+    try { walls = this.buildAllWalls().map(w=>({...w,elevationRef:this.drawingRecord?.wallReferences?.[w.wallId]?.trim()||w.elevationRef})); }
     finally { this.remaining = undefined; }
     const aisleWarnings  = this.checkAisles();
     const layoutWarnings = this.checkZoneConstraints(walls);

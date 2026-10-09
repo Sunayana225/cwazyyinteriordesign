@@ -6,6 +6,7 @@ import { validPlanning, canonicalPlanning, planningIssues } from './planning';
 import { validColumns, columnsIssue } from './layoutColumns';
 import { isUserRole, USER_ROLES } from './userRoles';
 import { validSurveyConfirmation, surveyRecordIssue } from './surveyReview';
+import { drawingRecordIssue, canonicalDrawingRecord } from './drawingRecord';
 
 export const SAVED_KEY = 'alveo-saved-designs';
 export const DRAFT_KEY = 'alveo-draft';
@@ -23,6 +24,7 @@ export function pickFields<T extends object>(value: T, keys: readonly string[]):
 }
 export function canonicalConfig(c: ClosetConfiguration): ClosetConfiguration {
   const next = pickFields(c, ['closetType','dimensions','roomDimensions','userInfo','wardrobe','shoes','amenities','zoneOverrides','drawerInteriors','planning','inventoryPlanning','surveyConfirmation','surveyRecord']);
+  if(c.drawingRecord)next.drawingRecord=canonicalDrawingRecord(c.drawingRecord);
   if(c.surveyRecord)next.surveyRecord=pickFields(c.surveyRecord,['author','date']);
   if(c.surveyConfirmation){
     next.surveyConfirmation=pickFields(c.surveyConfirmation,['version','geometry','confirmedAt']);
@@ -51,6 +53,7 @@ const record = (value: unknown): boolean => value !== null && typeof value === '
 export function validConfig(value: unknown): value is ClosetConfiguration {
   if (!record(value)) return false;
   const c = value as ClosetConfiguration;
+  if(drawingRecordIssue(c.drawingRecord))return false;
   const finite = (n: unknown) => typeof n === 'number' && Number.isFinite(n) && n >= 0;
   const counts = (actual: object | undefined, expected: object) => record(actual) && Object.keys(expected).every(k => {
     const v = (actual as Record<string, unknown>)[k];
@@ -107,6 +110,7 @@ export function readDesigns(raw: string | null): SavedDesign[] {
 export function invalidConfigurationField(value:unknown):string{
   if(!record(value))return 'record';
   const c=value as Record<string,any>,planning=planningIssues(c.planning);
+  const drawingIssue=drawingRecordIssue(c.drawingRecord);if(drawingIssue)return drawingIssue;
   if(!validSurveyConfirmation(c.surveyConfirmation))return 'surveyConfirmation';
   const surveyIssue=surveyRecordIssue(c.surveyRecord);if(surveyIssue)return surveyIssue;
   if(planning.length)return planning[0];

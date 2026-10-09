@@ -15,6 +15,7 @@ import { hangerAssumptions, shoeAssumptions, bagAssumptions } from '@/lib/fitMea
 import { surveyState } from '@/lib/surveyReview';
 import { unassessedStorage } from '@/lib/storageFit';
 import { householdDemand,HOUSEHOLD_DEMAND_NOTE } from '@/lib/householdDemand';
+import { drawingRecordLabel } from '@/lib/drawingRecord';
 
 export interface PDFExportOptions {
   layout: ClosetLayout;
@@ -27,7 +28,8 @@ export interface PDFExportOptions {
 function renderDesign({ layout, config, fileName = 'Current design', showDimensions = true, showLabels = true, settings=DEFAULT_PRINT }: PDFExportOptions) {
   const p = config.userInfo;
   const options = { showDimensions, showLabels, style: p?.stylePreference ?? 'modern' as const, woodFinish: p?.woodFinish ?? 'medium' as const, hardwareFinish: p?.hardwareFinish, accentColor: p?.accentColor };
-  const drawings = layout.walls.filter(w=>!settings.walls||settings.walls.includes(w.wallId)).map(w => `<section class="drawing"><h2>${esc(w.label)} (${esc(w.elevationRef)})</h2>${new ClosetSVGRenderer(wallElevation(layout,w), options).renderElevation()}</section>`).join('');
+  const record=esc(drawingRecordLabel(config.drawingRecord));
+  const drawings = layout.walls.filter(w=>!settings.walls||settings.walls.includes(w.wallId)).map(w => `<section class="drawing"><h2>${esc(w.label)} (${esc(w.elevationRef)})</h2><p>${record} · NOT TO SCALE · Not construction approval</p>${new ClosetSVGRenderer(wallElevation(layout,w), options).renderElevation()}</section>`).join('');
   const room = layout.roomDimensions;
   const floor = settings.floorPlan&&isWalkIn(layout.closetType) && room ? `<section class="drawing"><h2>Floor plan</h2>${renderFloorPlan(layout, { ...room, unitDepth: layout.dimensions.depth })}<p>${layout.planning?.door?'Configured door; verify swing clearance on site.':'Door location and 30-inch width are illustrative; confirm on site.'}</p></section>` : '';
   const capacity = layout.capacity ?? (validConfig(config) ? capacityReport(config, layout.walls) : []);
@@ -58,7 +60,7 @@ function renderDesign({ layout, config, fileName = 'Current design', showDimensi
   const household=settings.household?`<section class="schedule"><h2>Household and season totals</h2><p>Stored profile totals; these may differ from the active inventory.</p>${table([['Profile','Season','Category','Count'],...members.flatMap(m=>INVENTORY_KEYS.map(k=>[m.name,m.season,inventoryLabel(k),String(inventoryValue(m.inventory,k))])),...(['everyday','seasonal'] as const).flatMap(season=>{const total=combinedInventory(members.filter(m=>m.season===season));return INVENTORY_KEYS.map(k=>['Season total',season,inventoryLabel(k),String(inventoryValue(total,k))]);})])}</section>`:'';
   const reserveNotes=settings.reserveNotes?`<section class="schedule"><h2>Reserve percentages and inventory notes</h2>${table([['Category','Reserve (%)'],...INVENTORY_KEYS.filter(k=>(config.inventoryPlanning?.reserve?.[k]??0)>0).map(k=>[inventoryLabel(k),String(config.inventoryPlanning?.reserve?.[k])])])}${Object.entries(config.inventoryPlanning?.notes??{}).map(([k,v])=>`<p>${esc(k)}: ${esc(v??'')}</p>`).join('')}</section>`:'';
   const changes=settings.comparison?`<section class="schedule"><h2>Changes from ${esc(settings.comparisonName??'reference design')}</h2>${table([['Dimension or quantity','Before','Current'],...configurationChanges(settings.comparison,config)])}</section>`:'';
-  return `<article><h1>${esc(settings.project||fileName)}</h1><p>${esc(fileName)} · ${esc(settings.contact)}</p><p>Alvéo · ${esc(new Date().toLocaleDateString())} · Planning layout</p>
+  return `<article><h1>${esc(settings.project||fileName)}</h1><p>${esc(fileName)} · ${esc(settings.contact)}</p><p>Alvéo · ${esc(new Date().toLocaleDateString())} · Planning layout</p><p>${record} · Not construction approval</p>
     <h2>Space specifications — effective dimensions</h2>${table(specs,false)}${surveyNote}${settings.notes&&config.surveyRecord?`<p>Site survey author: ${esc(config.surveyRecord.author?.trim()||'Not recorded')}; survey date: ${esc(config.surveyRecord.date||'Not recorded')}. This is the recorded site survey, separate from the review confirmation date.</p>`:''}
     <h2>Capacity and fit</h2><p>Utilization: ${layout.utilizationScore}%. A high utilization score does not mean every item fits.</p>
     ${unassessedStorage(config)?`<p>${esc(unassessedStorage(config))}</p>`:''}

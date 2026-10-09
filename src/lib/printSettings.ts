@@ -29,7 +29,7 @@ export function storedPrintSettings(raw:string|null):PrintSettings{
 }
 export function configurationChanges(before:Partial<ClosetConfiguration>,after:Partial<ClosetConfiguration>){
   const rows:Array<[string,string,string]>=[];
-  for(const key of ['closetType','dimensions','roomDimensions','wardrobe','shoes','planning','inventoryPlanning'] as const){
+  for(const key of ['closetType','dimensions','roomDimensions','wardrobe','shoes','planning','inventoryPlanning','drawingRecord'] as const){
     const a=before[key],b=after[key];if(JSON.stringify(a)===JSON.stringify(b))continue;
     if(a&&b&&typeof a==='object'&&typeof b==='object')for(const field of new Set([...Object.keys(a),...Object.keys(b)])){const av=(a as Record<string,unknown>)[field],bv=(b as Record<string,unknown>)[field];if(JSON.stringify(av)!==JSON.stringify(bv))rows.push([`${key}.${field}`,JSON.stringify(av)??'None',JSON.stringify(bv)??'None']);}
     else rows.push([key,JSON.stringify(a)??'None',JSON.stringify(b)??'None']);

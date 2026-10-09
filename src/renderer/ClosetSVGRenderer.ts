@@ -3,7 +3,7 @@ import { dimensionColumns, rightHeightChain } from '@/lib/elevationDimensions';
 import { footwearSymbol } from './FootwearSymbol';
 import { garmentSymbol } from './GarmentSymbol';
 import { faceDetails, CABINET_STYLES } from '@/lib/cabinetStyle';
-import { formatInches, HARDWARE } from '@/lib/design';
+import { formatInches, HARDWARE, escapeHTML } from '@/lib/design';
 import { drawerKey } from '@/lib/drawers';
 ﻿import { ClosetLayout, ClosetZone, UserPreferences } from '@/types/closet';
 
@@ -841,7 +841,7 @@ export class ClosetSVGRenderer {
     const wall = this.layout.walls[0];
     const d = this.layout.dimensions;
     return '<g fill="#333" font-family="Arial,sans-serif" text-anchor="middle">' +
-      '<text x="' + center + '" y="' + y + '" font-size="12" font-weight="bold">' + (wall?.elevationRef ?? 'EL-A') + ' — ' + (wall?.label ?? 'BACK WALL') + '</text>' +
+      '<text x="' + center + '" y="' + y + '" font-size="12" font-weight="bold">' + escapeHTML(wall?.elevationRef ?? 'EL-A') + ' — ' + escapeHTML(wall?.label ?? 'BACK WALL') + '</text>' +
       '<text x="' + center + '" y="' + (y + 14) + '" font-size="8">' + formatInches(d.width) + ' wide · ' + formatInches(d.height) + ' ceiling · ' + d.depth + ' in cabinet depth</text>' +
       '<text x="' + center + '" y="' + (y + 27) + '" font-size="8">ALVÉO · PLANNING DRAWING · NOT TO SCALE</text></g>';
   }

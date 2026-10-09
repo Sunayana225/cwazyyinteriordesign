@@ -1,6 +1,6 @@
 import type { ClosetConfiguration, ZoneOverrides } from '@/types/closet';
 /** Only fields read by the layout engine, excluding material colors and organizer edits. */
-export function layoutInputKey(config:Partial<ClosetConfiguration>,zoneOverrides:ZoneOverrides){return JSON.stringify({closetType:config.closetType,dimensions:config.dimensions,roomDimensions:config.roomDimensions,wardrobe:config.wardrobe,shoes:config.shoes,amenities:config.amenities,planning:config.planning,inventoryPlanning:{reserve:config.inventoryPlanning?.reserve},zoneOverrides,userInfo:{userType:config.userInfo?.userType,drawerPreference:config.userInfo?.drawerPreference,priorityItems:config.userInfo?.priorityItems}});}
+export function layoutInputKey(config:Partial<ClosetConfiguration>,zoneOverrides:ZoneOverrides){return JSON.stringify({drawingRecord:config.drawingRecord?.wallReferences?{wallReferences:config.drawingRecord.wallReferences}:undefined,closetType:config.closetType,dimensions:config.dimensions,roomDimensions:config.roomDimensions,wardrobe:config.wardrobe,shoes:config.shoes,amenities:config.amenities,planning:config.planning,inventoryPlanning:{reserve:config.inventoryPlanning?.reserve},zoneOverrides,userInfo:{userType:config.userInfo?.userType,drawerPreference:config.userInfo?.drawerPreference,priorityItems:config.userInfo?.priorityItems}});}
 export function namespaceSVG(svg:string,prefix:string):string {
   const ids:string[]=[],expression=/\sid="([^"]+)"/g;let match:RegExpExecArray|null;
   while((match=expression.exec(svg)))ids.push(match[1]);

@@ -181,6 +181,7 @@ export interface VillaAmenities {
 }
 
 export interface ClosetConfiguration {
+  drawingRecord?: import('@/lib/drawingRecord').DrawingRecord;
   surveyConfirmation?: import('@/lib/surveyReview').SurveyConfirmation;
   surveyRecord?: import('@/lib/surveyReview').SurveyRecord;
   inventoryPlanning?: import('@/lib/inventoryPlanning').InventoryPlanning;
@@ -199,6 +200,7 @@ export interface ClosetConfiguration {
 
 /** Input to the layout engine — explicit interface so all fields are visible */
 export interface ClosetCalculationInput {
+  drawingRecord?: import('@/lib/drawingRecord').DrawingRecord;
   inventoryPlanning?: import('@/lib/inventoryPlanning').InventoryPlanning;
   planning?: PlanningOptions;
   closetType?: ClosetType;         // defaults to 'reach-in' if omitted

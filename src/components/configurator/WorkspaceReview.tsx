@@ -8,6 +8,7 @@ import { confirmSurvey, surveyState } from '@/lib/surveyReview';
 import { unassessedStorage } from '@/lib/storageFit';
 const SurveyRecordEditor=dynamic(()=>import('./SurveyRecordEditor'));
 const SurveyChanges=dynamic(()=>import('./SurveyChanges'));
+const DrawingRecordEditor=dynamic(()=>import('./DrawingRecordEditor'));
 
 /** These are measured model checks, not a certification of the survey or installation. */
 export function WorkspaceReview({role,layout,preferences,config,onChange,onAction}:{role:UserRole;layout:ClosetLayout;preferences?:UserPreferences;config:Partial<ClosetConfiguration>;onChange?:(change:Partial<ClosetConfiguration>)=>void;onAction:(tool:StudioTool)=>void}) {
@@ -19,6 +20,7 @@ export function WorkspaceReview({role,layout,preferences,config,onChange,onActio
   const heading=role==='architect'?'Architect coordination review':role==='renter'?'Existing-room review':role==='designer'?'Client presentation review':'Your storage review';
   return <section className="studio-role-review" aria-label={heading}>
     <div className="studio-role-review-heading"><h3>{heading}</h3><span>Live model checks</span></div>
+    <details><summary>Drawing references, revision, and status</summary><DrawingRecordEditor record={config.drawingRecord} walls={layout.walls} onChange={onChange?drawingRecord=>onChange({drawingRecord}):undefined}/></details>
     <div className="studio-role-next"><div><span>Suggested next step</span><h4>{next.title}</h4><p>{next.detail}</p></div><button type="button" onClick={()=>onAction(next.action)}>Open {next.action==='room'?'room checks':next.action==='fit'?'storage fit':next.action==='inventory'?'household planner':next.action==='print'?'print options':'saved designs'}</button></div>
     {role==='designer'&&preferences&&<div className="studio-role-palette"><p><strong>Current material direction</strong><br/>{STYLE_OPTIONS.find(s=>s.id===preferences.stylePreference)?.name} · {WOOD_OPTIONS.find(w=>w.id===preferences.woodFinish)?.name} · Hardware: {preferences.hardwareFinish??'automatic for selected style'}</p><button type="button" onClick={()=>onAction('style')}>Refine finishes</button><button type="button" onClick={()=>onAction('library')}>Compare saved options</button></div>}
     <div className="studio-role-metrics">

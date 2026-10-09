@@ -1,3 +1,4 @@
+import {applicationBuild} from './buildInfo';
 import { BACKUP_MAX_BYTES, BACKUP_MAX_RECORDS, migrateSavedData, readBackup, readDesigns, SAVED_KEY, DRAFT_KEY } from './storage';
 import { validConfig, invalidConfigurationField } from './storage';
 import { readShells, ROOM_SHELL_KEY } from './roomShells';
@@ -29,7 +30,7 @@ export function recoveryReport(storage:Pick<Storage,'length'|'key'|'getItem'>){
   const health=(key:string,read:(raw:string|null)=>unknown[])=>{try{return {readable:true,records:read(storage.getItem(key)).length};}catch{return {readable:false,error:'Stored data could not be validated. Inspect it locally with recovery tools.'};}};
   const {present,parseable,restorable}=draftStatus(storage.getItem(DRAFT_KEY));
   const draft={present,parseable,restorable,...(present&&!restorable?{error:parseable?'Stored draft uses an unsupported version or invalid configuration.':'Stored draft is not valid JSON.'}:{})};
-  return {version:2,generatedAt:new Date().toISOString(),usage:localStorageUsage(storage),breakdown:storageBreakdown(storage),named:health(SAVED_KEY,readDesigns),templates:health(TEMPLATE_KEY,readTemplates),shells:health(ROOM_SHELL_KEY,readShells),draft};
+  return {version:2,application:applicationBuild,generatedAt:new Date().toISOString(),usage:localStorageUsage(storage),breakdown:storageBreakdown(storage),named:health(SAVED_KEY,readDesigns),templates:health(TEMPLATE_KEY,readTemplates),shells:health(ROOM_SHELL_KEY,readShells),draft};
 }
 export function storageError(error:unknown){
   const name=error&&typeof error==='object'&&'name' in error?String(error.name):'';

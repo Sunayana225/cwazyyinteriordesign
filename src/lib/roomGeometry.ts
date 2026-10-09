@@ -74,7 +74,7 @@ export function islandRequirement(layout:ClosetLayout){
   return {width:2*Math.max(d('left'),d('right'))+36+2*target,depth:d('back')+d('island-unit')+2*target,target};
 }
 export function obstacleSuggestions(layout:ClosetLayout,id:string):Array<{x:number;y:number}>{
-  const o=layout.planning?.obstacles?.find(v=>v.id===id);if(!o)return [];
+  const o=layout.planning?.obstacles?.find(v=>v.id===id);if(!o||o.mobility!=='movable')return [];
   const room=roomSize(layout),blocked=[...storageFootprints(layout),...(layout.planning?.obstacles??[]).filter(v=>v.id!==id)];
   const door=layout.planning?.door;
   const clear=(r:Rect)=>r.x>=0&&r.y>=0&&r.x+r.width<=room.width&&r.y+r.depth<=room.depth&&!blocked.some(b=>overlaps(r,b))&&(!door||doorDistance(r,door,room)>.00001);

@@ -13,7 +13,7 @@ describe('room geometry and editing',()=>{
     const l=layout(c),issues=roomIssues(l);expect(issues.some(v=>v.message.includes('Window 1')&&v.message.includes('12.00 in beyond'))).toBe(true);expect(issues.some(v=>v.message.includes('above the ceiling'))).toBe(true);expect(issues.filter(v=>v.message.includes('overlaps Window'))).toHaveLength(2);expect(l.planning?.windows).toHaveLength(2);
   });
   it('reports both overlapping obstacle names and out-of-room positions',()=>{
-    const c=config();c.planning={obstacles:[{id:'a',label:'Pillar',x:188,y:0,width:12,depth:12},{id:'b',label:'Duct',x:190,y:0,width:6,depth:6}]};
+    const c=config();c.planning={obstacles:[{id:'a',mobility:'movable',label:'Pillar',x:188,y:0,width:12,depth:12},{id:'b',label:'Duct',x:190,y:0,width:6,depth:6}]};
     const issues=roomIssues(layout(c));expect(issues.some(v=>v.message.includes('outside'))).toBe(true);expect(issues.filter(v=>v.message.includes('Pillar')&&v.message.includes('Duct'))).toHaveLength(2);
   });
   it('uses exact quarter-sector distance rather than accepting its outside corner',()=>{
@@ -28,7 +28,7 @@ describe('room geometry and editing',()=>{
     }
   });
   it('distinguishes sector versus envelope and rejects an outside door opening',()=>{
-    const l=layout();l.walls=[];l.roomDimensions={roomWidth:100,roomDepth:100};l.planning={door:{wall:'front',offset:0,width:30,hinge:'left',swing:'in'},obstacles:[{id:'a',label:'Corner',x:25,y:73,width:2,depth:2}]};
+    const l=layout();l.walls=[];l.roomDimensions={roomWidth:100,roomDepth:100};l.planning={door:{wall:'front',offset:0,width:30,hinge:'left',swing:'in'},obstacles:[{id:'a',mobility:'movable',label:'Corner',x:25,y:73,width:2,depth:2}]};
     expect(doorAssessment(l).conflicts).toEqual(['Corner']);l.planning.door!.check='sector';expect(doorAssessment(l).conflicts).toEqual([]);l.planning.door!.offset=90;expect(doorAssessment(l).outside).toBe(true);
   });
   it('applies personal clearance targets to generation and island requirements',()=>{
@@ -37,7 +37,7 @@ describe('room geometry and editing',()=>{
   });
   it('uses the selected door model for suggestions, including square-only conflicts',()=>{
     const l=layout();l.walls=[];l.roomDimensions={roomWidth:100,roomDepth:100};
-    l.planning={door:{wall:'front',offset:0,width:30,hinge:'left',swing:'in',check:'envelope'},obstacles:[{id:'a',label:'Corner',x:25,y:73,width:2,depth:2}]};
+    l.planning={door:{wall:'front',offset:0,width:30,hinge:'left',swing:'in',check:'envelope'},obstacles:[{id:'a',mobility:'movable',label:'Corner',x:25,y:73,width:2,depth:2}]};
     const positions=obstacleSuggestions(l,'a');expect(positions.length).toBeGreaterThan(0);
     for(const pos of positions){const moved=structuredClone(l);Object.assign(moved.planning!.obstacles![0],pos);expect(doorAssessment(moved).conflicts).toEqual([]);}
     l.planning.door!.check='sector';expect(obstacleSuggestions(l,'a')).toEqual([]);
@@ -45,14 +45,14 @@ describe('room geometry and editing',()=>{
   it('keeps every suggested placement consistent across door orientations and sweep models',()=>{
     for(const wall of ['front','back','left','right'] as const)for(const hinge of ['left','right'] as const)for(const swing of ['in','out'] as const)for(const check of ['envelope','sector'] as const){
       const l=layout();l.walls=[];l.roomDimensions={roomWidth:100,roomDepth:100};
-      l.planning={door:{wall,offset:10,width:30,hinge,swing,check},obstacles:[{id:'a',label:'Object',x:-5,y:20,width:10,depth:10}]};
+      l.planning={door:{wall,offset:10,width:30,hinge,swing,check},obstacles:[{id:'a',mobility:'movable',label:'Object',x:-5,y:20,width:10,depth:10}]};
       const positions=obstacleSuggestions(l,'a');expect(positions.length).toBeGreaterThan(0);
       for(const pos of positions){const moved=structuredClone(l);Object.assign(moved.planning!.obstacles![0],pos);expect(doorAssessment(moved).conflicts).toEqual([]);expect(roomIssues(moved)).toEqual([]);}
     }
   });
   it('finds nearby door-edge placements and returns none for an object larger than the room',()=>{
     const l=layout();l.walls=[];l.roomDimensions={roomWidth:100,roomDepth:100};
-    l.planning={door:{wall:'front',offset:0,width:30,hinge:'left',swing:'in'},obstacles:[{id:'a',label:'Object',x:25,y:73,width:2,depth:2}]};
+    l.planning={door:{wall:'front',offset:0,width:30,hinge:'left',swing:'in'},obstacles:[{id:'a',mobility:'movable',label:'Object',x:25,y:73,width:2,depth:2}]};
     expect(obstacleSuggestions(l,'a')).toContainEqual({x:30.125,y:73});
     const nearest=obstacleSuggestions(l,'a')[0];expect(Math.hypot(nearest.x-25,nearest.y-73)).toBe(5.125);
     l.planning.obstacles![0].width=101;expect(obstacleSuggestions(l,'a')).toEqual([]);
@@ -62,7 +62,7 @@ describe('room geometry and editing',()=>{
     const a=before.zones.flatMap(z=>z.drawers??[])[0],b=after.zones.flatMap(z=>z.drawers??[])[0];expect(b.depth).toBe(a.depth-2);expect(b.position).toBe(a.position+4);expect(after.unitDepth).toBe(before.unitDepth);
   });
   it('suggests positions clear of the generated island and room boundaries',()=>{
-    const c=config();c.planning={obstacles:[{id:'a',label:'Column',x:94,y:80,width:4,depth:4}]};const l=layout(c),positions=obstacleSuggestions(l,'a');expect(positions.length).toBeGreaterThan(0);const boxes=storageFootprints(l);for(const p of positions)expect(boxes.some(b=>p.x<b.x+b.width&&p.x+4>b.x&&p.y<b.y+b.depth&&p.y+4>b.y)).toBe(false);
+    const c=config();c.planning={obstacles:[{id:'a',mobility:'movable',label:'Column',x:94,y:80,width:4,depth:4}]};const l=layout(c),positions=obstacleSuggestions(l,'a');expect(positions.length).toBeGreaterThan(0);const boxes=storageFootprints(l);for(const p of positions)expect(boxes.some(b=>p.x<b.x+b.width&&p.x+4>b.x&&p.y<b.y+b.depth&&p.y+4>b.y)).toBe(false);
   });
   it('retains supported new planning fields through canonicalization and backup restore',()=>{
     const c=config();c.planning={clearanceTarget:42,walls:{back:{ceilingHeight:110,baseboard:2,floorOffset:3}},door:{wall:'front',offset:50,width:30,hinge:'right',swing:'in',check:'sector'},windows:[{id:'a',label:'Garden',wall:'back',offset:0,width:20,sill:20,height:20}]};

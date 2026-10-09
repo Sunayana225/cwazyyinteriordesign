@@ -5,7 +5,7 @@ import { DEFAULT_CONFIG,EMPTY_WARDROBE } from '../../src/lib/design';
 test.beforeEach(async({page})=>{
   const config=structuredClone(DEFAULT_CONFIG);config.closetType='walkin-u';config.roomDimensions={roomWidth:100,roomDepth:100};
   config.dimensions.depth=12;config.wardrobe={...EMPTY_WARDROBE};config.shoes={boots:0,heels:0,sneakers:0,flats:0};
-  config.planning={door:{wall:'front',offset:0,width:30,hinge:'left',swing:'in',check:'envelope'},obstacles:[{id:'a',label:'Bench',x:25,y:73,width:2,depth:2}]};
+  config.planning={door:{wall:'front',offset:0,width:30,hinge:'left',swing:'in',check:'envelope'},obstacles:[{id:'a',label:'Bench',mobility:'movable',x:25,y:73,width:2,depth:2}]};
   await page.addInitScript(c=>{if(!localStorage.getItem('alveo-draft'))localStorage.setItem('alveo-draft',JSON.stringify({version:1,config:c}));},config);
   await page.goto('/configure');await page.locator('#studio-room-tools > summary').click();
 });
@@ -32,4 +32,16 @@ test('changing a door while reviewing a suggestion prevents applying a stale mov
   await expect(preview.getByRole('status')).toContainText('design changed');
   await expect(preview.getByRole('button',{name:'Apply obstacle move'})).toBeDisabled();
   await expect(page.getByLabel('Obstacle 1 x',{exact:true})).toHaveValue('25');
+});
+
+test('fixed objects keep their position and movable classifications persist through duplication and reload',async({page})=>{
+  const placement=page.getByLabel('Obstacle 1 placement');await placement.selectOption('fixed');
+  await expect(page.getByRole('button',{name:/^Preview Bench at/})).toHaveCount(0);
+  await expect(page.getByText('Fixed at its surveyed position.',{exact:false})).toBeVisible();
+  await expect(page.getByLabel('Obstacle 1 x',{exact:true})).toHaveValue('25');
+  await placement.selectOption('movable');await expect(page.getByRole('button',{name:/^Preview Bench at/}).first()).toBeVisible();
+  await page.getByRole('button',{name:'Duplicate obstacle 1'}).click();await expect(page.getByLabel('Obstacle 2 placement')).toHaveValue('movable');
+  await expect.poll(()=>page.evaluate(()=>JSON.parse(localStorage.getItem('alveo-draft')!).config.planning.obstacles.length)).toBe(2);
+  await page.reload();await page.locator('#studio-room-tools > summary').click();await expect(page.getByLabel('Obstacle 2 placement')).toHaveValue('movable');
+  await page.getByRole('button',{name:'Add obstacle',exact:true}).click();await expect(page.getByLabel('Obstacle 3 placement')).toHaveValue('fixed');
 });

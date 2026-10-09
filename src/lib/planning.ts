@@ -37,7 +37,7 @@ export function planningIssues(value:unknown):string[] {
       if((key==='obstacles'||entry.label!==undefined)&&(typeof entry.label!=='string'||entry.label.length>80))errors.push(`${path}.label: expected text of at most 80 characters`);
       if(key==='windows'){
         choice(entry,'wall',WALL_IDS.filter(id=>id!=='island-unit'),path);number(entry,'offset',0,MAX_DIMENSION,path);number(entry,'width',1,MAX_DIMENSION,path);number(entry,'sill',0,MAX_HEIGHT,path);number(entry,'height',1,MAX_HEIGHT,path);
-      }else{number(entry,'x',0,MAX_DIMENSION,path);number(entry,'y',0,MAX_DIMENSION,path);number(entry,'width',1,MAX_DIMENSION,path);number(entry,'depth',1,MAX_DIMENSION,path);}
+      }else{number(entry,'x',0,MAX_DIMENSION,path);number(entry,'y',0,MAX_DIMENSION,path);number(entry,'width',1,MAX_DIMENSION,path);number(entry,'depth',1,MAX_DIMENSION,path);choice(entry,'mobility',['fixed','movable'],path,true);}
     });
   }
   return errors;
@@ -80,6 +80,6 @@ export function canonicalPlanning(p:PlanningOptions):PlanningOptions{
   if(p.walls)next.walls=Object.fromEntries(Object.entries(p.walls).map(([id,v])=>[id,{depth:v?.depth,priority:v?.priority,ceilingHeight:v?.ceilingHeight,baseboard:v?.baseboard,floorOffset:v?.floorOffset}]));
   if(p.door){const {wall,offset,width,hinge,swing,check}=p.door;next.door={wall,offset,width,hinge,swing,check};}
   if(p.windows)next.windows=p.windows.map(({id,label,wall,offset,width,sill,height})=>({id,label,wall,offset,width,sill,height}));
-  if(p.obstacles)next.obstacles=p.obstacles.map(({id,label,x,y,width,depth})=>({id,label,x,y,width,depth}));
+  if(p.obstacles)next.obstacles=p.obstacles.map(({id,label,x,y,width,depth,mobility})=>({id,label,x,y,width,depth,...(mobility?{mobility}:{})}));
   return next;
 }

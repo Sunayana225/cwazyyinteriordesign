@@ -215,7 +215,7 @@ export interface PlanningOptions {
   walls?:Partial<Record<ClosetWall['wallId'],{depth?:number;priority?:'default'|'hanging'|'shoes'|'folded'|'accessories';ceilingHeight?:number;baseboard?:number;floorOffset?:number}>>;
   door?:{wall:'front'|'back'|'left'|'right';offset:number;width:number;hinge:'left'|'right';swing:'in'|'out';check?:'envelope'|'sector'};
   windows?:Array<{id:string;label?:string;wall:ClosetWall['wallId'];offset:number;width:number;sill:number;height:number}>;
-  obstacles?:Array<{id:string;label:string;x:number;y:number;width:number;depth:number}>;
+  obstacles?:Array<{id:string;label:string;x:number;y:number;width:number;depth:number;mobility?:'fixed'|'movable'}>;
 }
 
 // ─── Saved design entry ──────────────────────────────────────────────────────

@@ -24,11 +24,17 @@ test('survey confirmation persists, goes stale after measurements change, and ca
   const ceiling=page.getByLabel('BACK WALL measured ceiling height',{exact:true});await reveal(ceiling);
   await ceiling.fill('72');await ceiling.press('Tab');
   await expect(review.getByRole('status')).toContainText('Room changed since confirmation');
+  const changes=review.getByRole('list',{name:'Changed survey measurements'});
+  await expect(changes).toContainText('back wall · ceiling height');
+  await expect(changes).toContainText('Confirmed: Inherited');
+  await expect(changes).toContainText('Current: 72 in');
+  await page.reload();await expect(changes).toContainText('Current: 72 in');
   await page.getByLabel('User mode').selectOption('architect');
   const architect=page.getByRole('region',{name:'Architect coordination review'});
   await architect.getByText('Wall dimensions and offsets',{exact:true}).click();
   await expect(architect.getByRole('row',{name:/BACK WALL/})).toContainText('72.00');
   await architect.getByRole('button',{name:'I checked the measurements and fixed features'}).click();
+  await expect(architect.getByRole('list',{name:'Changed survey measurements'})).toHaveCount(0);
   await architect.getByRole('button',{name:'Clear survey confirmation'}).click();
   await expect(architect.getByRole('status')).toContainText('Not confirmed');
   expect((await new AxeBuilder({page}).include('.studio-role-review').withTags(['wcag2a','wcag2aa']).analyze()).violations).toEqual([]);

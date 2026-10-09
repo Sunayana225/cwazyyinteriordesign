@@ -1,9 +1,11 @@
 'use client';
+import dynamic from 'next/dynamic';
 import type { ClosetLayout, UserRole, UserPreferences, ClosetConfiguration } from '@/types/closet';
 import type { StudioTool } from '@/lib/userRoles';
 import { workspaceReview } from '@/lib/workspaceReview';
 import { WOOD_OPTIONS, STYLE_OPTIONS } from '@/lib/design';
 import { confirmSurvey, surveyState } from '@/lib/surveyReview';
+const SurveyChanges=dynamic(()=>import('./SurveyChanges'));
 
 /** These are measured model checks, not a certification of the survey or installation. */
 export function WorkspaceReview({role,layout,preferences,config,onChange,onAction}:{role:UserRole;layout:ClosetLayout;preferences?:UserPreferences;config:Partial<ClosetConfiguration>;onChange?:(change:Partial<ClosetConfiguration>)=>void;onAction:(tool:StudioTool)=>void}) {
@@ -27,6 +29,7 @@ export function WorkspaceReview({role,layout,preferences,config,onChange,onActio
     {issues.length>0&&<details><summary>Review {issues.length} room {issues.length===1?'conflict':'conflicts'}</summary><ul>{issues.map(issue=><li key={issue}>{issue}</li>)}</ul></details>}
     <div className="studio-role-survey" aria-label="Room survey review">
       <h4>Room survey</h4><p role="status">{survey==='current'?`Confirmed for this geometry on ${new Date(config.surveyConfirmation!.confirmedAt).toLocaleDateString()}.`:survey==='stale'?'Room changed since confirmation. Review the measurements and confirm again.':'Not confirmed. Check measurements and record every relevant fixed feature.'}</p>
+      {survey==='stale'&&<SurveyChanges config={config}/>}
       {objects===0&&survey!=='current'&&<p>No doors, windows, or obstacles recorded yet. If there are none affecting the cabinetry, you can confirm that after reviewing the room.</p>}
       <p>This records your review of the survey inputs; it does not clear model conflicts or approve installation.</p>
       {survey==='current'?<button className="studio-role-link" disabled={!onChange} type="button" onClick={()=>onChange?.({surveyConfirmation:undefined})}>Clear survey confirmation</button>:<button className="studio-role-link" disabled={!onChange} type="button" onClick={()=>onChange?.({surveyConfirmation:confirmSurvey(config)})}>I checked the measurements and fixed features</button>}

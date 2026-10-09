@@ -46,6 +46,10 @@ export function surveyChanges(config:Partial<ClosetConfiguration>):SurveyChange[
   if(surveyState(config)!=='stale')return [];
   try {
     const before=fields(config.surveyConfirmation!.geometry),after=fields(surveyGeometry(config));
+    for(const [field,key] of [['Survey author','author'],['Survey date','date']] as const){
+      before.set(field,config.surveyConfirmation?.record?.[key]?.trim()||'Not recorded');
+      after.set(field,config.surveyRecord?.[key]?.trim()||'Not recorded');
+    }
     return [...new Set([...before.keys(),...after.keys()])].flatMap(field=>{
       const a=before.get(field)??'Inherited',b=after.get(field)??'Inherited';
       return a===b?[]:[{field,before:a,after:b}];

@@ -6,6 +6,7 @@ import { workspaceReview } from '@/lib/workspaceReview';
 import { WOOD_OPTIONS, STYLE_OPTIONS } from '@/lib/design';
 import { confirmSurvey, surveyState } from '@/lib/surveyReview';
 import { unassessedStorage } from '@/lib/storageFit';
+const SurveyRecordEditor=dynamic(()=>import('./SurveyRecordEditor'));
 const SurveyChanges=dynamic(()=>import('./SurveyChanges'));
 
 /** These are measured model checks, not a certification of the survey or installation. */
@@ -30,8 +31,9 @@ export function WorkspaceReview({role,layout,preferences,config,onChange,onActio
     {notices.length>0&&<details><summary>Review {notices.length} layout {notices.length===1?'notice':'notices'}</summary><ul>{notices.map(notice=><li key={notice}>{notice}</li>)}</ul></details>}
     {issues.length>0&&<details><summary>Review {issues.length} room {issues.length===1?'conflict':'conflicts'}</summary><ul>{issues.map(issue=><li key={issue}>{issue}</li>)}</ul></details>}
     <div className="studio-role-survey" aria-label="Room survey review">
-      <h4>Room survey</h4><p role="status">{survey==='current'?`Confirmed for this geometry on ${new Date(config.surveyConfirmation!.confirmedAt).toLocaleDateString()}.`:survey==='stale'?'Room changed since confirmation. Review the measurements and confirm again.':'Not confirmed. Check measurements and record every relevant fixed feature.'}</p>
+      <h4>Room survey</h4><p role="status">{survey==='current'?`Confirmed for this geometry on ${new Date(config.surveyConfirmation!.confirmedAt).toLocaleDateString()}.`:survey==='stale'?'Room changed since confirmation, or the survey record was edited. Review the changes and confirm again.':'Not confirmed. Check measurements and record every relevant fixed feature.'}</p>
       {survey==='stale'&&<SurveyChanges config={config}/>}
+      <details open={role==='architect'?true:undefined}><summary>Survey author and date</summary><SurveyRecordEditor record={config.surveyRecord} onChange={onChange?surveyRecord=>onChange({surveyRecord}):undefined}/></details>
       {objects===0&&survey!=='current'&&<p>No doors, windows, or obstacles recorded yet. If there are none affecting the cabinetry, you can confirm that after reviewing the room.</p>}
       <p>This records your review of the survey inputs; it does not clear model conflicts or approve installation.</p>
       {survey==='current'?<button className="studio-role-link" disabled={!onChange} type="button" onClick={()=>onChange?.({surveyConfirmation:undefined})}>Clear survey confirmation</button>:<button className="studio-role-link" disabled={!onChange} type="button" onClick={()=>onChange?.({surveyConfirmation:confirmSurvey(config)})}>I checked the measurements and fixed features</button>}

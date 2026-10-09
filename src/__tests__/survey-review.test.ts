@@ -44,7 +44,7 @@ describe('survey confirmations',()=>{
     expect(workspaceReview('architect',layout,surveyState(c)).next.action).toBe('room');
     c.dimensions.width=100;
     const print=buildPrintDocument([{layout:new ClosetLayoutEngine(c).calculateLayout(),config:c,settings:{...DEFAULT_PRINT,notes:true,roomSchedule:true}}]);
-    expect(print.includes('room geometry changed since confirmation')).toBe(true);
+    expect(print.includes('room geometry or survey record changed since confirmation')).toBe(true);
     expect(print.includes('Wall height coordination')).toBe(true);
   });
 });

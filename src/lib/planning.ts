@@ -1,5 +1,6 @@
 import { GENERATOR_CAPABILITIES, MEASUREMENT_MINIMUMS } from './measurementPolicy';
 import type { ClosetLayout, ClosetWall, PlanningOptions } from '@/types/closet';
+import { HANGER_SPACING } from './fitMeasurements';
 export const WALL_IDS:ClosetWall['wallId'][]=['back','left','right','corridor-a','corridor-b','island-unit'];
 export const MAX_DIMENSION=GENERATOR_CAPABILITIES.roomSpan,MAX_HEIGHT=GENERATOR_CAPABILITIES.ceilingHeight,MAX_CABINET_DEPTH=GENERATOR_CAPABILITIES.cabinetDepth,MAX_INVENTORY=10000;
 const num=(v:unknown,min:number,max:number)=>typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max;
@@ -12,6 +13,13 @@ export function planningIssues(value:unknown):string[] {
   const number=(o:Record<string,unknown>,key:string,min:number,max:number,path:string,optional=false)=>{if(!(optional&&o[key]===undefined)&&!num(o[key],min,max))errors.push(`${path}.${key}: expected a number from ${min} to ${max}`);};
   const choice=(o:Record<string,unknown>,key:string,values:readonly string[],path:string,optional=false)=>{if(!(optional&&o[key]===undefined)&&!values.includes(o[key] as string))errors.push(`${path}.${key}: expected ${values.join(', ')}`);};
   number(value,'accessoryShelfOpening',8,36,'planning',true);
+  if(value.hangerSpacing!==undefined){
+    if(!record(value.hangerSpacing))errors.push('planning.hangerSpacing: expected category measurements');
+    else for(const key of Object.keys(value.hangerSpacing)){
+      if(!Object.prototype.hasOwnProperty.call(HANGER_SPACING,key))errors.push(`planning.hangerSpacing.${key}: unsupported garment category`);
+      else number(value.hangerSpacing,key,.125,MAX_DIMENSION,'planning.hangerSpacing');
+    }
+  }
   for(const key of ['supportSpan','clearanceTarget'])number(value,key,key==='supportSpan'?12:18,key==='supportSpan'?48:72,'planning',true);
   for(const key of ['garmentLengths','shoeHeights','walls','door']){
     const block=value[key];if(block===undefined)continue;const path=`planning.${key}`;
@@ -73,6 +81,7 @@ export function canonicalPlanning(p:PlanningOptions):PlanningOptions{
   const next:PlanningOptions={};
   if(p.upperStorage!==undefined)next.upperStorage=p.upperStorage;
   if(p.garmentLengths)next.garmentLengths={long:p.garmentLengths.long,short:p.garmentLengths.short};
+  if(p.hangerSpacing)next.hangerSpacing={...p.hangerSpacing};
   if(p.shoeHeights)next.shoeHeights={boots:p.shoeHeights.boots,heels:p.shoeHeights.heels,sneakers:p.shoeHeights.sneakers,flats:p.shoeHeights.flats};
   if(p.accessoryShelfOpening!==undefined)next.accessoryShelfOpening=p.accessoryShelfOpening;
   if(p.supportSpan!==undefined)next.supportSpan=p.supportSpan;

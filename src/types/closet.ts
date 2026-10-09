@@ -209,6 +209,7 @@ export interface PlanningOptions {
   upperStorage?:boolean; // Use spare height above hanging and shoes; enabled by default.
   accessoryShelfOpening?:number; // Minimum clear opening for adaptive accessory shelves (inches).
   garmentLengths?:{long:number;short:number};
+  hangerSpacing?:Partial<Record<'longDresses'|'shortJackets'|'suits'|'shirts'|'pants',number>>;
   shoeHeights?:ShoeCollection;
   supportSpan?:number;
   clearanceTarget?:number;

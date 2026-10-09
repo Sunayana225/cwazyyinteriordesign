@@ -1,6 +1,8 @@
 import type { ClosetConfiguration, ClosetLayout, ClosetWall, WardrobeItems, DrawerConfig } from '@/types/closet';
 import { MAX_DIMENSION, MAX_HEIGHT, MAX_CABINET_DEPTH } from './planning';
 import { MEASUREMENT_MINIMUMS } from './measurementPolicy';
+import { hangerSpacing } from './fitMeasurements';
+import type { PlanningOptions } from '@/types/closet';
 
 /** Floors are what the generator can still draw something sensible for, not a
  * recommendation. Small spaces are real closets — a 24 in linen press, a 60 in
@@ -101,16 +103,19 @@ export function dimensionErrors(c: Partial<ClosetConfiguration>): string[] {
   if (d?.cabinetHeight !== undefined && (!finite(d.cabinetHeight, LIMITS.height, LIMITS.heightMax) || d.cabinetHeight > d.height)) errors.push('Cabinet height must be within the supported height range and no higher than the ceiling.');
   return errors;
 }
-export function hangingDemand(w: WardrobeItems) {
-  return { long: w.longDresses * 2.5, short: (w.shirts + w.shortJackets + w.pants + w.suits * 2) * 1.8 };
+export function hangingDemand(w: WardrobeItems, planning?:PlanningOptions) {
+  const spacing=hangerSpacing(planning);
+  // Preserve the arithmetic of existing projects when every short hanger is equal.
+  const equal=spacing.shirts===spacing.shortJackets&&spacing.shirts===spacing.pants&&spacing.shirts===spacing.suits;
+  return { long: w.longDresses * spacing.longDresses, short: equal?(w.shirts+w.shortJackets+w.pants+w.suits*2)*spacing.shirts:w.shirts*spacing.shirts+w.shortJackets*spacing.shortJackets+w.pants*spacing.pants+w.suits*2*spacing.suits };
 }
 export function foldedDemand(w: WardrobeItems) {
   return Object.entries(FOLDED_PER_DRAWER).reduce((n, [key, count]) => n + w[key as keyof typeof FOLDED_PER_DRAWER] / count, 0);
 }
 export interface CapacityRow { label: string; required: number; available: number; unit: string; }
-export function capacityReport(c: Pick<ClosetConfiguration, 'wardrobe' | 'shoes'>, walls: Pick<ClosetWall, 'zones'>[]): CapacityRow[] {
+export function capacityReport(c: Pick<ClosetConfiguration, 'wardrobe' | 'shoes' | 'planning'>, walls: Pick<ClosetWall, 'zones'>[]): CapacityRow[] {
   const zones = walls.flatMap(w => w.zones);
-  const demand = hangingDemand(c.wardrobe);
+  const demand = hangingDemand(c.wardrobe,c.planning);
   const rodCapacity = (long: boolean) => zones.filter(z => (z.type === 'long-hang') === long).flatMap(z => z.rods ?? []).reduce((n,r) => n + finitePositive(r.length), 0);
   const drawers = zones.flatMap(z => z.drawers ?? []);
   const shelves = zones.flatMap(z => z.shelves ?? []);

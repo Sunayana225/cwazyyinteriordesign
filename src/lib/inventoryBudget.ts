@@ -1,4 +1,4 @@
-import type { ClosetZone, ShoeCollection, WardrobeItems } from '@/types/closet';
+import type { ClosetZone, ShoeCollection, WardrobeItems, PlanningOptions } from '@/types/closet';
 import { capacityReport, EMPTY_WARDROBE, FOLDED_PER_DRAWER, hangingDemand } from './design';
 
 export interface InventoryBudget { wardrobe: WardrobeItems; shoes: ShoeCollection }
@@ -23,12 +23,12 @@ function spendGroup(wardrobe: WardrobeItems, costs: Partial<Record<keyof Wardrob
   }
 }
 
-export function remainingInventory(inventory: InventoryBudget, zones: ClosetZone[]): InventoryBudget {
+export function remainingInventory(inventory: InventoryBudget, zones: ClosetZone[], planning?:PlanningOptions): InventoryBudget {
   const wardrobe = { ...inventory.wardrobe }, shoes = { ...inventory.shoes };
-  const rows = capacityReport(inventory, [{ zones }]);
+  const rows = capacityReport({...inventory,planning}, [{ zones }]);
   const capacity = (label: string) => rows.find(row => row.label === label)?.available ?? 0;
   const rodCosts = Object.fromEntries(['longDresses', 'shirts', 'shortJackets', 'pants', 'suits'].map(key => {
-    const demand = hangingDemand({ ...EMPTY_WARDROBE, [key]: 1 });
+    const demand = hangingDemand({ ...EMPTY_WARDROBE, [key]: 1 },planning);
     return [key, demand.long + demand.short];
   }));
   spendGroup(wardrobe, { longDresses: rodCosts.longDresses }, capacity('Long hanging'));

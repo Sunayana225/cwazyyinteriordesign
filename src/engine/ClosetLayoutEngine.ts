@@ -143,7 +143,7 @@ export class ClosetLayoutEngine {
     finally { this.remaining = undefined; }
     const aisleWarnings  = this.checkAisles();
     const layoutWarnings = this.checkZoneConstraints(walls);
-    const capacity = capacityReport({ wardrobe: this.wardrobe, shoes: this.shoes }, walls);
+    const capacity = capacityReport({ wardrobe: this.wardrobe, shoes: this.shoes, planning:this.planning }, walls);
     for (const row of capacity) if (row.required > row.available + 0.01) layoutWarnings.push({
       id: 'capacity-' + row.label, severity: 'caution', message: row.label + ' shortfall',
       designerNote: row.required.toFixed(1) + ' ' + row.unit + ' required; ' + row.available.toFixed(1) + ' provided. Allocate additional storage or reduce the inventory.',
@@ -293,7 +293,7 @@ export class ClosetLayoutEngine {
     }
     try {
       const wall = this.buildWallForDemand(wallId, label, elevationRef, width, unitDepth, role, fullSpan);
-      if (this.remaining) this.remaining = remainingInventory(this.remaining, wall.zones);
+      if (this.remaining) this.remaining = remainingInventory(this.remaining, wall.zones,this.planning);
       return wall;
     } finally {
       this.wardrobe = wardrobe;
@@ -380,7 +380,7 @@ export class ClosetLayoutEngine {
   // â”€â”€ Role dispatcher â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
 
   private buildZonesForRole(role: WallRole, W: number): ClosetZone[] {
-    const hanging = hangingDemand(this.wardrobe);
+    const hanging = hangingDemand(this.wardrobe,this.planning);
     const roleHasDemand = role === 'hanging-only' ? hanging.long + hanging.short > 0
       : role === 'shoes-only' ? this.countShoes() > 0
       : role === 'drawers-only' ? this.hasAnyDrawers()
@@ -737,7 +737,7 @@ export class ClosetLayoutEngine {
       }
     }
 
-    const demand = hangingDemand(this.wardrobe);
+    const demand = hangingDemand(this.wardrobe,this.planning);
     if (demand.long + demand.short > this.calcStorage(walls).hangingRods * 12) warnings.push({ id: 'overflow-capacity', severity: 'caution', message: 'Hanging inventory exceeds generated rods', designerNote: 'See the capacity report for the exact long- and short-hanging shortfalls.' });
     for (const wall of walls) if (wall.width < 12) warnings.push({ id: 'wall-too-short-' + wall.wallId, severity: 'caution', message: wall.label + ' has no usable storage length', designerNote: 'The cabinet depth leaves less than 12 inches on this wall. Enlarge the room or reduce cabinet depth.' });
     return warnings;
@@ -779,7 +779,7 @@ export class ClosetLayoutEngine {
   }
 
   private fitColumnTypes(types:('long-hang'|'short-hang'|'shoe-shelves')[],width:number,drawers:boolean){
-    const demand=hangingDemand(this.wardrobe),priority=this.prefs.priorityItems??[];
+    const demand=hangingDemand(this.wardrobe,this.planning),priority=this.prefs.priorityItems??[];
     // Drop elements the cabinet physically cannot take before competing for width,
     // so a shallow or short unit never gets a rod it has no room for.
     const clear=this.H-TOE_KICK;
@@ -837,7 +837,7 @@ export class ClosetLayoutEngine {
     const shoeTotal = shoeCount * Math.min(shoeColW, W - (longCount + shortCount) * minColumn);
     const hangAvail = W - shoeTotal;
 
-    const demand=hangingDemand(this.wardrobe);
+    const demand=hangingDemand(this.wardrobe,this.planning);
     const snapLong=longCount>0?(shortCount>0?hangingWidths(hangAvail,demand.long,demand.short,shortRods,minColumn)[0]:hangAvail):0;
     const snapShort=shortCount>0?hangAvail-snapLong:0;
 
@@ -967,10 +967,8 @@ export class ClosetLayoutEngine {
     const storage = this.calcStorage(walls);
     const wrd     = this.wardrobe;
 
-    // Hanging demand: ~2.5" per long-hang item, ~1.8" per short-hang item → linear feet
-    const longHang = wrd.longDresses;
-    const shortHang = wrd.shirts + wrd.shortJackets + wrd.pants + wrd.suits * 2;
-    const hangDemand  = (longHang * 2.5 + shortHang * 1.8) / 12;
+    const hanging = hangingDemand(wrd,this.planning);
+    const hangDemand = (hanging.long+hanging.short)/12;
     const hangSupply  = Math.max(storage.hangingRods, 0.01);
 
     // Drawer demand: ~10 folded items per drawer
@@ -1025,7 +1023,7 @@ export class ClosetLayoutEngine {
     if (note) recs.push(note);
 
     // Hanging inventory analysis
-    for (const row of capacityReport({ wardrobe: this.wardrobe, shoes: this.shoes }, walls)) {
+    for (const row of capacityReport({ wardrobe: this.wardrobe, shoes: this.shoes, planning:this.planning }, walls)) {
       if (row.required > 0) recs.push(row.label + ': ' + row.required.toFixed(1) + ' ' + row.unit + ' required; ' + row.available.toFixed(1) + ' available.' + (row.required > row.available ? ' Additional storage is needed.' : ' Inventory fits the calculated capacity.'));
     }
 

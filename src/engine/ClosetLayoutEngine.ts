@@ -7,7 +7,8 @@ import { accessoryShelves } from '@/lib/accessoryShelves';
 import { reserveInventory, validInventoryPlanning } from '@/lib/inventoryPlanning';
 import { validColumns, resolveColumns, COLUMN_MIN_WIDTH } from '@/lib/layoutColumns';
 import type { ZoneOverrides, LayoutColumn } from '@/types/closet';
-import { EMPTY_WARDROBE, LIMITS, SHOE_SPACING, SHOE_PAIR_WIDTH as SHOE_PAIR_W, foldedDemand, hangingDemand, capacityReport, ELEMENT_FIT, elementFits, TOE_KICK } from '@/lib/design';
+import { EMPTY_WARDROBE, LIMITS, SHOE_SPACING, foldedDemand, hangingDemand, capacityReport, ELEMENT_FIT, elementFits, TOE_KICK } from '@/lib/design';
+import { shoeLengths } from '@/lib/fitMeasurements';
 import { MAX_DIMENSION, MAX_HEIGHT, MAX_INVENTORY, validPlanning, freeSpans, wallFootprint, overlaps } from '@/lib/planning';
 import type { PlanningOptions } from '@/types/closet';
 ﻿import {
@@ -214,6 +215,9 @@ export class ClosetLayoutEngine {
     const wallOptions=this.planning.walls?.[wallId];
     const wallTop=Math.min(originalHeight,wallOptions?.ceilingHeight??this.ceilingHeight);
     unitDepth=this.depthFor(wallId);this.D=unitDepth-(wallOptions?.baseboard??0);
+    for(const [kind,length] of Object.entries(shoeLengths(this.planning)))if(this.shoes[kind as keyof ShoeCollection]>0&&length>this.D){
+      this.inputWarnings.push(`${label}: ${kind} need ${length} in of shelf depth including clearance; usable cabinet depth is ${this.D} in after baseboard allowance. These pairs remain unallocated on this wall.`);
+    }
     const floorOffset=wallOptions?.floorOffset??0;this.H=Math.max(0,wallTop-floorOffset);
     const priority=this.planning.walls?.[wallId]?.priority;
     const roleMap:Record<string,WallRole>={hanging:'hanging-only',shoes:'shoes-only',folded:'drawers-only',accessories:'all'};
@@ -766,7 +770,7 @@ export class ClosetLayoutEngine {
 
   /** Shoe shelf heights are stored RELATIVE to zone.y (renderer adds zone.y). */
   private buildShoeShelves(totalH: number, colW: number): ShelfConfig[] {
-    return shoeShelves(this.shoes,totalH,colW,this.planning.shoeHeights);
+    return shoeShelves(this.shoes,totalH,colW,this.planning.shoeHeights,{pairWidths:this.planning.shoePairWidths,lengths:this.planning.shoeLengths,usableDepth:this.D});
   }
 
   // â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€â”€
@@ -775,7 +779,7 @@ export class ClosetLayoutEngine {
 
   /** Choose shoe width by testing actual row capacity and vertical clearances. */
   private calcShoeColumnWidth(availableWidth=this.W): number {
-    return shoeColumnWidth(this.shoes,this.H-TOE_KICK,availableWidth,this.planning.shoeHeights,COL_SHOE_W);
+    return shoeColumnWidth(this.shoes,this.H-TOE_KICK,availableWidth,this.planning.shoeHeights,COL_SHOE_W,{pairWidths:this.planning.shoePairWidths,lengths:this.planning.shoeLengths,usableDepth:this.D});
   }
 
   private fitColumnTypes(types:('long-hang'|'short-hang'|'shoe-shelves')[],width:number,drawers:boolean){
@@ -783,10 +787,13 @@ export class ClosetLayoutEngine {
     // Drop elements the cabinet physically cannot take before competing for width,
     // so a shallow or short unit never gets a rod it has no room for.
     const clear=this.H-TOE_KICK;
-    const possible=types.filter(type=>elementFits(type,clear,this.D)
-      || (type==='short-hang' && drawers && elementFits('drawers',clear,this.D)));
+    const possible=types.filter(type=>(type!=='shoe-shelves'||this.buildShoeShelves(clear,width).length>0)&&(elementFits(type,clear,this.D)
+      || (type==='short-hang' && drawers && elementFits('drawers',clear,this.D))));
     const unfit=types.filter(type=>!possible.includes(type));
     for(const type of unfit){
+      if(type==='shoe-shelves'&&elementFits(type,clear,this.D)){
+        this.inputWarnings.push(`Shoe storage omitted: measured pairs do not fit this span's width, usable depth, or vertical clearance.`);continue;
+      }
       const need=ELEMENT_FIT[type];
       this.inputWarnings.push(`${type.replace(/-/g,' ')} omitted: needs at least ${need.height} in of clear height and ${need.depth} in of depth; this cabinet has ${clear.toFixed(0)} by ${this.D.toFixed(0)} in.`);
     }

@@ -1,7 +1,7 @@
 import type { ClosetConfiguration, ClosetLayout, ClosetWall, WardrobeItems, DrawerConfig } from '@/types/closet';
 import { MAX_DIMENSION, MAX_HEIGHT, MAX_CABINET_DEPTH } from './planning';
 import { MEASUREMENT_MINIMUMS } from './measurementPolicy';
-import { hangerSpacing } from './fitMeasurements';
+import { hangerSpacing, SHOE_WIDTH_DEFAULTS, shoeLengths } from './fitMeasurements';
 import type { PlanningOptions } from '@/types/closet';
 
 /** Floors are what the generator can still draw something sensible for, not a
@@ -30,7 +30,7 @@ export function elementFits(element:FittedElement,height:number,depth:number){
 }
 export function dimensionRange(field:string){return (field==='height'||field==='cabinetHeight')?{min:LIMITS.height,max:LIMITS.heightMax}:field==='depth'?{min:LIMITS.depthMin,max:LIMITS.depthMax}:field==='roomDepth'?{min:LIMITS.roomDepth,max:LIMITS.roomDepthMax}:{min:LIMITS.width,max:LIMITS.widthMax};}
 export const SHOE_SPACING = { boots: 25, heels: 8, sneakers: 8, flats: 6 };
-export const SHOE_PAIR_WIDTH = { boots: 7, heels: 4, sneakers: 5, flats: 4 };
+export const SHOE_PAIR_WIDTH = SHOE_WIDTH_DEFAULTS;
 export const FOLDED_PER_DRAWER = { tShirts: 10, sweaters: 5, jeans: 6, underwear: 20 };
 /** Reference box dimensions for the existing category estimates, in inches.
  * This is an approximate packing volume, not proof that a specific folded item fits. */
@@ -119,11 +119,12 @@ export function capacityReport(c: Pick<ClosetConfiguration, 'wardrobe' | 'shoes'
   const rodCapacity = (long: boolean) => zones.filter(z => (z.type === 'long-hang') === long).flatMap(z => z.rods ?? []).reduce((n,r) => n + finitePositive(r.length), 0);
   const drawers = zones.flatMap(z => z.drawers ?? []);
   const shelves = zones.flatMap(z => z.shelves ?? []);
+  const lengths=shoeLengths(c.planning);
   return [
     { label: 'Long hanging', required: demand.long, available: rodCapacity(true), unit: 'inches of rod' },
     { label: 'Short hanging (suits count twice)', required: demand.short, available: rodCapacity(false), unit: 'inches of rod' },
     { label: 'Folded storage', required: foldedDemand(c.wardrobe), available: drawers.filter(d => d.purpose === 'folded').reduce((n,d) => n + foldedDrawerCapacity(d), 0), unit: 'standard drawer equivalents' },
-    ...Object.keys(SHOE_SPACING).map(key => ({ label: key, required: c.shoes[key as keyof typeof SHOE_SPACING], available: shelves.filter(s => s.purpose === key).reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'pairs' })),
+    ...Object.keys(SHOE_SPACING).map(key => ({ label: key, required: c.shoes[key as keyof typeof SHOE_SPACING], available: shelves.filter(s => s.purpose === key&&Number.isFinite(s.depth)&&s.depth>=lengths[key as keyof typeof SHOE_SPACING]).reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'pairs' })),
     { label: 'Bags', required: c.wardrobe.bags, available: shelves.filter(s => s.purpose === 'bags').reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'bags' },
     { label: 'Belts', required: c.wardrobe.belts, available: shelves.filter(s => s.purpose === 'belts').reduce((n,s) => n+Math.floor(finitePositive(s.count)),0), unit: 'belts' },
   ];

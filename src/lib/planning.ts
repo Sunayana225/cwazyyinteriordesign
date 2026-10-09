@@ -1,6 +1,6 @@
 import { GENERATOR_CAPABILITIES, MEASUREMENT_MINIMUMS } from './measurementPolicy';
 import type { ClosetLayout, ClosetWall, PlanningOptions } from '@/types/closet';
-import { HANGER_SPACING } from './fitMeasurements';
+import { HANGER_SPACING, SHOE_WIDTH_DEFAULTS } from './fitMeasurements';
 export const WALL_IDS:ClosetWall['wallId'][]=['back','left','right','corridor-a','corridor-b','island-unit'];
 export const MAX_DIMENSION=GENERATOR_CAPABILITIES.roomSpan,MAX_HEIGHT=GENERATOR_CAPABILITIES.ceilingHeight,MAX_CABINET_DEPTH=GENERATOR_CAPABILITIES.cabinetDepth,MAX_INVENTORY=10000;
 const num=(v:unknown,min:number,max:number)=>typeof v==='number'&&Number.isFinite(v)&&v>=min&&v<=max;
@@ -18,6 +18,14 @@ export function planningIssues(value:unknown):string[] {
     else for(const key of Object.keys(value.hangerSpacing)){
       if(!Object.prototype.hasOwnProperty.call(HANGER_SPACING,key))errors.push(`planning.hangerSpacing.${key}: unsupported garment category`);
       else number(value.hangerSpacing,key,.125,MAX_DIMENSION,'planning.hangerSpacing');
+    }
+  }
+  for(const key of ['shoePairWidths','shoeLengths'])if(value[key]!==undefined){
+    const block=value[key];
+    if(!record(block))errors.push(`planning.${key}: expected category measurements`);
+    else for(const category of Object.keys(block)){
+      if(!Object.prototype.hasOwnProperty.call(SHOE_WIDTH_DEFAULTS,category))errors.push(`planning.${key}.${category}: unsupported shoe category`);
+      else number(block,category,.125,key==='shoeLengths'?MAX_CABINET_DEPTH:MAX_DIMENSION,`planning.${key}`);
     }
   }
   for(const key of ['supportSpan','clearanceTarget'])number(value,key,key==='supportSpan'?12:18,key==='supportSpan'?48:72,'planning',true);
@@ -83,6 +91,8 @@ export function canonicalPlanning(p:PlanningOptions):PlanningOptions{
   if(p.garmentLengths)next.garmentLengths={long:p.garmentLengths.long,short:p.garmentLengths.short};
   if(p.hangerSpacing)next.hangerSpacing={...p.hangerSpacing};
   if(p.shoeHeights)next.shoeHeights={boots:p.shoeHeights.boots,heels:p.shoeHeights.heels,sneakers:p.shoeHeights.sneakers,flats:p.shoeHeights.flats};
+  if(p.shoePairWidths)next.shoePairWidths={...p.shoePairWidths};
+  if(p.shoeLengths)next.shoeLengths={...p.shoeLengths};
   if(p.accessoryShelfOpening!==undefined)next.accessoryShelfOpening=p.accessoryShelfOpening;
   if(p.supportSpan!==undefined)next.supportSpan=p.supportSpan;
   if(p.clearanceTarget!==undefined)next.clearanceTarget=p.clearanceTarget;

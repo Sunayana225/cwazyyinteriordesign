@@ -211,6 +211,8 @@ export interface PlanningOptions {
   garmentLengths?:{long:number;short:number};
   hangerSpacing?:Partial<Record<'longDresses'|'shortJackets'|'suits'|'shirts'|'pants',number>>;
   shoeHeights?:ShoeCollection;
+  shoePairWidths?:Partial<ShoeCollection>;
+  shoeLengths?:Partial<ShoeCollection>;
   supportSpan?:number;
   clearanceTarget?:number;
   walls?:Partial<Record<ClosetWall['wallId'],{depth?:number;priority?:'default'|'hanging'|'shoes'|'folded'|'accessories';ceilingHeight?:number;baseboard?:number;floorOffset?:number}>>;

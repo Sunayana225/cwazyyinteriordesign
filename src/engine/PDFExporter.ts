@@ -11,7 +11,7 @@ import { DEFAULT_PRINT, dividerEstimate, configurationChanges } from '@/lib/prin
 import type { PrintSettings } from '@/lib/printSettings';
 import { wallElevation } from '@/lib/wallElevation';
 import { FOLDED_REFERENCE } from '@/lib/design';
-import { hangerAssumptions } from '@/lib/fitMeasurements';
+import { hangerAssumptions, shoeAssumptions } from '@/lib/fitMeasurements';
 import { surveyState } from '@/lib/surveyReview';
 import { unassessedStorage } from '@/lib/storageFit';
 
@@ -58,7 +58,7 @@ function renderDesign({ layout, config, fileName = 'Current design', showDimensi
     <h2>Space specifications — effective dimensions</h2>${table(specs,false)}${surveyNote}
     <h2>Capacity and fit</h2><p>Utilization: ${layout.utilizationScore}%. A high utilization score does not mean every item fits.</p>
     ${unassessedStorage(config)?`<p>${esc(unassessedStorage(config))}</p>`:''}
-    <p>${esc(hangerAssumptions(config.planning))}</p>
+    <p>${esc(hangerAssumptions(config.planning))}</p><p>${esc(shoeAssumptions(config.planning))}</p>
     <p>Folded storage uses estimated usable volume relative to a ${FOLDED_REFERENCE.width} × ${FOLDED_REFERENCE.depth} × ${FOLDED_REFERENCE.height} in reference drawer, with ${FOLDED_REFERENCE.edgeClearance} in edge clearance and ${FOLDED_REFERENCE.bottomAllowance} in bottom allowance. Verify actual folded-item dimensions and packing.</p>
     ${table([['Storage', 'Required', 'Provided', 'Shortfall'], ...capacity.map(r => [r.label, r.required.toFixed(1) + ' ' + r.unit, r.available.toFixed(1), Math.max(0,r.required-r.available).toFixed(1)])])}
     <h2>Warnings</h2>${warnings.length ? `<ul>${warnings.map(w => `<li>${esc(w)}</li>`).join('')}</ul>` : '<p>No calculated warnings.</p>'}

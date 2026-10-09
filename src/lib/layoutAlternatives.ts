@@ -4,7 +4,7 @@ import { alternativeIssues } from './roomGeometry';
 import { storageFit } from './storageFit';
 
 type Preference=UserPreferences['drawerPreference'];
-export interface DrawerAlternative { preference:Preference; equivalentPreferences:Preference[]; layout:ClosetLayout; score:number; changes:Array<{label:string;unit:string;delta:number}>; }
+export interface DrawerAlternative { id?:string;title?:string;description?:string;patch?:Pick<ClosetConfiguration,'zoneOverrides'>;preference:Preference; equivalentPreferences:Preference[]; layout:ClosetLayout; score:number; changes:Array<{label:string;unit:string;delta:number}>; }
 const category=(label:string):UserPreferences['priorityItems'][number]=>label.startsWith('Long')||label.startsWith('Short')?'hanging':label==='Folded storage'?'folded':['boots','heels','sneakers','flats'].includes(label)?'shoes':'accessories';
 /** Compare fractions within each category instead of adding inches, pairs and
  * drawer equivalents. Selected priorities carry twice the weight, openly. */

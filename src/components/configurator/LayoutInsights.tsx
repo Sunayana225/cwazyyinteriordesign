@@ -1,5 +1,6 @@
 'use client';
 import dynamic from 'next/dynamic';
+const WidthAlternativeExplorer=dynamic(()=>import('./WidthAlternativeExplorer'));
 const DrawerAlternativeCard=dynamic(()=>import('./DrawerAlternativeCard'));
 import { useEffect, useRef, useState } from 'react';
 import type { ClosetConfiguration, ClosetLayout } from '@/types/closet';
@@ -12,7 +13,7 @@ import { compareDrawerLayouts, type DrawerAlternative } from '@/lib/layoutAltern
 export function LayoutInsights({layout,config,onChange,onZone}:{layout:ClosetLayout;config:Partial<ClosetConfiguration>;onChange?:(c:Partial<ClosetConfiguration>)=>void;onZone?:(wall:string,index:number)=>void}){
   const last=useRef(layout),[previous,setPrevious]=useState<ClosetLayout|null>(null),[alternatives,setAlternatives]=useState<DrawerAlternative[]>([]);
   const [rejected,setRejected]=useState<Array<{preference:string;issues:Array<[string,string[]]>}>>([]);
-  const [compared,setCompared]=useState(false);
+  const [compared,setCompared]=useState(false),[widths,setWidths]=useState(false);
   const fit=storageFit(layout.capacity);
   const capacity=[...(layout.capacity??[])].sort((a,b)=>Number(b.required>b.available+.01)-Number(a.required>a.available+.01));
   const upper=layout.walls.flatMap(w=>w.zones).filter(z=>z.contentLabel==='Upper storage for seasonal items');
@@ -40,6 +41,7 @@ export function LayoutInsights({layout,config,onChange,onZone}:{layout:ClosetLay
     {compared&&<p role="status" className="text-sm my-2">{alternatives.length ? `${alternatives.length} drawer layout options meet the current room, door, aisle, and obstacle checks. Review capacity shortfalls before choosing.` : 'No drawer layout options meet the current room, door, aisle, and obstacle checks. Adjust the room dimensions, cabinet depths, or obstacle positions and compare again.'}</p>}
     {rejected.map(r=><details key={r.preference} className="border rounded p-2"><summary>Why {r.preference} was excluded</summary>{r.issues.map(([group,messages])=><div key={group}><h4>{group}</h4><ul>{messages.map((message,i)=><li key={i}>{message}</li>)}</ul></div>)}</details>)}
     {alternatives.length>0&&<div className="my-2"><p className="text-sm">Distinct layouts, ranked by unmet demand within each category. Your priority categories carry twice the weight. This compares three drawer preferences, not every possible layout.</p>{alternatives.map(a=><DrawerAlternativeCard key={a.preference} alternative={a} current={layout} config={config} onChange={onChange}/>)}</div>}
+    <button className="underline my-3" aria-expanded={widths} onClick={()=>setWidths(!widths)}>{widths?'Hide':'Explore'} width allocations</button>{widths&&<WidthAlternativeExplorer config={config} layout={layout} onChange={onChange}/>}
   </details>;
 }
 

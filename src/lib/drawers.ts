@@ -1,5 +1,6 @@
 import type { ClosetLayout, DrawerConfig } from '@/types/closet';
 import { escapeHTML, ORGANIZER_FOOTPRINTS, ORGANIZER_BANDS, MAX_COMPARTMENTS } from './design';
+import { uid } from './id';
 
 export interface Compartment { id: string; x: number; y: number; w: number; h: number; label: string; category: string; quantity: number; color: string; notes?:string;item?:{width:number;depth:number;height:number;rotate:boolean}; }
 export interface DrawerInterior {
@@ -147,7 +148,7 @@ export function splitCell(p:DrawerInterior,id:string,axis:'x'|'y',ratio:number,a
   // Item 005: optionally allocate the compartment's items proportionally to the split,
   // preserving the planned total. Default keeps the previous behaviour (remainder is empty).
   const ratioQty=allocateItems?Math.round(c.quantity*ratio):c.quantity;
-  const a={...c,quantity:ratioQty}, b={...c,id:crypto.randomUUID(),label:(c.label+' B').slice(0,60),quantity:c.quantity-ratioQty};
+  const a={...c,quantity:ratioQty}, b={...c,id:uid(),label:(c.label+' B').slice(0,60),quantity:c.quantity-ratioQty};
   if(axis==='x'){a.w=c.w*ratio;b.x=c.x+a.w;b.w=c.w-a.w;}else{a.h=c.h*ratio;b.y=c.y+a.h;b.h=c.h-a.h;}
   return {...p,cells:p.cells.flatMap(v=>v.id===id?[a,b]:[v])};
 }

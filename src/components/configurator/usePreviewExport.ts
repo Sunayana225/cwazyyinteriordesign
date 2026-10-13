@@ -5,6 +5,7 @@ import { DEFAULT_PRINT, storedPrintSettings, materialEstimateCSV } from '@/lib/p
 import type { PrintSettings } from '@/lib/printSettings';
 import { downloadText } from '@/lib/download';
 import { serializeDesigns } from '@/lib/storage';
+import { uid } from '@/lib/id';
 export function usePreviewExport({layout,config,savedDesigns,showDimensions,showLabels,onError,onSelectedDone}:{layout:ClosetLayout|null;config:Partial<ClosetConfiguration>;savedDesigns:SavedDesign[];showDimensions:boolean;showLabels:boolean;onError:(message:string)=>void;onSelectedDone:()=>void}){
   const [isExporting,setIsExporting]=useState(false),[showExportMenu,setShowExportMenu]=useState(false),[settings,setSettings]=useState<PrintSettings>(DEFAULT_PRINT),[showExportSettings,setShowExportSettings]=useState(false);
   const exportMenuRef=useRef<HTMLDivElement>(null);
@@ -22,7 +23,7 @@ export function usePreviewExport({layout,config,savedDesigns,showDimensions,show
   const handleExport=async(chosen:PrintSettings=settings,snapshot?:{layout:ClosetLayout;config:Partial<ClosetConfiguration>})=>{
     if(!layout&&!snapshot)return;const captured=snapshot??structuredClone({layout:layout!,config});
     setSettings(chosen);try{localStorage.setItem("alveo-print-preferences",JSON.stringify(storedPrintSettings(JSON.stringify(chosen))));}catch{}
-    await runPrint(async popup=>{const {exportLayoutToPDF}=await import('@/engine/PDFExporter');if(chosen.materialsCSV)downloadText(materialEstimateCSV(captured.layout,captured.config),"alveo-material-estimates.csv","text/csv");if(chosen.editableJSON)downloadText(serializeDesigns([{id:crypto.randomUUID(),name:chosen.project||'Current design',savedAt:new Date().toISOString(),config:captured.config}]),'alveo-print-configuration.json');await exportLayoutToPDF({...captured,showDimensions,showLabels,settings:chosen},popup);});
+    await runPrint(async popup=>{const {exportLayoutToPDF}=await import('@/engine/PDFExporter');if(chosen.materialsCSV)downloadText(materialEstimateCSV(captured.layout,captured.config),"alveo-material-estimates.csv","text/csv");if(chosen.editableJSON)downloadText(serializeDesigns([{id:uid(),name:chosen.project||'Current design',savedAt:new Date().toISOString(),config:captured.config}]),'alveo-print-configuration.json');await exportLayoutToPDF({...captured,showDimensions,showLabels,settings:chosen},popup);});
   };
   const handleExportAll=()=>{const captured=structuredClone(savedDesigns);return runPrint(async popup=>{const {exportMultipleDesignsToPDF}=await import('@/engine/PDFExporter');await exportMultipleDesignsToPDF(captured,popup);});};
   const handleExportSelected=(ids:Set<string>)=>{const captured=structuredClone(savedDesigns.filter(d=>ids.has(d.id)));return runPrint(async popup=>{const {exportMultipleDesignsToPDF}=await import('@/engine/PDFExporter');await exportMultipleDesignsToPDF(captured,popup);onSelectedDone();});};

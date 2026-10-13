@@ -8,6 +8,7 @@ import { drawerTargets, resolveOrganizers } from '@/lib/drawers';
 import type { ClosetConfiguration, SavedDesign, UserRole } from '@/types/closet';
 import { getPreset } from '@/lib/presets';
 import { storageError, draftStatus } from '@/lib/recovery';
+import { uid } from '@/lib/id';
 import { copyDesign } from '@/lib/designLibrary';
 import { isUserRole } from '@/lib/userRoles';
 function restoredConfig(config:ClosetConfiguration){const c=canonicalConfig(config);if(c.drawerInteriors)c.drawerInteriors=resolveOrganizers(c.drawerInteriors,drawerTargets(new ClosetLayoutEngine(c).calculateLayout()));return c;}
@@ -129,14 +130,14 @@ export function useDesignStore() {
   };
   const save = () => {
     if (!validConfig(config)) { setNotice('Complete the configuration before saving.'); return false; }
-    const id=crypto.randomUUID(), snapshot=canonicalConfig(config), savedAt=new Date().toISOString();
+    const id=uid(), snapshot=canonicalConfig(config), savedAt=new Date().toISOString();
     flushDraft.current();
     setOpenedId(id);setOpenedSnapshot(JSON.stringify(snapshot));
     return mutate(current => [...current, { id, name: nextDesignName(current), config: snapshot, savedAt, modifiedAt:savedAt }],'Save design');
   };
   const remove = (id: string) => { setDeleted(savedDesigns.find(d => d.id === id) ?? null); mutate(current => current.filter(d => d.id !== id),'Delete design'); };
   const duplicate = (sourceId: string) => {
-    const id = crypto.randomUUID(), savedAt = new Date().toISOString();
+    const id = uid(), savedAt = new Date().toISOString();
     return mutate(current => {
       const source = current.find(d => d.id === sourceId);
       return source ? [...current, copyDesign(source, current, id, savedAt)] : current;
@@ -146,13 +147,13 @@ export function useDesignStore() {
   const rename = (id: string, name: string) => { const modifiedAt=new Date().toISOString(); if (name.trim()) mutate(current => current.map(d => d.id === id ? { ...d, name: name.trim().slice(0, 120), modifiedAt } : d),'Rename design'); };
   const open = (id: string) => { const d = savedDesigns.find(d => d.id === id); if (d) { const restored=restoredConfig(d.config as ClosetConfiguration);setConfig(restored);setOpenedId(id);setOpenedSnapshot(JSON.stringify(restored)); setNotice('Opened ' + d.name); } };
   const importDesigns = (items: SavedDesign[]) => {
-    const copies=items.map(d=>({...d,id:crypto.randomUUID(),config:canonicalConfig(d.config as ClosetConfiguration)}));
+    const copies=items.map(d=>({...d,id:uid(),config:canonicalConfig(d.config as ClosetConfiguration)}));
     return mutate(current=>[...current,...copies],'Import backup');
   };
   const tag = (id:string,tags:string[]) => { const modifiedAt=new Date().toISOString();return mutate(current=>current.map(d=>d.id===id?{...d,tags:[...new Set(tags.map(t=>t.trim()).filter(Boolean))].slice(0,12).map(t=>t.slice(0,40)),modifiedAt}:d),'Update design tags'); };
   const replace = (id:string,expected:string,note='') => {
     if(!validConfig(config)) return Promise.resolve(false);
-    const snapshot=canonicalConfig(config),modifiedAt=new Date().toISOString(),revisionId=crypto.randomUUID();
+    const snapshot=canonicalConfig(config),modifiedAt=new Date().toISOString(),revisionId=uid();
     const changed=mutate(current=>{
       const original=current.find(d=>d.id===id);
       if(!original||designRevision(original)!==expected) throw new Error('This design changed since the preview. Reopen the replacement preview.');
@@ -162,7 +163,7 @@ export function useDesignStore() {
   };
   const organize=(ids:string[],folder:string)=>mutate(current=>current.map(d=>ids.includes(d.id)?{...d,folder:folder.trim().slice(0,80),modifiedAt:new Date().toISOString()}:d),'Move designs to folder');
   const pin=(id:string)=>mutate(current=>current.map(d=>d.id===id?{...d,pinnedOrder:d.pinnedOrder===undefined?Math.max(-1,...current.map(v=>v.pinnedOrder??-1))+1:undefined}:d),'Change favorite order');
-  const restoreRevision=(id:string,revisionId:string)=>{const newId=crypto.randomUUID(),savedAt=new Date().toISOString();return mutate(current=>{const source=current.find(d=>d.id===id),revision=source?.revisions?.find(r=>r.id===revisionId);if(!source||!revision)throw new Error('Revision is no longer available.');const copy=copyDesign({...source,config:revision.config},current,newId,savedAt);return [...current,copy];},'Restore design revision');};
+  const restoreRevision=(id:string,revisionId:string)=>{const newId=uid(),savedAt=new Date().toISOString();return mutate(current=>{const source=current.find(d=>d.id===id),revision=source?.revisions?.find(r=>r.id===revisionId);if(!source||!revision)throw new Error('Revision is no longer available.');const copy=copyDesign({...source,config:revision.config},current,newId,savedAt);return [...current,copy];},'Restore design revision');};
   const removeMany=(expected:SavedDesign[])=>mutate(current=>{for(const d of expected){const existing=current.find(v=>v.id===d.id);if(!existing||designRevision(existing)!==designRevision(d))throw new Error('A cleanup record changed. Review the cleanup preview again.');}return current.filter(d=>!expected.some(v=>v.id===d.id));},'Clean up selected designs');
   const metadataBatch=(changes:Array<{before:SavedDesign;folder?:string;tags?:string[]}>)=>mutate(current=>{
     for(const change of changes){const found=current.find(d=>d.id===change.before.id);if(!found||designRevision(found)!==designRevision(change.before))throw new Error('A previewed design changed. Review the batch again.');if(change.tags&&(change.tags.length>12||change.tags.some(t=>t.length>40)))throw new Error('Use at most 12 tags of 40 characters.');}

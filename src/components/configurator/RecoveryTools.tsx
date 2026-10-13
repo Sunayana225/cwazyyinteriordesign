@@ -2,12 +2,13 @@
 import { useState } from 'react';
 import { draftStatus, recoveryReport } from '@/lib/recovery';
 import { canonicalConfig, DRAFT_KEY, serializeDesigns, validConfig } from '@/lib/storage';
+import { uid } from '@/lib/id';
 import { downloadText } from '@/lib/download';
 import type { ClosetConfiguration, SavedDesign } from '@/types/closet';
 export function RecoveryTools({lastDraftAt,lastNamedAt,config,designs,pendingOperations,onReplaceDraft}:{lastDraftAt:string|null;lastNamedAt:string|null;config:Partial<ClosetConfiguration>;designs:SavedDesign[];pendingOperations:string[];onReplaceDraft:(raw:string,snapshot:Partial<ClosetConfiguration>)=>boolean}){
   const [report,setReport]=useState(''),[error,setError]=useState(''),[backup,setBackup]=useState<string|null>(null),[preview,setPreview]=useState<{raw:string;config:ClosetConfiguration}|null>(null);
   const run=(work:()=>void)=>{try{work();setError('');}catch(e){setError((e as Error).message);}};
-  const exportDraft=()=>{if(!validConfig(config))throw new Error('Current configuration is incomplete.');downloadText(serializeDesigns([{id:crypto.randomUUID(),name:'Recovered current draft',savedAt:new Date().toISOString(),config:canonicalConfig(config)}]),'alveo-current-draft.json');};
+  const exportDraft=()=>{if(!validConfig(config))throw new Error('Current configuration is incomplete.');downloadText(serializeDesigns([{id:uid(),name:'Recovered current draft',savedAt:new Date().toISOString(),config:canonicalConfig(config)}]),'alveo-current-draft.json');};
   return <><section aria-label="Project data and privacy" className="settings-card my-3">
     <h3>Your projects on this device</h3>
     <p>Drafts, saved designs, household profiles, room shells, and organizer templates stay in this browser at this site address. This app does not upload project contents or synchronize them to an account. Another browser, device, or site address has a separate library.</p>
